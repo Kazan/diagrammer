@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace "com.example.diagrammerapp"
-    compileSdk 34
+    compileSdk 36
 
     defaultConfig {
         applicationId "com.example.diagrammerapp"
         minSdk 26
-        targetSdk 34
+        targetSdk 36
         versionCode 1
         versionName "1.0.0"
 
@@ -21,14 +21,14 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            minifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
         }
         debug {
-            isDebuggable = true
+            debuggable = true
         }
     }
 
@@ -59,7 +59,7 @@ android {
 }
 
 dependencies {
-    implementation platform("org.jetbrains.kotlin:kotlin-bom:1.9.22")
+    implementation platform("org.jetbrains.kotlin:kotlin-bom:1.9.24")
     implementation "androidx.core:core-ktx:1.12.0"
     implementation "androidx.appcompat:appcompat:1.6.1"
     implementation "com.google.android.material:material:1.11.0"

@@ -3,47 +3,312 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Diagrammer</title>
+  <title>Diagrammer Preview</title>
   <style>
-    html, body, #root {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      background: #111;
-      color: #f5f5f5;
-      overflow: hidden;
-      touch-action: none;
+    :root {
+      color-scheme: dark;
+      --bg: #0c0f14;
+      --panel: #151922;
+      --accent: #5ad1ff;
+      --muted: #8fa3b8;
+      --text: #f4f7fb;
+      --border: #1f2530;
     }
-    #placeholder {
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", "Helvetica Neue", system-ui, -apple-system, sans-serif;
+      background: radial-gradient(circle at 20% 20%, #10151f, #0b0e14 45%),
+                  radial-gradient(circle at 80% 10%, #111827, #0b0e14 40%);
+      color: var(--text);
       display: grid;
       place-items: center;
-      height: 100%;
-      font-family: sans-serif;
+      padding: 24px;
     }
+
+    .card {
+      width: min(900px, 100%);
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+      box-shadow: 0 18px 60px rgba(0, 0, 0, 0.35);
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 18px;
+      flex-wrap: wrap;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 20px;
+      letter-spacing: 0.3px;
+    }
+
+    .pill {
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 12px;
+    }
+
+    .panel {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      background: #0f131c;
+    }
+
+    .panel h2 {
+      margin: 0 0 10px 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--muted);
+      letter-spacing: 0.2px;
+    }
+
+    button, label.input-btn {
+      width: 100%;
+      padding: 11px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: linear-gradient(135deg, #1b2230, #131926);
+      color: var(--text);
+      cursor: pointer;
+      font-weight: 600;
+      letter-spacing: 0.2px;
+      transition: transform 0.08s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+    }
+
+    button:hover, label.input-btn:hover {
+      border-color: var(--accent);
+      box-shadow: 0 8px 24px rgba(90, 209, 255, 0.18);
+    }
+
+    button:active, label.input-btn:active {
+      transform: translateY(1px);
+    }
+
+    button.secondary {
+      background: #111623;
+    }
+
+    .stack { display: grid; gap: 8px; }
+
+    .log {
+      height: 200px;
+      overflow: auto;
+      font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+      background: #0a0d14;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      color: #cdd7e5;
+      line-height: 1.35;
+    }
+
     .hint {
-      max-width: 640px;
-      text-align: center;
-      line-height: 1.5;
-      opacity: 0.8;
+      margin: 4px 0 10px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
     }
+
+    input[type="file"] { display: none; }
   </style>
-  <script>
-    // TODO: Replace this placeholder with the built React bundle that renders @excalidraw/excalidraw.
-    // Make sure to set window.EXCALIDRAW_ASSET_PATH to the directory containing the self-hosted fonts.
-    window.NativeBridgeCallbacks = {
-      onNativeMessage: (payload) => {
-        console.log('Native message', payload);
-      }
-    };
-  </script>
 </head>
 <body>
-  <div id="placeholder">
-    <div class="hint">
-      <p>Excalidraw bundle not yet added.</p>
-      <p>Build the React app (offline) and place the output files in this folder. Load via https://appassets.androidplatform.net/assets/web/index.html.</p>
+  <div class="card">
+    <header>
+      <div>
+        <h1>Diagrammer HTML Preview</h1>
+        <div class="hint">Lightweight page to sanity-check the NativeBridge before wiring the Excalidraw bundle.</div>
+      </div>
+      <div class="pill" id="bridge-status">NativeBridge: pending</div>
+    </header>
+
+    <div class="grid">
+      <div class="panel">
+        <h2>Scene storage</h2>
+        <div class="stack">
+          <button id="save-btn">Save sample scene</button>
+          <button id="load-btn" class="secondary">Load saved scene</button>
+          <div class="hint">Calls NativeBridge.saveScene/loadScene with a minimal JSON payload.</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Exports</h2>
+        <div class="stack">
+          <button id="png-btn">Export sample PNG</button>
+          <button id="svg-btn" class="secondary">Export sample SVG</button>
+          <div class="hint">Generates in-memory artwork and sends Base64 data URLs to NativeBridge.exportPng/exportSvg.</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Gallery picker</h2>
+        <div class="stack">
+          <label class="input-btn" for="file-input">Open image picker</label>
+          <input id="file-input" type="file" accept="image/*" multiple />
+          <div class="hint">Triggers WebView file chooser; selected URIs flow back to the page.</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Log</h2>
+        <div class="stack">
+          <button id="clear-log" class="secondary">Clear log</button>
+          <div id="log" class="log"></div>
+        </div>
+      </div>
     </div>
   </div>
+
+  <script>
+    // Keep Excalidraw asset path explicit when the real bundle is dropped in.
+    window.EXCALIDRAW_ASSET_PATH = "/assets/web/";
+
+    const logEl = document.getElementById("log");
+    const statusEl = document.getElementById("bridge-status");
+
+    function log(message) {
+      const line = document.createElement("div");
+      const stamp = new Date().toLocaleTimeString();
+      line.textContent = `[${stamp}] ${message}`;
+      logEl.appendChild(line);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function setStatus(text, ok) {
+      statusEl.textContent = text;
+      statusEl.style.borderColor = ok ? "#3fcf8e" : "#d46b6b";
+      statusEl.style.color = ok ? "#a6f4c5" : "#f6c7c7";
+    }
+
+    const native = window.NativeBridge ?? {
+      saveScene: (json) => log(`[stub] saveScene called with ${json.length} chars`),
+      loadScene: () => {
+        log("[stub] loadScene returning null");
+        return null;
+      },
+      exportPng: (dataUrl) => log(`[stub] exportPng got ${dataUrl.length} chars`),
+      exportSvg: (dataUrl) => log(`[stub] exportSvg got ${dataUrl.length} chars`)
+    };
+
+    window.NativeBridgeCallbacks = {
+      onNativeMessage: (payload) => {
+        log(`Native message: ${JSON.stringify(payload)}`);
+      }
+    };
+
+    const bridgeDetected = Boolean(window.NativeBridge);
+    setStatus(`NativeBridge: ${bridgeDetected ? "ready" : "stubbed (web preview)"}`, bridgeDetected);
+
+    function sampleScene() {
+      return {
+        updatedAt: new Date().toISOString(),
+        elements: [
+          { type: "rectangle", width: 120, height: 80, x: 80, y: 80 },
+          { type: "text", text: "Hello Diagrammer", x: 100, y: 130 }
+        ],
+        appState: { theme: "dark" }
+      };
+    }
+
+    function handleSave() {
+      const payload = JSON.stringify(sampleScene());
+      native.saveScene(payload);
+      log(`Requested save (${payload.length} chars)`);
+    }
+
+    function handleLoad() {
+      const result = native.loadScene?.();
+      if (result) {
+        log(`Loaded scene: ${result.slice(0, 120)}...`);
+      } else {
+        log("No scene returned (null/empty)");
+      }
+    }
+
+    function makePngDataUrl() {
+      const canvas = document.createElement("canvas");
+      canvas.width = 720;
+      canvas.height = 405;
+      const ctx = canvas.getContext("2d");
+      const g = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+      g.addColorStop(0, "#101b2d");
+      g.addColorStop(1, "#0a0f1d");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#5ad1ff";
+      ctx.font = "bold 28px 'Helvetica Neue', system-ui";
+      ctx.fillText("Diagrammer export", 32, 64);
+      ctx.fillStyle = "#cdd7e5";
+      ctx.font = "16px 'Helvetica Neue', system-ui";
+      ctx.fillText("Sample PNG generated in-page", 32, 96);
+      ctx.strokeStyle = "#3fcf8e";
+      ctx.lineWidth = 3;
+      ctx.strokeRect(28, 120, 300, 180);
+      return canvas.toDataURL("image/png");
+    }
+
+    function makeSvgDataUrl() {
+      const svg = [
+        '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">',
+        '<defs><linearGradient id="g" x1="0" x2="1" y1="0" y2="1">',
+        '<stop offset="0%" stop-color="#0f1726"/><stop offset="100%" stop-color="#0a0f1c"/>',
+        '</linearGradient></defs>',
+        '<rect width="640" height="360" fill="url(#g)"/>',
+        '<rect x="32" y="32" width="200" height="120" rx="14" fill="none" stroke="#5ad1ff" stroke-width="3"/>',
+        '<text x="260" y="96" fill="#5ad1ff" font-size="26" font-family="Helvetica, Arial, sans-serif" font-weight="700">Diagrammer export</text>',
+        '<text x="260" y="132" fill="#cdd7e5" font-size="16" font-family="Helvetica, Arial, sans-serif">Sample SVG generated in-page</text>',
+        '</svg>'
+      ].join("");
+      const base64 = btoa(unescape(encodeURIComponent(svg)));
+      return `data:image/svg+xml;base64,${base64}`;
+    }
+
+    function handleExportPng() {
+      const dataUrl = makePngDataUrl();
+      native.exportPng(dataUrl);
+      log(`Requested PNG export (${dataUrl.length} chars)`);
+    }
+
+    function handleExportSvg() {
+      const dataUrl = makeSvgDataUrl();
+      native.exportSvg(dataUrl);
+      log(`Requested SVG export (${dataUrl.length} chars)`);
+    }
+
+    document.getElementById("save-btn").addEventListener("click", handleSave);
+    document.getElementById("load-btn").addEventListener("click", handleLoad);
+    document.getElementById("png-btn").addEventListener("click", handleExportPng);
+    document.getElementById("svg-btn").addEventListener("click", handleExportSvg);
+    document.getElementById("clear-log").addEventListener("click", () => { logEl.innerHTML = ""; });
+
+    const input = document.getElementById("file-input");
+    input.addEventListener("change", (ev) => {
+      const names = Array.from(ev.target.files || []).map(f => f.name).join(", ");
+      log(names ? `Selected: ${names}` : "Picker cancelled");
+    });
+
+    log("Page ready. Use the buttons to exercise the NativeBridge.");
+  </script>
 </body>
 </html>
