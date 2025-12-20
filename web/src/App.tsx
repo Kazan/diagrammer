@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Excalidraw, WelcomeScreen } from "@excalidraw/excalidraw";
+import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import "@excalidraw/excalidraw/index.css";
+import { CustomToolbar, type ToolType } from "./components/CustomToolbar";
 
 const EMPTY_SCENE = {
   elements: [],
@@ -40,8 +42,11 @@ function NativeStatus({ present }: { present: boolean }) {
 }
 
 export default function App() {
-  const apiRef = useRef<any>(null);
+  const apiRef = useRef<ExcalidrawImperativeAPI | null>(null);
+  const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null);
   const [nativePresent, setNativePresent] = useState(false);
+  const [activeTool, setActiveTool] = useState<ToolType>("rectangle");
+  const HIDE_BUILTIN_TOOLBAR = false;
 
   useEffect(() => {
     setNativePresent(Boolean((window as any).NativeBridge));
@@ -49,8 +54,27 @@ export default function App() {
 
   const initialData = useMemo(() => EMPTY_SCENE, []);
 
+  useEffect(() => {
+    if (!api) {
+      return undefined;
+    }
+    const unsubscribe = api.onChange((_, appState) => {
+      const tool = appState.activeTool?.type as ToolType | undefined;
+      if (tool) {
+        setActiveTool(tool);
+      }
+    });
+    return () => unsubscribe();
+  }, [api]);
+
+  const handleSelectTool = (tool: ToolType) => {
+    setActiveTool(tool);
+    apiRef.current?.setActiveTool({ type: tool });
+  };
+
   return (
     <div
+      className={HIDE_BUILTIN_TOOLBAR ? "hide-builtin-toolbar" : undefined}
       style={{
         height: "100vh",
         width: "100vw",
@@ -62,6 +86,8 @@ export default function App() {
         initialData={initialData}
         excalidrawAPI={(api) => {
           apiRef.current = api;
+          setApi(api);
+          api.setActiveTool({ type: "rectangle" });
         }}
       >
         {/* Render a stripped-down welcome screen so the default menu items stay hidden */}
@@ -75,6 +101,7 @@ export default function App() {
           </WelcomeScreen.Center>
         </WelcomeScreen>
       </Excalidraw>
+      <CustomToolbar activeTool={activeTool} onSelect={handleSelectTool} />
       <NativeStatus present={nativePresent} />
     </div>
   );
