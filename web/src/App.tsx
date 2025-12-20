@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Excalidraw } from "@excalidraw/excalidraw";
+import { Excalidraw, WelcomeScreen } from "@excalidraw/excalidraw";
 import "@excalidraw/excalidraw/index.css";
 
 const EMPTY_SCENE = {
   elements: [],
   appState: {
-    viewBackgroundColor: "#0f172a",
+    viewBackgroundColor: "#ecececff",
     theme: "dark" as const,
   },
   files: {},
@@ -63,7 +63,18 @@ export default function App() {
         excalidrawAPI={(api) => {
           apiRef.current = api;
         }}
-      />
+      >
+        {/* Render a stripped-down welcome screen so the default menu items stay hidden */}
+        <WelcomeScreen>
+          <WelcomeScreen.Center>
+            <WelcomeScreen.Center.Logo />
+            <WelcomeScreen.Center.Heading>
+              Start drawing whenever you like
+            </WelcomeScreen.Center.Heading>
+            {/* No menu items rendered here on purpose */}
+          </WelcomeScreen.Center>
+        </WelcomeScreen>
+      </Excalidraw>
       <NativeStatus present={nativePresent} />
     </div>
   );
