@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Diagrammer</title>
+  <style>
+    html, body, #root {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: #111;
+      color: #f5f5f5;
+      overflow: hidden;
+      touch-action: none;
+    }
+    #placeholder {
+      display: grid;
+      place-items: center;
+      height: 100%;
+      font-family: sans-serif;
+    }
+    .hint {
+      max-width: 640px;
+      text-align: center;
+      line-height: 1.5;
+      opacity: 0.8;
+    }
+  </style>
+  <script>
+    // TODO: Replace this placeholder with the built React bundle that renders @excalidraw/excalidraw.
+    // Make sure to set window.EXCALIDRAW_ASSET_PATH to the directory containing the self-hosted fonts.
+    window.NativeBridgeCallbacks = {
+      onNativeMessage: (payload) => {
+        console.log('Native message', payload);
+      }
+    };
+  </script>
+</head>
+<body>
+  <div id="placeholder">
+    <div class="hint">
+      <p>Excalidraw bundle not yet added.</p>
+      <p>Build the React app (offline) and place the output files in this folder. Load via https://appassets.androidplatform.net/assets/web/index.html.</p>
+    </div>
+  </div>
+</body>
+</html>
