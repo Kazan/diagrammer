@@ -7,5 +7,12 @@ export default defineConfig({
   build: {
     outDir: "../app/src/main/assets/web",
     emptyOutDir: true,
+    cssCodeSplit: false,
+    rollupOptions: {
+      output: {
+        // Force a single JS bundle to ship with the Android assets.
+        manualChunks: () => "bundle",
+      },
+    },
   },
 });
