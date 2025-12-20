@@ -8,7 +8,7 @@ const EMPTY_SCENE = {
   elements: [],
   appState: {
     viewBackgroundColor: "#ecececff",
-    theme: "dark" as const,
+    theme: "light" as const,
   },
   files: {},
 };
@@ -30,7 +30,7 @@ function NativeStatus({ present }: { present: boolean }) {
         padding: "8px 12px",
         borderRadius: 999,
         border: `1px solid ${color}66`,
-        background: "#0b1220cc",
+        background: "#ffffffcc",
         color,
         fontSize: 12,
         letterSpacing: 0.2,
@@ -78,11 +78,12 @@ export default function App() {
       style={{
         height: "100vh",
         width: "100vw",
-        background: "#0b1220",
-        color: "#e2e8f0",
+        background: "#f5f5f5",
+        color: "#0f172a",
       }}
     >
       <Excalidraw
+        theme="light"
         initialData={initialData}
         excalidrawAPI={(api) => {
           apiRef.current = api;
