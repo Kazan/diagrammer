@@ -8,6 +8,7 @@ export default defineConfig({
     outDir: "../app/src/main/assets/web",
     emptyOutDir: true,
     cssCodeSplit: false,
+    chunkSizeWarningLimit: 9000,
     rollupOptions: {
       output: {
         // Force a single JS bundle to ship with the Android assets.

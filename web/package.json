@@ -10,12 +10,12 @@
   },
   "dependencies": {
     "@excalidraw/excalidraw": "0.18.0",
-    "react": "19.0.0",
-    "react-dom": "19.0.0"
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
   },
   "devDependencies": {
-    "@types/react": "19.0.10",
-    "@types/react-dom": "19.0.4",
+    "@types/react": "18.3.11",
+    "@types/react-dom": "18.3.0",
     "@vitejs/plugin-react": "5.0.4",
     "typescript": "5.6.3",
     "vite": "5.4.10"

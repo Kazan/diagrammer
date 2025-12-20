@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace "com.example.diagrammerapp"
-    compileSdk 36
+    compileSdk 35
 
     defaultConfig {
         applicationId "com.example.diagrammerapp"
         minSdk 26
-        targetSdk 36
+        targetSdk 35
         versionCode 1
         versionName "1.0.0"
 
@@ -66,4 +66,31 @@ dependencies {
     implementation "androidx.activity:activity-ktx:1.8.2"
     implementation "androidx.lifecycle:lifecycle-runtime-ktx:2.6.2"
     implementation "androidx.webkit:webkit:1.10.0"
+}
+
+def rootApkDir = rootDir.toPath().resolve("build").toFile()
+
+tasks.register("copyReleaseApk", Copy) {
+    dependsOn("assembleRelease")
+    from(layout.buildDirectory.dir("outputs/apk/release"))
+    include("*.apk")
+    into(rootApkDir)
+    rename { name -> name == "app-release-unsigned.apk" ? "app-release.apk" : name }
+}
+
+tasks.register("copyDebugApk", Copy) {
+    dependsOn("assembleDebug")
+    from(layout.buildDirectory.dir("outputs/apk/debug"))
+    include("*.apk")
+    into(rootApkDir)
+}
+
+afterEvaluate {
+    tasks.named("assembleRelease").configure {
+        finalizedBy("copyReleaseApk")
+    }
+
+    tasks.named("assembleDebug").configure {
+        finalizedBy("copyDebugApk")
+    }
 }
