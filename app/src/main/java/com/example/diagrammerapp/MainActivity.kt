@@ -43,8 +43,24 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var assetLoader: WebViewAssetLoader
+    private var nativeBridge: NativeBridge? = null
+    private val dateFormat = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
     private val ioScope = CoroutineScope(Dispatchers.IO + Job())
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    private var pendingDocumentContent: String? = null
+    private val createDocumentLauncher = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        nativeBridge?.completeDocumentSave(uri, pendingDocumentContent)
+        pendingDocumentContent = null
+    }
+
+    private val openDocumentLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        nativeBridge?.completeDocumentLoad(uri)
+    }
 
     private var fileChooserCallback: ValueCallback<Array<Uri>>? = null
     private val galleryLauncher = registerForActivityResult(
@@ -109,8 +125,16 @@ class MainActivity : ComponentActivity() {
                     context = this@MainActivity,
                     ioScope = ioScope,
                     mainHandler = mainHandler,
-                    webView = this
-                ),
+                    webView = this,
+                    startDocumentPicker = { content ->
+                        pendingDocumentContent = content
+                        val fileName = "diagram_${dateFormat.format(Date())}.excalidraw"
+                        createDocumentLauncher.launch(fileName)
+                    },
+                    startOpenDocument = {
+                        openDocumentLauncher.launch(arrayOf("application/json", "application/octet-stream", "*/*"))
+                    }
+                ).also { nativeBridge = it },
                 "NativeBridge"
             )
         }
@@ -195,9 +219,13 @@ private class NativeBridge(
     private val context: Context,
     private val ioScope: CoroutineScope,
     private val mainHandler: Handler,
-    private val webView: WebView
+    private val webView: WebView,
+    private val startDocumentPicker: (String) -> Unit,
+    private val startOpenDocument: () -> Unit
 ) {
     private val dateFormat = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
+    @Volatile
+    private var pendingDocumentContent: String? = null
 
     @JavascriptInterface
     fun saveScene(json: String) {
@@ -206,6 +234,21 @@ private class NativeBridge(
             runCatching { file.writeText(json) }
                 .onSuccess { notifyJs("onSaveComplete", true, null) }
                 .onFailure { notifyJs("onSaveComplete", false, it.message) }
+        }
+    }
+
+    @JavascriptInterface
+    fun saveSceneToDocument(json: String) {
+        pendingDocumentContent = json
+        mainHandler.post {
+            startDocumentPicker(json)
+        }
+    }
+
+    @JavascriptInterface
+    fun openSceneFromDocument() {
+        mainHandler.post {
+            startOpenDocument()
         }
     }
 
@@ -290,6 +333,50 @@ private class NativeBridge(
         val script = "window.NativeBridgeCallbacks && window.NativeBridgeCallbacks.onNativeMessage(${payload});"
         mainHandler.post {
             webView.evaluateJavascript(script, null)
+        }
+    }
+
+    fun completeDocumentSave(uri: Uri?, content: String?) {
+        if (uri == null) {
+            notifyJs("onSaveComplete", false, "No location selected")
+            return
+        }
+        val data = content ?: run {
+            notifyJs("onSaveComplete", false, "Nothing to save")
+            return
+        }
+        ioScope.launch {
+            runCatching {
+                context.contentResolver.openOutputStream(uri)?.use { stream ->
+                    stream.write(data.toByteArray())
+                    stream.flush()
+                } ?: error("No output stream")
+            }.onSuccess {
+                notifyJs("onSaveComplete", true, null)
+            }.onFailure {
+                notifyJs("onSaveComplete", false, it.message)
+            }
+        }
+    }
+
+    fun completeDocumentLoad(uri: Uri?) {
+        if (uri == null) {
+            notifyJs("onNativeMessage", false, "No file selected")
+            return
+        }
+        ioScope.launch {
+            val content = runCatching {
+                context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+            }.getOrNull()
+            if (content == null) {
+                notifyJs("onNativeMessage", false, "Unable to read file")
+                return@launch
+            }
+            val escaped = JSONObject.quote(content)
+            val script = "window.NativeBridgeCallbacks && window.NativeBridgeCallbacks.onSceneLoaded(${escaped});"
+            mainHandler.post {
+                webView.evaluateJavascript(script, null)
+            }
         }
     }
 }
