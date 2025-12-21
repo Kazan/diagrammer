@@ -130,7 +130,7 @@ export default function App() {
           openFileResolveRef.current = null;
           openFileRejectRef.current = null;
         };
-        nativeBridge.openSceneFromDocument();
+        nativeBridge?.openSceneFromDocument?.();
       });
     return () => {
       (window as any).showOpenFilePicker = originalShowPicker;
@@ -139,7 +139,7 @@ export default function App() {
 
   const initialData = useMemo(() => startupScene ?? EMPTY_SCENE, [startupScene]);
 
-  const computeSceneSignature = useCallback((elements: any[], appState: any) => {
+  const computeSceneSignature = useCallback((elements: readonly any[], appState: any) => {
     const elemSig = elements
       .map((el) => `${el.id}:${el.version}:${el.isDeleted ? 1 : 0}`)
       .join("|");
@@ -174,7 +174,7 @@ export default function App() {
     if (!api) return;
     const elements = api.getSceneElements();
     hydratedSceneRef.current = true;
-    prevNonEmptySceneRef.current = elements.length > 0;
+    prevNonEmptySceneRef.current = elements.filter((el) => !el.isDeleted).length > 0;
     prevSceneSigRef.current = computeSceneSignature(elements, api.getAppState());
   }, [api, computeSceneSignature]);
 
@@ -264,13 +264,13 @@ export default function App() {
                   bytes: currentContent.length,
                   name: fileName,
                 });
-                nativeBridge.saveSceneToCurrentDocument(currentContent);
+                nativeBridge?.saveSceneToCurrentDocument?.(currentContent);
               } else {
                 console.log("[NativeBridge] saveSceneToDocument ->", {
                   bytes: currentContent.length,
                   name: fileName,
                 });
-                nativeBridge.saveSceneToDocument(currentContent);
+                nativeBridge?.saveSceneToDocument?.(currentContent);
               }
             },
             abort() {
@@ -286,8 +286,11 @@ export default function App() {
   );
 
   const applyFileHandleToAppState = useCallback(
-    (handle: any) => {
+    (handle: any, opts?: { suppressDirty?: boolean }) => {
       if (!api) return;
+      if (opts?.suppressDirty) {
+        suppressNextDirtyRef.current = true;
+      }
       currentFileHandleRef.current = handle;
       const appState = api.getAppState();
       api.updateScene({ appState: { ...appState, fileHandle: handle } });
@@ -296,14 +299,14 @@ export default function App() {
   );
 
   const syncFileHandle = useCallback(
-    (rawName: string, fileContent = "", hasFileHandle = true) => {
+    (rawName: string, fileContent = "", hasFileHandle = true, opts?: { suppressDirty?: boolean }) => {
       const displayName = stripExtension(rawName || "Unsaved");
       const handle = createNativeFileHandle(displayName || "Unsaved", fileContent);
       currentFileHandleRef.current = handle;
       hasCurrentFileRef.current = hasFileHandle;
       setCurrentFileName(displayName || "Unsaved");
       if (api) {
-        applyFileHandleToAppState(handle);
+        applyFileHandleToAppState(handle, opts);
       }
       return handle;
     },
@@ -375,16 +378,13 @@ export default function App() {
         setActiveTool(tool);
       }
 
-      const isCleared = hydratedSceneRef.current && prevNonEmptySceneRef.current && elements.length === 0;
-      prevNonEmptySceneRef.current = elements.length > 0;
+      const visibleCount = elements.filter((el) => !el.isDeleted).length;
+      const hadNonEmptyScene = prevNonEmptySceneRef.current;
+      const becameEmpty = hydratedSceneRef.current && hadNonEmptyScene && visibleCount === 0;
+
       if (hydratedSceneRef.current) {
         const sig = computeSceneSignature(elements, appState);
-        if (suppressNextDirtyRef.current) {
-          suppressNextDirtyRef.current = false;
-        } else if (prevSceneSigRef.current && sig !== prevSceneSigRef.current) {
-          setIsDirty(true);
-        }
-        if (elements.length === 0 && sig === EMPTY_SCENE_SIG && prevSceneSigRef.current !== EMPTY_SCENE_SIG) {
+        if (becameEmpty) {
           setCurrentFileName("Unsaved");
           setIsDirty(false);
           suppressNextDirtyRef.current = true;
@@ -392,21 +392,20 @@ export default function App() {
           prevNonEmptySceneRef.current = false;
           clearFileAssociation();
           setStatus({ text: "Canvas cleared", tone: "warn" });
+        } else {
+          if (suppressNextDirtyRef.current) {
+            // First change after a programmatic load; treat as baseline.
+            suppressNextDirtyRef.current = false;
+            prevSceneSigRef.current = sig;
+            prevNonEmptySceneRef.current = visibleCount > 0;
+          } else {
+            if (prevSceneSigRef.current && sig !== prevSceneSigRef.current) {
+              setIsDirty(true);
+            }
+            prevSceneSigRef.current = sig;
+            prevNonEmptySceneRef.current = visibleCount > 0;
+          }
         }
-        if (elements.length === 0 && currentFileName !== "Unsaved") {
-          setCurrentFileName("Unsaved");
-        }
-      }
-      if (isCleared) {
-        setCurrentFileName("Unsaved");
-        setIsDirty(false);
-        suppressNextDirtyRef.current = true;
-        prevSceneSigRef.current = computeSceneSignature([], {
-          ...appState,
-          viewBackgroundColor: EMPTY_SCENE.appState.viewBackgroundColor,
-          theme: EMPTY_SCENE.appState.theme,
-        });
-        setStatus({ text: "Canvas cleared", tone: "warn" });
       }
 
       const dialogName = appState.openDialog?.name ?? null;
@@ -431,14 +430,13 @@ export default function App() {
         if (payload.success) {
           setLastSaved(new Date());
           syncFileHandle(displayName || "Untitled", "", true);
-            setIsDirty(false);
-            suppressNextDirtyRef.current = true;
-            if (api) {
-              prevSceneSigRef.current = computeSceneSignature(
-                api.getSceneElementsIncludingDeleted(),
-                api.getAppState()
-              );
-            }
+          setIsDirty(false);
+          suppressNextDirtyRef.current = true;
+          if (api) {
+            const elements = api.getSceneElementsIncludingDeleted();
+            prevSceneSigRef.current = computeSceneSignature(elements, api.getAppState());
+            prevNonEmptySceneRef.current = elements.some((el) => !el.isDeleted);
+          }
           setStatus({ text: `Saved${displayName ? `: ${displayName}` : ""}`, tone: "ok" });
         } else {
           setStatus({
@@ -476,29 +474,41 @@ export default function App() {
       onNativeMessage: handleNativeMessage,
       onSceneLoaded: (sceneJson: string, fileName?: string) => {
         console.log("[NativeBridge] onSceneLoaded", { fileName, bytes: sceneJson.length });
-        const resolvedName = fileName?.trim() ? fileName : "Unsaved";
+        let parsed: any = null;
+        let nextSig = EMPTY_SCENE_SIG;
+        let hasElements = false;
+        try {
+          parsed = JSON.parse(sceneJson);
+          nextSig = computeSceneSignatureFromScene(parsed);
+          hasElements = Array.isArray(parsed?.elements)
+            ? parsed.elements.some((el: any) => !el.isDeleted)
+            : false;
+        } catch (_err) {
+          parsed = null;
+          nextSig = EMPTY_SCENE_SIG;
+          hasElements = false;
+        }
+
+        const parsedName = parsed?.appState?.name?.trim();
+        const resolvedName = fileName?.trim()
+          ? fileName
+          : nativeBridge?.getCurrentFileName?.()?.trim() || parsedName || "Unsaved";
         const displayName = stripExtension(resolvedName);
-        const handle = syncFileHandle(displayName, sceneJson, true);
+        const handle = syncFileHandle(displayName, sceneJson, true, { suppressDirty: true });
+
+        suppressNextDirtyRef.current = true;
+        setIsDirty(false);
+        prevSceneSigRef.current = nextSig;
+        prevNonEmptySceneRef.current = hasElements;
+
         if (openFileResolveRef.current) {
           openFileResolveRef.current([handle]);
-          setIsDirty(false);
-          suppressNextDirtyRef.current = true;
-          try {
-            const parsed = JSON.parse(sceneJson);
-            prevSceneSigRef.current = computeSceneSignatureFromScene(parsed);
-          } catch (_err) {
-            prevSceneSigRef.current = EMPTY_SCENE_SIG;
-          }
         } else if (api) {
-          try {
-            const parsed = JSON.parse(sceneJson);
+          if (parsed) {
             api.updateScene(parsed);
-            setIsDirty(false);
-            suppressNextDirtyRef.current = true;
-            prevSceneSigRef.current = computeSceneSignatureFromScene(parsed);
             setStatus({ text: `Loaded${displayName !== "Unsaved" ? `: ${displayName}` : ""}`, tone: "ok" });
-          } catch (err) {
-            setStatus({ text: `Load failed: ${String(err)}`, tone: "err" });
+          } else {
+            setStatus({ text: "Load failed: invalid scene", tone: "err" });
           }
         }
         openFileResolveRef.current = null;
@@ -524,7 +534,7 @@ export default function App() {
     setPendingScene(null);
     hydratedSceneRef.current = true;
     prevNonEmptySceneRef.current = Array.isArray((pendingScene as any)?.elements)
-      ? (pendingScene as any).elements.length > 0
+      ? (pendingScene as any).elements.some((el: any) => !el.isDeleted)
       : false;
     setIsDirty(false);
     suppressNextDirtyRef.current = true;
@@ -552,10 +562,15 @@ export default function App() {
     }
     try {
       const parsed = JSON.parse(saved);
-      api.updateScene(parsed);
-      setIsDirty(false);
+      const nextSig = computeSceneSignatureFromScene(parsed);
+      const hasElements = Array.isArray(parsed?.elements)
+        ? parsed.elements.some((el: any) => !el.isDeleted)
+        : false;
       suppressNextDirtyRef.current = true;
-      prevSceneSigRef.current = computeSceneSignatureFromScene(parsed);
+      prevSceneSigRef.current = nextSig;
+      prevNonEmptySceneRef.current = hasElements;
+      setIsDirty(false);
+      api.updateScene(parsed);
       setStatus({ text: "Loaded saved drawing", tone: "ok" });
     } catch (err) {
       setStatus({ text: `Load failed: ${String(err)}`, tone: "err" });

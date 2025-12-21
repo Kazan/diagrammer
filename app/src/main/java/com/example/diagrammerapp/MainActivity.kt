@@ -1,3 +1,5 @@
+@file:Suppress("DEPRECATION")
+
 package com.example.diagrammerapp
 
 import android.annotation.SuppressLint
@@ -42,6 +44,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+@Suppress("DEPRECATION")
 class MainActivity : ComponentActivity() {
 
     private lateinit var binding: ActivityMainBinding
@@ -92,6 +95,7 @@ class MainActivity : ComponentActivity() {
     }
 
     @SuppressLint("SetJavaScriptEnabled")
+    @Suppress("DEPRECATION")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WebView.setWebContentsDebuggingEnabled(true)
@@ -106,15 +110,16 @@ class MainActivity : ComponentActivity() {
             .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
             .build()
 
+        @Suppress("DEPRECATION")
         with(binding.webView) {
             setBackgroundColor(0xFF000000.toInt())
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.cacheMode = WebSettings.LOAD_DEFAULT
+            @Suppress("DEPRECATION")
             settings.allowFileAccess = false
+            @Suppress("DEPRECATION")
             settings.allowContentAccess = true
-            settings.allowFileAccessFromFileURLs = false
-            settings.allowUniversalAccessFromFileURLs = false
             settings.setSupportZoom(false)
             settings.mediaPlaybackRequiresUserGesture = false
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -173,6 +178,7 @@ class MainActivity : ComponentActivity() {
         binding.webView.destroy()
     }
 
+    @Suppress("DEPRECATION")
     private fun enterImmersive() {
         val controller = WindowInsetsControllerCompat(window, binding.webView)
         controller.hide(WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.navigationBars())
@@ -184,7 +190,7 @@ class MainActivity : ComponentActivity() {
         val controller = WindowInsetsControllerCompat(window, binding.webView)
         controller.show(WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.navigationBars())
         controller.systemBarsBehavior =
-            WindowInsetsControllerCompat.BEHAVIOR_SHOW_BARS_BY_SWIPE
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
     }
 
     private inner class DiagrammerWebViewClient : WebViewClient() {
