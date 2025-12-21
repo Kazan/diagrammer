@@ -28,6 +28,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import android.content.Intent
+import com.example.diagrammerapp.BuildConfig
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -166,6 +167,16 @@ class MainActivity : ComponentActivity() {
                 }
             }
         )
+
+        // Debug-only: allow automated launch with a pre-specified scene URI for e2e testing.
+        handleLoadSceneExtra(intent)
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        if (intent != null) {
+            handleLoadSceneExtra(intent)
+        }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -191,6 +202,15 @@ class MainActivity : ComponentActivity() {
         controller.show(WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.navigationBars())
         controller.systemBarsBehavior =
             WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+    }
+
+    private fun handleLoadSceneExtra(intent: Intent) {
+        if (!BuildConfig.DEBUG) return
+        val uriString = intent.getStringExtra("LOAD_SCENE_URI")?.takeIf { it.isNotBlank() }
+        if (uriString == null) return
+        val uri = runCatching { Uri.parse(uriString) }.getOrNull() ?: return
+        Log.d("NativeBridge", "handleLoadSceneExtra uri=$uri")
+        nativeBridge?.completeDocumentLoad(uri)
     }
 
     private inner class DiagrammerWebViewClient : WebViewClient() {

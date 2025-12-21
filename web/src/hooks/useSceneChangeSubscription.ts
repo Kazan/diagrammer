@@ -14,6 +14,9 @@ export type SceneChangeOptions = {
   prevSceneSigRef: React.MutableRefObject<string | null>;
   prevNonEmptySceneRef: React.MutableRefObject<boolean>;
   hydratedSceneRef: React.MutableRefObject<boolean>;
+  sceneLoadInProgressRef: React.MutableRefObject<boolean>;
+  expectedSceneSigRef: React.MutableRefObject<string | null>;
+  loadSkipRef: React.MutableRefObject<number>;
   lastDialogRef: React.MutableRefObject<string | null>;
   handleSaveToDocument: () => void;
 };
@@ -30,6 +33,9 @@ export function useSceneChangeSubscription(opts: SceneChangeOptions) {
     prevSceneSigRef,
     prevNonEmptySceneRef,
     hydratedSceneRef,
+    sceneLoadInProgressRef,
+    expectedSceneSigRef,
+    loadSkipRef,
     lastDialogRef,
     handleSaveToDocument,
   } = opts;
@@ -37,6 +43,24 @@ export function useSceneChangeSubscription(opts: SceneChangeOptions) {
   useEffect(() => {
     if (!api) return undefined;
     const unsubscribe = api.onChange((elements, appState) => {
+      if (sceneLoadInProgressRef.current) {
+        const sig = computeSceneSignature(elements, appState);
+        prevSceneSigRef.current = sig;
+        prevNonEmptySceneRef.current = elements.some((el) => !el.isDeleted);
+        return;
+      }
+
+      if (loadSkipRef.current > 0) {
+        loadSkipRef.current -= 1;
+        const sig = computeSceneSignature(elements, appState);
+        prevSceneSigRef.current = sig;
+        prevNonEmptySceneRef.current = elements.some((el) => !el.isDeleted);
+        suppressNextDirtyRef.current = false;
+        expectedSceneSigRef.current = null;
+        setIsDirty(false);
+        return;
+      }
+
       const tool = appState.activeTool?.type as ToolType | undefined;
       if (tool) {
         setActiveTool(tool);
@@ -48,6 +72,15 @@ export function useSceneChangeSubscription(opts: SceneChangeOptions) {
 
       if (hydratedSceneRef.current) {
         const sig = computeSceneSignature(elements, appState);
+
+        if (expectedSceneSigRef.current && sig === expectedSceneSigRef.current) {
+          suppressNextDirtyRef.current = false;
+          expectedSceneSigRef.current = null;
+          prevSceneSigRef.current = sig;
+          prevNonEmptySceneRef.current = visibleCount > 0;
+          setIsDirty(false);
+          return;
+        }
         if (becameEmpty) {
           setCurrentFileName("Unsaved");
           setIsDirty(false);
@@ -89,6 +122,9 @@ export function useSceneChangeSubscription(opts: SceneChangeOptions) {
     lastDialogRef,
     prevNonEmptySceneRef,
     prevSceneSigRef,
+    sceneLoadInProgressRef,
+    expectedSceneSigRef,
+    loadSkipRef,
     setActiveTool,
     setCurrentFileName,
     setIsDirty,

@@ -21,6 +21,9 @@ export type NativeMessageDeps = {
   nativeBridge?: NativeBridge;
   openFileResolveRef: MutableRefObject<((handles: NativeFileHandle[]) => void) | null>;
   openFileRejectRef: MutableRefObject<((reason: any) => void) | null>;
+  sceneLoadInProgressRef: MutableRefObject<boolean>;
+  expectedSceneSigRef: MutableRefObject<string | null>;
+  loadSkipRef: MutableRefObject<number>;
 };
 
 export function useNativeMessageHandlers(deps: NativeMessageDeps) {
@@ -37,6 +40,9 @@ export function useNativeMessageHandlers(deps: NativeMessageDeps) {
     nativeBridge,
     openFileRejectRef,
     openFileResolveRef,
+    sceneLoadInProgressRef,
+    expectedSceneSigRef,
+    loadSkipRef,
   } = deps;
 
   const handleNativeMessage = useCallback(
@@ -125,6 +131,7 @@ export function useNativeMessageHandlers(deps: NativeMessageDeps) {
       const displayName = stripExtension(resolvedName);
       const handle = syncFileHandle(displayName, sceneJson, true, { suppressDirty: true });
 
+      sceneLoadInProgressRef.current = true;
       // Seed signature and suppress dirty before updating the scene so the first onChange
       // (triggered by updateScene) is ignored, and we overwrite the signature with the
       // canonical post-normalization one right after.
@@ -143,12 +150,15 @@ export function useNativeMessageHandlers(deps: NativeMessageDeps) {
           prevSceneSigRef.current = computeSceneSignature(elements, appState);
           prevNonEmptySceneRef.current = elements.some((el) => !el.isDeleted);
           suppressNextDirtyRef.current = true;
+          expectedSceneSigRef.current = prevSceneSigRef.current;
+          loadSkipRef.current = 2;
           setIsDirty(false);
           setStatus({ text: `Loaded${displayName !== "Unsaved" ? `: ${displayName}` : ""}`, tone: "ok" });
         } else {
           setStatus({ text: "Load failed: invalid scene", tone: "err" });
         }
       }
+      sceneLoadInProgressRef.current = false;
       openFileResolveRef.current = null;
       openFileRejectRef.current = null;
     },

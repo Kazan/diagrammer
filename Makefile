@@ -1,3 +1,15 @@
+ADB ?= adb
+APP_ID ?= com.example.diagrammerapp
+SCENE_URI ?= file:///sdcard/Download/sample-scene.excalidraw
+SCENE_FILE ?= research/sample-scene.excalidraw
+
+.PHONY: e2e-load-scene
+e2e-load-scene:
+	$(ADB) shell am force-stop $(APP_ID)
+	$(ADB) shell pm clear $(APP_ID)
+	$(ADB) push $(SCENE_FILE) /sdcard/Download/sample-scene.excalidraw
+	$(ADB) shell am start -S -W -n $(APP_ID)/.MainActivity --es LOAD_SCENE_URI $(SCENE_URI)
+	$(ADB) shell am start -S -W -n $(APP_ID)/.MainActivity --es LOAD_SCENE_URI $(SCENE_URI)
 WEB_DIR := web
 WEB_PORT ?= 5173
 AVD ?= Pixel_Tablet_API_34

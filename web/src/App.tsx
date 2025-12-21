@@ -38,6 +38,9 @@ export default function App() {
   const openFileRejectRef = useRef<((reason: any) => void) | null>(null);
   const prevNonEmptySceneRef = useRef(false);
   const hydratedSceneRef = useRef(false);
+  const sceneLoadInProgressRef = useRef(false);
+  const expectedSceneSigRef = useRef<string | null>(null);
+  const loadSkipRef = useRef(0);
   const suppressNextDirtyRef = useRef(false);
   const prevSceneSigRef = useRef<string | null>(null);
 
@@ -143,6 +146,9 @@ export default function App() {
     prevSceneSigRef,
     prevNonEmptySceneRef,
     hydratedSceneRef,
+    sceneLoadInProgressRef,
+    expectedSceneSigRef,
+    loadSkipRef,
     lastDialogRef,
     handleSaveToDocument,
   });
@@ -160,6 +166,9 @@ export default function App() {
     nativeBridge,
     openFileResolveRef,
     openFileRejectRef,
+    sceneLoadInProgressRef,
+    expectedSceneSigRef,
+    loadSkipRef,
   });
 
   useNativeBridgeCallbacks(nativeCallbacks);
