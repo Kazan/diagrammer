@@ -116,7 +116,7 @@ body {
   color: #0f172a;
   border: none;
   border-radius: 0;
-  font-weight: 700;
+  font-weight: 500;
   line-height: 1.25;
   letter-spacing: -0.01em;
   max-width: 220px;
@@ -125,5 +125,9 @@ body {
   text-overflow: ellipsis;
   box-shadow: none;
   z-index: 22;
+}
+
+.file-chip.is-dirty {
+  font-weight: 700;
 }
 

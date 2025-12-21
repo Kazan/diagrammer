@@ -13,6 +13,7 @@ import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.provider.OpenableColumns
 import android.util.Base64
+import android.util.Log
 import android.view.View
 import android.webkit.JavascriptInterface
 import android.webkit.ValueCallback
@@ -56,12 +57,14 @@ class MainActivity : ComponentActivity() {
     ) { uri ->
         nativeBridge?.completeDocumentSave(uri, pendingDocumentContent)
         pendingDocumentContent = null
+        enterImmersive()
     }
 
     private val openDocumentLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         nativeBridge?.completeDocumentLoad(uri)
+        enterImmersive()
     }
 
     private var fileChooserCallback: ValueCallback<Array<Uri>>? = null
@@ -91,6 +94,7 @@ class MainActivity : ComponentActivity() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WebView.setWebContentsDebuggingEnabled(true)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
@@ -131,9 +135,11 @@ class MainActivity : ComponentActivity() {
                     startDocumentPicker = { content ->
                         pendingDocumentContent = content
                         val fileName = "diagram_${dateFormat.format(Date())}.excalidraw"
+                        exitImmersive()
                         createDocumentLauncher.launch(fileName)
                     },
                     startOpenDocument = {
+                        exitImmersive()
                         openDocumentLauncher.launch(arrayOf("application/json", "application/octet-stream", "*/*"))
                     }
                 ).also { nativeBridge = it },
@@ -174,6 +180,13 @@ class MainActivity : ComponentActivity() {
             WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
     }
 
+    private fun exitImmersive() {
+        val controller = WindowInsetsControllerCompat(window, binding.webView)
+        controller.show(WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.navigationBars())
+        controller.systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_BARS_BY_SWIPE
+    }
+
     private inner class DiagrammerWebViewClient : WebViewClient() {
         override fun shouldInterceptRequest(
             view: WebView,
@@ -204,6 +217,16 @@ class MainActivity : ComponentActivity() {
     }
 
     private inner class DiagrammerWebChromeClient : WebChromeClient() {
+        override fun onConsoleMessage(message: android.webkit.ConsoleMessage?): Boolean {
+            if (message != null) {
+                Log.d(
+                    "DiagrammerWebView",
+                    "${message.messageLevel()}: ${message.message()} @ ${message.sourceId()}:${message.lineNumber()}"
+                )
+            }
+            return super.onConsoleMessage(message)
+        }
+
         override fun onShowFileChooser(
             webView: WebView?,
             filePathCallback: ValueCallback<Array<Uri>>?,
@@ -297,7 +320,15 @@ private class NativeBridge(
         }
         ioScope.launch {
             runCatching {
-                context.contentResolver.openOutputStream(target)?.use { stream ->
+                try {
+                    context.contentResolver.takePersistableUriPermission(
+                        target,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                    )
+                } catch (_: SecurityException) {
+                    // Proceed; openOutputStream will still fail if no permission
+                }
+                context.contentResolver.openOutputStream(target, "w")?.use { stream ->
                     stream.write(json.toByteArray())
                     stream.flush()
                 } ?: error("No output stream")
@@ -400,6 +431,7 @@ private class NativeBridge(
         message?.let { payload.put("message", it) }
         fileName?.let { payload.put("fileName", it) }
         val script = "window.NativeBridgeCallbacks && window.NativeBridgeCallbacks.onNativeMessage(${payload});"
+        Log.d("NativeBridge", "notifyJs -> $payload")
         mainHandler.post {
             webView.evaluateJavascript(script, null)
         }
@@ -416,7 +448,15 @@ private class NativeBridge(
         }
         ioScope.launch {
             runCatching {
-                context.contentResolver.openOutputStream(uri)?.use { stream ->
+                try {
+                    context.contentResolver.takePersistableUriPermission(
+                        uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                    )
+                } catch (_: SecurityException) {
+                    // ignore if not persistable
+                }
+                context.contentResolver.openOutputStream(uri, "w")?.use { stream ->
                     stream.write(data.toByteArray())
                     stream.flush()
                 } ?: error("No output stream")
