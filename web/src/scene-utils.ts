@@ -29,3 +29,41 @@ export const computeSceneSignatureFromScene = (scene: any) =>
   computeSceneSignature(scene?.elements ?? [], scene?.appState ?? {});
 
 export const EMPTY_SCENE_SIG = computeSceneSignature(EMPTY_SCENE.elements, EMPTY_SCENE.appState);
+
+export type SceneSaveEnvelope = {
+  json: string;
+  byteLength: number;
+  sha256?: string;
+  suggestedName?: string;
+  createdAt: number;
+};
+
+const toHex = (buffer: ArrayBuffer) =>
+  Array.from(new Uint8Array(buffer))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+
+export const buildSceneSaveEnvelope = async (
+  json: string,
+  suggestedName?: string,
+): Promise<SceneSaveEnvelope> => {
+  const encoder = new TextEncoder();
+  const bytes = encoder.encode(json);
+  let sha256: string | undefined;
+  try {
+    if (window.crypto?.subtle) {
+      const digest = await window.crypto.subtle.digest("SHA-256", bytes);
+      sha256 = toHex(digest);
+    }
+  } catch (_err) {
+    sha256 = undefined;
+  }
+
+  return {
+    json,
+    byteLength: bytes.byteLength,
+    sha256,
+    suggestedName,
+    createdAt: Date.now(),
+  };
+};

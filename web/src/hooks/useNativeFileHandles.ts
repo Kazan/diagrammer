@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from "react";
 import type { MutableRefObject } from "react";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import type { NativeBridge, NativeFileHandle } from "../native-bridge";
-import { stripExtension } from "../scene-utils";
+import { buildSceneSaveEnvelope, stripExtension } from "../scene-utils";
 
 type Options = {
   api: ExcalidrawImperativeAPI | null;
@@ -81,10 +81,28 @@ export function useNativeFileHandles({
               if (!nativeBridge) {
                 throw new Error("Native file save unavailable");
               }
+              const envelope = await buildSceneSaveEnvelope(currentContent, fileName);
+              const serialized = JSON.stringify(envelope);
               if (hasCurrentFileRef.current) {
-                nativeBridge?.saveSceneToCurrentDocument?.(currentContent);
+                if (nativeBridge.persistSceneToCurrentDocument) {
+                  nativeBridge.persistSceneToCurrentDocument(serialized);
+                } else if (nativeBridge.saveSceneToCurrentDocument) {
+                  nativeBridge.saveSceneToCurrentDocument(envelope.json);
+                } else if (nativeBridge.persistScene) {
+                  nativeBridge.persistScene(serialized);
+                } else {
+                  nativeBridge.saveScene?.(envelope.json);
+                }
               } else {
-                nativeBridge?.saveSceneToDocument?.(currentContent);
+                if (nativeBridge.persistSceneToDocument) {
+                  nativeBridge.persistSceneToDocument(serialized);
+                } else if (nativeBridge.saveSceneToDocument) {
+                  nativeBridge.saveSceneToDocument(envelope.json);
+                } else if (nativeBridge.persistScene) {
+                  nativeBridge.persistScene(serialized);
+                } else {
+                  nativeBridge.saveScene?.(envelope.json);
+                }
               }
             },
             abort() {

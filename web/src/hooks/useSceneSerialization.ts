@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import { serializeAsJSON } from "@excalidraw/excalidraw";
+import { buildSceneSaveEnvelope, type SceneSaveEnvelope } from "../scene-utils";
 
 export function useSceneSerialization(api: ExcalidrawImperativeAPI | null) {
   const serializeScenePayload = useCallback(
@@ -19,5 +20,13 @@ export function useSceneSerialization(api: ExcalidrawImperativeAPI | null) {
     [api]
   );
 
-  return { serializeScenePayload } as const;
+  const buildSceneEnvelope = useCallback(
+    async (opts?: { includeDeleted?: boolean; suggestedName?: string }): Promise<SceneSaveEnvelope> => {
+      const json = serializeScenePayload(opts);
+      return buildSceneSaveEnvelope(json, opts?.suggestedName);
+    },
+    [serializeScenePayload]
+  );
+
+  return { serializeScenePayload, buildSceneEnvelope } as const;
 }

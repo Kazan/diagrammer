@@ -37,9 +37,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.IOException
+import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -54,12 +56,10 @@ class MainActivity : ComponentActivity() {
     private val ioScope = CoroutineScope(Dispatchers.IO + Job())
     private val mainHandler = Handler(Looper.getMainLooper())
 
-    private var pendingDocumentContent: String? = null
     private val createDocumentLauncher = registerForActivityResult(
         ActivityResultContracts.CreateDocument("application/vnd.excalidraw+json")
     ) { uri ->
-        nativeBridge?.completeDocumentSave(uri, pendingDocumentContent)
-        pendingDocumentContent = null
+        nativeBridge?.completeDocumentSave(uri)
         enterImmersive()
     }
 
@@ -137,10 +137,10 @@ class MainActivity : ComponentActivity() {
                     ioScope = ioScope,
                     mainHandler = mainHandler,
                     webView = this,
-                    startDocumentPicker = { content ->
-                        pendingDocumentContent = content
+                    startDocumentPicker = { envelope ->
                         exitImmersive()
-                        val suggested = "diagram_${dateFormat.format(Date())}.excalidraw"
+                        val suggested = envelope.suggestedName?.takeIf { it.isNotBlank() }
+                            ?: "diagram_${dateFormat.format(Date())}.excalidraw"
                         createDocumentLauncher.launch(suggested)
                     },
                     startOpenDocument = {
@@ -246,18 +246,26 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+    private data class SaveEnvelope(
+        val json: String,
+        val byteLength: Long,
+        val sha256: String?,
+        val suggestedName: String?,
+        val createdAt: Long,
+    )
+
 private class NativeBridge(
     private val context: Context,
     private val ioScope: CoroutineScope,
     private val mainHandler: Handler,
     private val webView: WebView,
-    private val startDocumentPicker: (String) -> Unit,
+    private val startDocumentPicker: (SaveEnvelope) -> Unit,
     private val startOpenDocument: () -> Unit
 ) {
     private val prefs = context.getSharedPreferences("diagrammer_prefs", Context.MODE_PRIVATE)
     private val dateFormat = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
     @Volatile
-    private var pendingDocumentContent: String? = null
+    private var pendingEnvelope: SaveEnvelope? = null
     @Volatile
     private var currentDocumentUri: Uri? = null
     @Volatile
@@ -299,21 +307,203 @@ private class NativeBridge(
         return renamed to desiredName
     }
 
+    private fun parseEnvelope(raw: String?, source: String): SaveEnvelope? {
+        if (raw.isNullOrBlank()) {
+            Log.w("NativeBridge", "$source: missing envelope payload")
+            notifyJs("onSaveComplete", false, "Invalid save payload", currentDocumentName)
+            return null
+        }
+        return runCatching {
+            val obj = JSONObject(raw)
+            val json = obj.optString("json", "")
+            val byteLength = obj.optLong("byteLength", -1)
+            val sha256 = obj.optString("sha256", null)?.takeIf { it.isNotBlank() }
+            val suggestedName = obj.optString("suggestedName", null)?.takeIf { it.isNotBlank() }
+            val createdAt = obj.optLong("createdAt", System.currentTimeMillis())
+            SaveEnvelope(json = json, byteLength = byteLength, sha256 = sha256, suggestedName = suggestedName, createdAt = createdAt)
+        }.getOrElse {
+            Log.e("NativeBridge", "$source: failed to parse envelope", it)
+            notifyJs("onSaveComplete", false, "Invalid save payload", currentDocumentName)
+            null
+        }
+    }
+
+    private fun validateEnvelope(envelope: SaveEnvelope, source: String): Boolean {
+        val bytes = envelope.json.toByteArray(Charsets.UTF_8)
+        if (envelope.byteLength >= 0 && bytes.size.toLong() != envelope.byteLength) {
+            Log.e(
+                "NativeBridge",
+                "$source: byteLength mismatch (expected=${envelope.byteLength}, actual=${bytes.size})"
+            )
+            notifyJs("onSaveComplete", false, "Corrupt save payload", currentDocumentName)
+            return false
+        }
+        val declaredSha = envelope.sha256
+        if (!declaredSha.isNullOrBlank()) {
+            val actualSha = computeSha(bytes)
+            if (!declaredSha.equals(actualSha, ignoreCase = true)) {
+                Log.e(
+                    "NativeBridge",
+                    "$source: sha mismatch (expected=$declaredSha, actual=$actualSha)"
+                )
+                notifyJs("onSaveComplete", false, "Corrupt save payload", currentDocumentName)
+                return false
+            }
+        }
+        if (!isValidJsonStrict(envelope.json)) {
+            Log.e("NativeBridge", "$source: invalid JSON payload")
+            notifyJs("onSaveComplete", false, "Invalid scene JSON", currentDocumentName)
+            return false
+        }
+        return true
+    }
+
+    private fun isValidJsonStrict(text: String): Boolean {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) return false
+        return try {
+            val first = trimmed.first()
+            when (first) {
+                '{' -> JSONObject(trimmed)
+                '[' -> JSONArray(trimmed)
+                else -> return false
+            }
+            true
+        } catch (ex: Exception) {
+            false
+        }
+    }
+
+    private fun computeSha(bytes: ByteArray): String {
+        val digest = MessageDigest.getInstance("SHA-256").digest(bytes)
+        return buildString(digest.size * 2) {
+            digest.forEach { b ->
+                append(((b.toInt() ushr 4) and 0xF).toString(16))
+                append((b.toInt() and 0xF).toString(16))
+            }
+        }
+    }
+
+    private fun legacyEnvelope(json: String, suggestedName: String? = null): SaveEnvelope {
+        val bytes = json.toByteArray(Charsets.UTF_8)
+        val sha = computeSha(bytes)
+        return SaveEnvelope(
+            json = json,
+            byteLength = bytes.size.toLong(),
+            sha256 = sha,
+            suggestedName = suggestedName,
+            createdAt = System.currentTimeMillis()
+        )
+    }
+
+    private suspend fun writeEnvelopeToFile(file: File, envelope: SaveEnvelope, source: String) {
+        Log.d(
+            "NativeBridge",
+            "$source: writing to file=${file.name}, bytes=${envelope.byteLength}, suggested=${envelope.suggestedName}"
+        )
+        runCatching { file.writeText(envelope.json) }
+            .onSuccess { notifyJs("onSaveComplete", true, null, envelope.suggestedName) }
+            .onFailure {
+                Log.e("NativeBridge", "$source: write failed", it)
+                notifyJs("onSaveComplete", false, it.message, envelope.suggestedName)
+            }
+    }
+
+    private suspend fun writeEnvelopeToUri(uri: Uri, envelope: SaveEnvelope, source: String) {
+        Log.d(
+            "NativeBridge",
+            "$source: writing to uri=${uri}, bytes=${envelope.byteLength}, suggested=${envelope.suggestedName}"
+        )
+        runCatching {
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+            } catch (_: SecurityException) {
+                // Proceed; openOutputStream will still fail if permission is insufficient.
+            }
+            val mode = "rwt"
+            val stream = runCatching {
+                context.contentResolver.openOutputStream(uri, mode)
+            }.getOrNull() ?: context.contentResolver.openOutputStream(uri, "w")
+            stream?.use {
+                it.write(envelope.json.toByteArray(Charsets.UTF_8))
+                it.flush()
+            } ?: error("No output stream")
+        }.onSuccess {
+            val (finalUri, finalName) = ensureExcalidrawName(uri)
+            currentDocumentUri = finalUri
+            currentDocumentName = finalName ?: currentDocumentName
+            persistCurrentFile(currentDocumentUri, currentDocumentName)
+            notifyJs("onSaveComplete", true, null, currentDocumentName)
+        }.onFailure {
+            Log.e("NativeBridge", "$source: write failed", it)
+            notifyJs("onSaveComplete", false, it.message, currentDocumentName)
+        }
+    }
+
+    @JavascriptInterface
+    fun persistScene(envelopeJson: String) {
+        ioScope.launch {
+            val envelope = parseEnvelope(envelopeJson, "persistScene") ?: return@launch
+            if (!validateEnvelope(envelope, "persistScene")) return@launch
+            writeEnvelopeToFile(File(context.filesDir, "autosave.excalidraw.json"), envelope, "persistScene")
+        }
+    }
+
+    @JavascriptInterface
+    fun persistSceneToDocument(envelopeJson: String) {
+        pendingEnvelope = null
+        val envelope = parseEnvelope(envelopeJson, "persistSceneToDocument") ?: return
+        if (!validateEnvelope(envelope, "persistSceneToDocument")) return
+        pendingEnvelope = envelope
+        Log.d(
+            "NativeBridge",
+            "persistSceneToDocument: queued bytes=${envelope.byteLength}, suggested=${envelope.suggestedName}"
+        )
+        mainHandler.post {
+            startDocumentPicker(envelope)
+        }
+    }
+
+    @JavascriptInterface
+    fun persistSceneToCurrentDocument(envelopeJson: String) {
+        val target = currentDocumentUri
+        if (target == null) {
+            notifyJs("onSaveComplete", false, "No current file", null)
+            return
+        }
+        ioScope.launch {
+            val envelope = parseEnvelope(envelopeJson, "persistSceneToCurrentDocument") ?: return@launch
+            if (!validateEnvelope(envelope, "persistSceneToCurrentDocument")) return@launch
+            writeEnvelopeToUri(target, envelope, "persistSceneToCurrentDocument")
+        }
+    }
+
+    // Legacy entry points maintained for backward compatibility.
     @JavascriptInterface
     fun saveScene(json: String) {
+        Log.d("NativeBridge", "saveScene (legacy) invoked")
         ioScope.launch {
-            val file = File(context.filesDir, "autosave.excalidraw.json")
-            runCatching { file.writeText(json) }
-                .onSuccess { notifyJs("onSaveComplete", true, null, null) }
-                .onFailure { notifyJs("onSaveComplete", false, it.message, null) }
+            val envelope = legacyEnvelope(json, currentDocumentName)
+            if (!validateEnvelope(envelope, "saveScene")) return@launch
+            writeEnvelopeToFile(File(context.filesDir, "autosave.excalidraw.json"), envelope, "saveScene")
         }
     }
 
     @JavascriptInterface
     fun saveSceneToDocument(json: String) {
-        pendingDocumentContent = json
+        pendingEnvelope = null
+        val envelope = legacyEnvelope(json, currentDocumentName)
+        if (!validateEnvelope(envelope, "saveSceneToDocument")) return
+        pendingEnvelope = envelope
+        Log.d(
+            "NativeBridge",
+            "saveSceneToDocument (legacy): queued bytes=${envelope.byteLength}, suggested=${envelope.suggestedName}"
+        )
         mainHandler.post {
-            startDocumentPicker(json)
+            startDocumentPicker(envelope)
         }
     }
 
@@ -325,33 +515,15 @@ private class NativeBridge(
             return
         }
         ioScope.launch {
-            runCatching {
-                try {
-                    context.contentResolver.takePersistableUriPermission(
-                        target,
-                        Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                    )
-                } catch (_: SecurityException) {
-                    // Proceed; openOutputStream will still fail if no permission
-                }
-                context.contentResolver.openOutputStream(target, "w")?.use { stream ->
-                    stream.write(json.toByteArray())
-                    stream.flush()
-                } ?: error("No output stream")
-            }.onSuccess {
-                val (finalUri, finalName) = ensureExcalidrawName(target)
-                currentDocumentUri = finalUri
-                currentDocumentName = finalName ?: currentDocumentName
-                persistCurrentFile(currentDocumentUri, currentDocumentName)
-                notifyJs("onSaveComplete", true, null, currentDocumentName)
-            }.onFailure {
-                notifyJs("onSaveComplete", false, it.message, currentDocumentName)
-            }
+            val envelope = legacyEnvelope(json, currentDocumentName)
+            if (!validateEnvelope(envelope, "saveSceneToCurrentDocument")) return@launch
+            writeEnvelopeToUri(target, envelope, "saveSceneToCurrentDocument")
         }
     }
 
     @JavascriptInterface
     fun openSceneFromDocument() {
+        Log.d("NativeBridge", "openSceneFromDocument invoked")
         mainHandler.post {
             startOpenDocument()
         }
@@ -360,7 +532,9 @@ private class NativeBridge(
     @JavascriptInterface
     fun loadScene(): String? {
         val file = File(context.filesDir, "autosave.excalidraw.json")
-        return runCatching { file.takeIf { it.exists() }?.readText() }.getOrNull()
+        val result = runCatching { file.takeIf { it.exists() }?.readText() }.getOrNull()
+        Log.d("NativeBridge", "loadScene -> bytes=${result?.length ?: 0}")
+        return result
     }
 
     @JavascriptInterface
@@ -443,38 +617,20 @@ private class NativeBridge(
         }
     }
 
-    fun completeDocumentSave(uri: Uri?, content: String?) {
+    fun completeDocumentSave(uri: Uri?) {
         if (uri == null) {
+            pendingEnvelope = null
             notifyJs("onSaveComplete", false, "No location selected", null)
             return
         }
-        val data = content ?: run {
+        val envelope = pendingEnvelope ?: run {
             notifyJs("onSaveComplete", false, "Nothing to save", null)
             return
         }
+        pendingEnvelope = null
+        if (!validateEnvelope(envelope, "completeDocumentSave")) return
         ioScope.launch {
-            runCatching {
-                try {
-                    context.contentResolver.takePersistableUriPermission(
-                        uri,
-                        Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                    )
-                } catch (_: SecurityException) {
-                    // ignore if not persistable
-                }
-                context.contentResolver.openOutputStream(uri, "w")?.use { stream ->
-                    stream.write(data.toByteArray())
-                    stream.flush()
-                } ?: error("No output stream")
-            }.onSuccess {
-                val (finalUri, finalName) = ensureExcalidrawName(uri)
-                currentDocumentUri = finalUri
-                currentDocumentName = finalName ?: uri.lastPathSegment
-                persistCurrentFile(currentDocumentUri, currentDocumentName)
-                notifyJs("onSaveComplete", true, null, currentDocumentName)
-            }.onFailure {
-                notifyJs("onSaveComplete", false, it.message, currentDocumentName)
-            }
+            writeEnvelopeToUri(uri, envelope, "completeDocumentSave")
         }
     }
 
@@ -491,6 +647,7 @@ private class NativeBridge(
                 notifyJs("onNativeMessage", false, "Unable to read file", null)
                 return@launch
             }
+            Log.d("NativeBridge", "completeDocumentLoad: read bytes=${content.length}")
             val displayName = getDisplayName(uri)
             val normalizedName = displayName ?: uri.lastPathSegment
             try {

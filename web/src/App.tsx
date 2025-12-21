@@ -75,7 +75,7 @@ export default function App() {
     }
   }, []);
 
-  const { serializeScenePayload } = useSceneSerialization(api);
+  const { buildSceneEnvelope } = useSceneSerialization(api);
 
   useNativePickers({
     nativeBridge,
@@ -87,39 +87,50 @@ export default function App() {
     api,
   });
 
-  const performSave = useCallback(() => {
-    if (!api || !nativeBridge?.saveScene) return;
+  const performSave = useCallback(async () => {
+    if (!api || (!nativeBridge?.persistScene && !nativeBridge?.saveScene)) return;
     try {
-      const payload = serializeScenePayload();
-      nativeBridge.saveScene(payload);
+      const envelope = await buildSceneEnvelope({ suggestedName: currentFileName });
+      const serialized = JSON.stringify(envelope);
+      if (nativeBridge.persistScene) {
+        nativeBridge.persistScene(serialized);
+      } else {
+        nativeBridge.saveScene?.(envelope.json);
+      }
     } catch (err) {
       setStatus({ text: `Save failed: ${String(err)}`, tone: "err" });
     }
-  }, [api, nativeBridge, serializeScenePayload]);
+  }, [api, buildSceneEnvelope, currentFileName, nativeBridge, setStatus]);
 
   const handleSaveNow = useCallback(() => {
-    if (!nativeBridge?.saveScene) {
+    if (!nativeBridge?.persistScene && !nativeBridge?.saveScene) {
       setStatus({ text: "Native save unavailable", tone: "warn" });
       return;
     }
-    performSave();
-  }, [nativeBridge, performSave]);
+    void performSave();
+  }, [nativeBridge, performSave, setStatus]);
 
-  const handleSaveToDocument = useCallback(() => {
+  const handleSaveToDocument = useCallback(async () => {
     if (!api) {
       setStatus({ text: "Canvas not ready", tone: "warn" });
       return;
     }
-    if (!nativeBridge?.saveSceneToDocument) {
+    if (!nativeBridge?.persistSceneToDocument && !nativeBridge?.saveSceneToDocument) {
       setStatus({ text: "Native document picker unavailable", tone: "warn" });
       return;
     }
     try {
-      nativeBridge.saveSceneToDocument(serializeScenePayload());
+      const envelope = await buildSceneEnvelope({ suggestedName: currentFileName });
+      const serialized = JSON.stringify(envelope);
+      if (nativeBridge.persistSceneToDocument) {
+        nativeBridge.persistSceneToDocument(serialized);
+      } else {
+        nativeBridge.saveSceneToDocument?.(envelope.json);
+      }
     } catch (err) {
       setStatus({ text: `Save failed: ${String(err)}`, tone: "err" });
     }
-  }, [api, nativeBridge, serializeScenePayload]);
+  }, [api, buildSceneEnvelope, currentFileName, nativeBridge, setStatus]);
 
   useSceneChangeSubscription({
     api,
