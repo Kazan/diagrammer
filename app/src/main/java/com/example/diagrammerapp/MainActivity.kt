@@ -337,8 +337,10 @@ private class NativeBridge(
             val obj = JSONObject(raw)
             val json = obj.optString("json", "")
             val byteLength = obj.optLong("byteLength", -1)
-            val sha256 = obj.optString("sha256", null)?.takeIf { it.isNotBlank() }
-            val suggestedName = obj.optString("suggestedName", null)?.takeIf { it.isNotBlank() }
+            val sha256Raw = obj.optString("sha256")
+            val sha256 = if (sha256Raw.isNotBlank()) sha256Raw else null
+            val suggestedNameRaw = obj.optString("suggestedName")
+            val suggestedName = if (suggestedNameRaw.isNotBlank()) suggestedNameRaw else null
             val createdAt = obj.optLong("createdAt", System.currentTimeMillis())
             SaveEnvelope(json = json, byteLength = byteLength, sha256 = sha256, suggestedName = suggestedName, createdAt = createdAt)
         }.getOrElse {
