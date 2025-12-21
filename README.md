@@ -14,6 +14,27 @@ Offline-first Android app embedding Excalidraw in a hardened WebView. Assets are
 3. Build: `./gradlew assembleDebug` (after wrapper regeneration) or `gradle assembleDebug` if you use a global Gradle install.
 4. Install: `adb install -r app/build/outputs/apk/debug/app-debug.apk`.
 
+## Release keystore (for `make apk`)
+`make apk` calls `./gradlew assembleRelease`, which signs with `keystore/diagrammer-release.keystore` (ignored by git) unless you override the paths/passwords with `RELEASE_STORE_FILE`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS`, and `RELEASE_KEY_PASSWORD`.
+
+To create the default keystore used by `make apk`:
+1. Ensure `keytool` is available (ships with JDK).
+2. Create the folder if missing: `mkdir -p keystore`.
+3. Generate the key (default creds in `app/build.gradle`):
+```
+keytool -genkeypair -v \
+   -keystore keystore/diagrammer-release.keystore \
+   -storetype JKS \
+   -storepass android \
+   -keyalg RSA -keysize 2048 -validity 3650 \
+   -alias diagrammer \
+   -keypass android \
+   -dname "CN=Diagrammer, OU=Engineering, O=Diagrammer, C=US"
+```
+4. Keep the keystore private and out of source control; the directory is already ignored.
+
+With the keystore present, run `make apk` to produce a signed release APK in `build/`.
+
 ## Adding Excalidraw bundle
 1. Create a small React app that renders `<Excalidraw />` and imports `@excalidraw/excalidraw/index.css`.
 2. Copy the build output (JS/CSS) plus fonts into `app/src/main/assets/web/`.
