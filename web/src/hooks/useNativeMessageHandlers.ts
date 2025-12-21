@@ -125,10 +125,13 @@ export function useNativeMessageHandlers(deps: NativeMessageDeps) {
       const displayName = stripExtension(resolvedName);
       const handle = syncFileHandle(displayName, sceneJson, true, { suppressDirty: true });
 
+      // Seed signature and suppress dirty before updating the scene so the first onChange
+      // (triggered by updateScene) is ignored, and we overwrite the signature with the
+      // canonical post-normalization one right after.
       suppressNextDirtyRef.current = true;
-      setIsDirty(false);
       prevSceneSigRef.current = nextSig;
       prevNonEmptySceneRef.current = hasElements;
+      setIsDirty(false);
 
       if (openFileResolveRef.current) {
         openFileResolveRef.current([handle]);
