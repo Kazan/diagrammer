@@ -135,6 +135,12 @@ export function useNativeMessageHandlers(deps: NativeMessageDeps) {
       } else if (api) {
         if (parsed) {
           api.updateScene(parsed);
+          const elements = api.getSceneElementsIncludingDeleted();
+          const appState = api.getAppState();
+          prevSceneSigRef.current = computeSceneSignature(elements, appState);
+          prevNonEmptySceneRef.current = elements.some((el) => !el.isDeleted);
+          suppressNextDirtyRef.current = true;
+          setIsDirty(false);
           setStatus({ text: `Loaded${displayName !== "Unsaved" ? `: ${displayName}` : ""}`, tone: "ok" });
         } else {
           setStatus({ text: "Load failed: invalid scene", tone: "err" });
