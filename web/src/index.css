@@ -107,3 +107,23 @@ body {
   color: #0f172a;
 }
 
+.file-chip {
+  position: fixed;
+  top: 26px;
+  left: 60px;
+  padding: 0;
+  background: transparent;
+  color: #0f172a;
+  border: none;
+  border-radius: 0;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  max-width: 220px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: none;
+  z-index: 22;
+}
+

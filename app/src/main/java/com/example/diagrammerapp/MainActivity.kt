@@ -9,7 +9,9 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.DocumentsContract
 import android.provider.MediaStore
+import android.provider.OpenableColumns
 import android.util.Base64
 import android.view.View
 import android.webkit.JavascriptInterface
@@ -50,7 +52,7 @@ class MainActivity : ComponentActivity() {
 
     private var pendingDocumentContent: String? = null
     private val createDocumentLauncher = registerForActivityResult(
-        ActivityResultContracts.CreateDocument("application/json")
+        ActivityResultContracts.CreateDocument("application/vnd.excalidraw+json")
     ) { uri ->
         nativeBridge?.completeDocumentSave(uri, pendingDocumentContent)
         pendingDocumentContent = null
@@ -223,17 +225,58 @@ private class NativeBridge(
     private val startDocumentPicker: (String) -> Unit,
     private val startOpenDocument: () -> Unit
 ) {
+    private val prefs = context.getSharedPreferences("diagrammer_prefs", Context.MODE_PRIVATE)
     private val dateFormat = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
     @Volatile
     private var pendingDocumentContent: String? = null
+    @Volatile
+    private var currentDocumentUri: Uri? = null
+    @Volatile
+    private var currentDocumentName: String? = null
+
+    init {
+        val storedUri = prefs.getString("current_uri", null)
+        val storedName = prefs.getString("current_name", null)
+        currentDocumentUri = storedUri?.let { Uri.parse(it) }
+        currentDocumentName = storedName
+    }
+
+    private fun getDisplayName(uri: Uri): String? {
+        return runCatching {
+            context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                ?.use { cursor ->
+                    val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (index >= 0 && cursor.moveToFirst()) cursor.getString(index) else null
+                }
+        }.getOrNull()
+    }
+
+    private fun persistCurrentFile(uri: Uri?, name: String?) {
+        prefs.edit()
+            .putString("current_uri", uri?.toString())
+            .putString("current_name", name)
+            .apply()
+    }
+
+    private fun ensureExcalidrawName(uri: Uri): Pair<Uri, String?> {
+        val existingName = getDisplayName(uri) ?: uri.lastPathSegment
+        val hasExtension = existingName?.lowercase(Locale.US)?.endsWith(".excalidraw") == true
+        if (hasExtension) return uri to existingName
+        val base = existingName?.substringBeforeLast('.') ?: existingName ?: "diagram"
+        val desiredName = "$base.excalidraw"
+        val renamed = runCatching {
+            DocumentsContract.renameDocument(context.contentResolver, uri, desiredName)
+        }.getOrNull() ?: uri
+        return renamed to desiredName
+    }
 
     @JavascriptInterface
     fun saveScene(json: String) {
         ioScope.launch {
             val file = File(context.filesDir, "autosave.excalidraw.json")
             runCatching { file.writeText(json) }
-                .onSuccess { notifyJs("onSaveComplete", true, null) }
-                .onFailure { notifyJs("onSaveComplete", false, it.message) }
+                .onSuccess { notifyJs("onSaveComplete", true, null, null) }
+                .onFailure { notifyJs("onSaveComplete", false, it.message, null) }
         }
     }
 
@@ -242,6 +285,31 @@ private class NativeBridge(
         pendingDocumentContent = json
         mainHandler.post {
             startDocumentPicker(json)
+        }
+    }
+
+    @JavascriptInterface
+    fun saveSceneToCurrentDocument(json: String) {
+        val target = currentDocumentUri
+        if (target == null) {
+            notifyJs("onSaveComplete", false, "No current file", null)
+            return
+        }
+        ioScope.launch {
+            runCatching {
+                context.contentResolver.openOutputStream(target)?.use { stream ->
+                    stream.write(json.toByteArray())
+                    stream.flush()
+                } ?: error("No output stream")
+            }.onSuccess {
+                val (finalUri, finalName) = ensureExcalidrawName(target)
+                currentDocumentUri = finalUri
+                currentDocumentName = finalName ?: currentDocumentName
+                persistCurrentFile(currentDocumentUri, currentDocumentName)
+                notifyJs("onSaveComplete", true, null, currentDocumentName)
+            }.onFailure {
+                notifyJs("onSaveComplete", false, it.message, currentDocumentName)
+            }
         }
     }
 
@@ -262,7 +330,7 @@ private class NativeBridge(
     fun exportPng(base64DataUrl: String) {
         ioScope.launch {
             val bytes = decodeBase64DataUrl(base64DataUrl) ?: run {
-                notifyJs("onExportComplete", false, "Invalid PNG data")
+                notifyJs("onExportComplete", false, "Invalid PNG data", null)
                 return@launch
             }
             val displayName = "diagram_${dateFormat.format(Date())}.png"
@@ -274,7 +342,7 @@ private class NativeBridge(
     fun exportSvg(base64DataUrl: String) {
         ioScope.launch {
             val bytes = decodeBase64DataUrl(base64DataUrl) ?: run {
-                notifyJs("onExportComplete", false, "Invalid SVG data")
+                notifyJs("onExportComplete", false, "Invalid SVG data", null)
                 return@launch
             }
             val displayName = "diagram_${dateFormat.format(Date())}.svg"
@@ -296,7 +364,7 @@ private class NativeBridge(
 
         val uri = resolver.insert(collection, contentValues)
         if (uri == null) {
-            notifyJs("onExportComplete", false, "Unable to create media entry")
+            notifyJs("onExportComplete", false, "Unable to create media entry", null)
             return
         }
 
@@ -305,7 +373,7 @@ private class NativeBridge(
                 stream.write(bytes)
                 stream.flush()
             } ?: run {
-                notifyJs("onExportComplete", false, "No output stream")
+                notifyJs("onExportComplete", false, "No output stream", null)
                 return
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -314,9 +382,9 @@ private class NativeBridge(
                 }
                 resolver.update(uri, pendingClear, null, null)
             }
-            notifyJs("onExportComplete", true, null)
+            notifyJs("onExportComplete", true, null, null)
         } catch (ioe: IOException) {
-            notifyJs("onExportComplete", false, ioe.message)
+            notifyJs("onExportComplete", false, ioe.message, null)
         }
     }
 
@@ -325,11 +393,12 @@ private class NativeBridge(
         return runCatching { Base64.decode(cleaned, Base64.DEFAULT) }.getOrNull()
     }
 
-    private fun notifyJs(event: String, success: Boolean, message: String?) {
+    private fun notifyJs(event: String, success: Boolean, message: String?, fileName: String?) {
         val payload = JSONObject()
         payload.put("event", event)
         payload.put("success", success)
         message?.let { payload.put("message", it) }
+        fileName?.let { payload.put("fileName", it) }
         val script = "window.NativeBridgeCallbacks && window.NativeBridgeCallbacks.onNativeMessage(${payload});"
         mainHandler.post {
             webView.evaluateJavascript(script, null)
@@ -338,11 +407,11 @@ private class NativeBridge(
 
     fun completeDocumentSave(uri: Uri?, content: String?) {
         if (uri == null) {
-            notifyJs("onSaveComplete", false, "No location selected")
+            notifyJs("onSaveComplete", false, "No location selected", null)
             return
         }
         val data = content ?: run {
-            notifyJs("onSaveComplete", false, "Nothing to save")
+            notifyJs("onSaveComplete", false, "Nothing to save", null)
             return
         }
         ioScope.launch {
@@ -352,16 +421,20 @@ private class NativeBridge(
                     stream.flush()
                 } ?: error("No output stream")
             }.onSuccess {
-                notifyJs("onSaveComplete", true, null)
+                val (finalUri, finalName) = ensureExcalidrawName(uri)
+                currentDocumentUri = finalUri
+                currentDocumentName = finalName ?: uri.lastPathSegment
+                persistCurrentFile(currentDocumentUri, currentDocumentName)
+                notifyJs("onSaveComplete", true, null, currentDocumentName)
             }.onFailure {
-                notifyJs("onSaveComplete", false, it.message)
+                notifyJs("onSaveComplete", false, it.message, currentDocumentName)
             }
         }
     }
 
     fun completeDocumentLoad(uri: Uri?) {
         if (uri == null) {
-            notifyJs("onNativeMessage", false, "No file selected")
+            notifyJs("onNativeMessage", false, "No file selected", null)
             return
         }
         ioScope.launch {
@@ -369,14 +442,31 @@ private class NativeBridge(
                 context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
             }.getOrNull()
             if (content == null) {
-                notifyJs("onNativeMessage", false, "Unable to read file")
+                notifyJs("onNativeMessage", false, "Unable to read file", null)
                 return@launch
             }
+            val displayName = getDisplayName(uri)
+            val normalizedName = displayName ?: uri.lastPathSegment
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+            } catch (_: SecurityException) {
+                // ignore if not persistable
+            }
+            currentDocumentUri = uri
+            currentDocumentName = normalizedName
+            persistCurrentFile(currentDocumentUri, currentDocumentName)
             val escaped = JSONObject.quote(content)
-            val script = "window.NativeBridgeCallbacks && window.NativeBridgeCallbacks.onSceneLoaded(${escaped});"
+            val name = JSONObject.quote(currentDocumentName ?: "")
+            val script = "window.NativeBridgeCallbacks && window.NativeBridgeCallbacks.onSceneLoaded(${escaped}, ${name});"
             mainHandler.post {
                 webView.evaluateJavascript(script, null)
             }
         }
     }
+
+    @JavascriptInterface
+    fun getCurrentFileName(): String? = currentDocumentName
 }
