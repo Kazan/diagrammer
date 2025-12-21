@@ -220,9 +220,36 @@ export default function App() {
             return JSON.stringify(value);
           };
 
-          const writable = new WritableStream<string>({
-            async write(chunk) {
-              currentContent = await normalizeToString(chunk);
+          // Reset buffer for each writer
+          currentContent = "";
+
+          const writable = new WritableStream<any>({
+            async write(chunk: any) {
+              // Support FileSystemWritableFileStream-like write params.
+              const isWriteParams = chunk && typeof chunk === "object" && "type" in chunk;
+              if (isWriteParams) {
+                const kind = (chunk as any).type;
+                if (kind === "write") {
+                  const data = (chunk as any).data;
+                  const position = (chunk as any).position;
+                  const text = await normalizeToString(data);
+                  if (typeof position === "number" && position >= 0) {
+                    const prefix = currentContent.slice(0, position);
+                    const suffix = currentContent.slice(position + text.length);
+                    currentContent = `${prefix}${text}${suffix}`;
+                  } else {
+                    currentContent += text;
+                  }
+                  return;
+                }
+                if (kind === "truncate") {
+                  const size = (chunk as any).size ?? 0;
+                  currentContent = currentContent.slice(0, size);
+                  return;
+                }
+              }
+              const text = await normalizeToString(chunk);
+              currentContent += text;
             },
             async close() {
               if (!nativeBridge) {
@@ -366,6 +393,9 @@ export default function App() {
           clearFileAssociation();
           setStatus({ text: "Canvas cleared", tone: "warn" });
         }
+        if (elements.length === 0 && currentFileName !== "Unsaved") {
+          setCurrentFileName("Unsaved");
+        }
       }
       if (isCleared) {
         setCurrentFileName("Unsaved");
@@ -451,6 +481,14 @@ export default function App() {
         const handle = syncFileHandle(displayName, sceneJson, true);
         if (openFileResolveRef.current) {
           openFileResolveRef.current([handle]);
+          setIsDirty(false);
+          suppressNextDirtyRef.current = true;
+          try {
+            const parsed = JSON.parse(sceneJson);
+            prevSceneSigRef.current = computeSceneSignatureFromScene(parsed);
+          } catch (_err) {
+            prevSceneSigRef.current = EMPTY_SCENE_SIG;
+          }
         } else if (api) {
           try {
             const parsed = JSON.parse(sceneJson);

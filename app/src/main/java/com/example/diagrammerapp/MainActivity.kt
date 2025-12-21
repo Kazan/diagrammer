@@ -3,7 +3,6 @@ package com.example.diagrammerapp
 import android.annotation.SuppressLint
 import android.content.ContentValues
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -26,6 +25,7 @@ import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
+import android.content.Intent
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -134,9 +134,9 @@ class MainActivity : ComponentActivity() {
                     webView = this,
                     startDocumentPicker = { content ->
                         pendingDocumentContent = content
-                        val fileName = "diagram_${dateFormat.format(Date())}.excalidraw"
                         exitImmersive()
-                        createDocumentLauncher.launch(fileName)
+                        val suggested = "diagram_${dateFormat.format(Date())}.excalidraw"
+                        createDocumentLauncher.launch(suggested)
                     },
                     startOpenDocument = {
                         exitImmersive()
