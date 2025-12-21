@@ -6,6 +6,7 @@ local.properties
 *.iml
 /build/
 /app/build/
+/app/bin/
 /app/src/main/assets/web/assets/
 *.apk
 *.aab

@@ -3,7 +3,7 @@ import React from "react";
 export type ToolType = "rectangle" | "ellipse" | "arrow" | "diamond";
 
 type Props = {
-  activeTool: string;
+  activeTool: ToolType;
   onSelect: (tool: ToolType) => void;
 };
 

@@ -1,88 +1,31 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  Excalidraw,
-  WelcomeScreen,
-  exportToBlob,
-  exportToSvg,
-  serializeAsJSON,
-} from "@excalidraw/excalidraw";
+import { Excalidraw, WelcomeScreen } from "@excalidraw/excalidraw";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import "@excalidraw/excalidraw/index.css";
-import { CustomToolbar, type ToolType } from "./components/CustomToolbar";
+import { ChromeOverlay } from "./components/ChromeOverlay";
+import { type ToolType } from "./components/CustomToolbar";
+import { type StatusMessage } from "./components/NativeStatus";
+import { useNativeBridge, useNativeBridgeCallbacks } from "./hooks/useNativeBridge";
+import { useNativeFileHandles } from "./hooks/useNativeFileHandles";
+import { useNativePickers } from "./hooks/useNativePickers";
+import { useNativeMessageHandlers } from "./hooks/useNativeMessageHandlers";
+import { useSceneChangeSubscription } from "./hooks/useSceneChangeSubscription";
+import { useSceneSerialization } from "./hooks/useSceneSerialization";
+import { useExportActions } from "./hooks/useExportActions";
+import { useSceneHydration } from "./hooks/useSceneHydration";
+import { useNativeSceneLoader } from "./hooks/useNativeSceneLoader";
+import type { NativeFileHandle } from "./native-bridge";
 
-const EMPTY_SCENE = {
-  elements: [],
-  appState: {
-    viewBackgroundColor: "#ecececff",
-    theme: "light" as const,
-  },
-  files: {},
-};
-
-const statusColors = {
-  ok: "#3fcf8e",
-  warn: "#f59e0b",
-  err: "#ef4444",
-};
-
-type StatusMessage = { text: string; tone: keyof typeof statusColors };
-
-const stripExtension = (name?: string | null) => {
-  if (!name) return "Unsaved";
-  const trimmed = name.replace(/\.(excalidraw(?:\.json)?|json)$/i, "");
-  return trimmed || "Unsaved";
-};
-
-function NativeStatus({
-  present,
-  lastSaved,
-  status,
-}: {
-  present: boolean;
-  lastSaved: Date | null;
-  status: StatusMessage | null;
-}) {
-  const color = present ? statusColors.ok : statusColors.warn;
-  return (
-    <div className="native-status" style={{ borderColor: `${color}66`, color }}>
-      <div className="native-status__row">
-        <span className="native-status__dot" style={{ backgroundColor: color }} />
-        NativeBridge: {present ? "ready" : "not available"}
-      </div>
-      {lastSaved ? (
-        <div className="native-status__meta">Saved at {lastSaved.toLocaleTimeString()}</div>
-      ) : (
-        <div className="native-status__meta">No saves yet</div>
-      )}
-      {status ? (
-        <div className="native-status__banner" style={{ borderColor: `${statusColors[status.tone]}66` }}>
-          {status.text}
-        </div>
-      ) : null}
-    </div>
-  );
-}
+import { stripExtension } from "./scene-utils";
 
 export default function App() {
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null);
   const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null);
-  const [nativePresent, setNativePresent] = useState(false);
-  const [nativeBridge, setNativeBridge] = useState<Window["NativeBridge"]>();
-  const startupScene = useMemo(() => {
-    const saved = window.NativeBridge?.loadScene?.();
-    if (!saved) return null;
-    try {
-      return JSON.parse(saved);
-    } catch (err) {
-      console.warn("Failed to parse saved scene", err);
-      return null;
-    }
-  }, []);
+  const { nativeBridge, nativePresent } = useNativeBridge({});
   const initialStoredName = useMemo(
     () => stripExtension(window.NativeBridge?.getCurrentFileName?.() ?? ""),
     []
   );
-  const [pendingScene, setPendingScene] = useState(startupScene);
   const [status, setStatus] = useState<StatusMessage | null>(null);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [exporting, setExporting] = useState<"png" | "svg" | null>(null);
@@ -91,14 +34,37 @@ export default function App() {
   const [isDirty, setIsDirty] = useState(false);
   const HIDE_BUILTIN_TOOLBAR = false;
   const lastDialogRef = useRef<string | null>(null);
-  const openFileResolveRef = useRef<((handles: any[]) => void) | null>(null);
+  const openFileResolveRef = useRef<((handles: NativeFileHandle[]) => void) | null>(null);
   const openFileRejectRef = useRef<((reason: any) => void) | null>(null);
-  const currentFileHandleRef = useRef<any | null>(null);
-  const hasCurrentFileRef = useRef(initialStoredName !== "Unsaved");
   const prevNonEmptySceneRef = useRef(false);
   const hydratedSceneRef = useRef(false);
   const suppressNextDirtyRef = useRef(false);
   const prevSceneSigRef = useRef<string | null>(null);
+
+  const {
+    createNativeFileHandle,
+    syncFileHandle,
+    applyFileHandleToAppState,
+    clearFileAssociation,
+    currentFileHandleRef,
+    hasCurrentFileRef,
+  } = useNativeFileHandles({
+    api,
+    nativeBridge,
+    initialFileName: initialStoredName || "Unsaved",
+    setCurrentFileName,
+    suppressNextDirtyRef,
+  });
+
+  const { initialData } = useSceneHydration({
+    api,
+    setStatus,
+    setIsDirty,
+    suppressNextDirtyRef,
+    prevSceneSigRef,
+    prevNonEmptySceneRef,
+    hydratedSceneRef,
+  });
 
   useEffect(() => {
     // Ensure a clean slate even if the WebView kept localStorage (e.g., across reinstalls on some devices).
@@ -109,231 +75,17 @@ export default function App() {
     }
   }, []);
 
-  useEffect(() => {
-    const bridge = window.NativeBridge;
-    setNativeBridge(bridge);
-    setNativePresent(Boolean(bridge));
-  }, []);
+  const { serializeScenePayload } = useSceneSerialization(api);
 
-  useEffect(() => {
-    if (!nativeBridge?.openSceneFromDocument) return undefined;
-    const originalShowPicker = (window as any).showOpenFilePicker;
-    (window as any).showOpenFilePicker = () =>
-      new Promise((resolve, reject) => {
-        openFileResolveRef.current = (handles) => {
-          resolve(handles);
-          openFileResolveRef.current = null;
-          openFileRejectRef.current = null;
-        };
-        openFileRejectRef.current = (reason) => {
-          reject(reason);
-          openFileResolveRef.current = null;
-          openFileRejectRef.current = null;
-        };
-        nativeBridge?.openSceneFromDocument?.();
-      });
-    return () => {
-      (window as any).showOpenFilePicker = originalShowPicker;
-    };
-  }, [nativeBridge]);
-
-  const initialData = useMemo(() => startupScene ?? EMPTY_SCENE, [startupScene]);
-
-  const computeSceneSignature = useCallback((elements: readonly any[], appState: any) => {
-    const elemSig = elements
-      .map((el) => `${el.id}:${el.version}:${el.isDeleted ? 1 : 0}`)
-      .join("|");
-    const appSig = [
-      appState?.viewBackgroundColor ?? "",
-      appState?.theme ?? "",
-      appState?.gridSize ?? "",
-    ].join(":");
-    return `${elemSig}::${appSig}`;
-  }, []);
-
-  const computeSceneSignatureFromScene = useCallback(
-    (scene: any) => computeSceneSignature(scene?.elements ?? [], scene?.appState ?? {}),
-    [computeSceneSignature]
-  );
-
-  const EMPTY_SCENE_SIG = useMemo(
-    () => computeSceneSignature(EMPTY_SCENE.elements, EMPTY_SCENE.appState),
-    [computeSceneSignature]
-  );
-
-  const clearFileAssociation = useCallback(() => {
-    hasCurrentFileRef.current = false;
-    currentFileHandleRef.current = null;
-    if (api) {
-      const appState = api.getAppState();
-      api.updateScene({ appState: { ...appState, fileHandle: null } });
-    }
-  }, [api]);
-
-  useEffect(() => {
-    if (!api) return;
-    const elements = api.getSceneElements();
-    hydratedSceneRef.current = true;
-    prevNonEmptySceneRef.current = elements.filter((el) => !el.isDeleted).length > 0;
-    prevSceneSigRef.current = computeSceneSignature(elements, api.getAppState());
-  }, [api, computeSceneSignature]);
-
-  const serializeScenePayload = useCallback(
-    (opts?: { includeDeleted?: boolean }) => {
-      if (!api) {
-        throw new Error("Canvas not ready");
-      }
-      const includeDeleted = opts?.includeDeleted ?? true;
-      const elements = includeDeleted
-        ? api.getSceneElementsIncludingDeleted()
-        : api.getSceneElements();
-      const appState = api.getAppState();
-      const files = api.getFiles();
-      return serializeAsJSON(elements, appState, files, "local");
-    },
-    [api]
-  );
-
-  const createNativeFileHandle = useCallback(
-    (rawName: string, fileContent = "") => {
-      const baseName = stripExtension(rawName);
-      const fileName = `${baseName}.excalidraw`;
-      let currentContent = fileContent;
-      return {
-        kind: "file" as const,
-        name: fileName,
-        async getFile() {
-          return new File([currentContent], fileName, { type: "application/json" });
-        },
-        async createWritable() {
-          if (!window.WritableStream) {
-            throw new Error("WritableStream unavailable");
-          }
-
-          const normalizeToString = async (value: any): Promise<string> => {
-            if (typeof value === "string") return value;
-            if (value instanceof Blob) return await value.text();
-            if (value instanceof ArrayBuffer) return new TextDecoder().decode(value);
-            if (ArrayBuffer.isView(value)) return new TextDecoder().decode(value as ArrayBufferView);
-            if (typeof value?.text === "function") return await value.text();
-            if (typeof value?.data !== "undefined") return normalizeToString(value.data);
-            return JSON.stringify(value);
-          };
-
-          // Reset buffer for each writer
-          currentContent = "";
-
-          const writable = new WritableStream<any>({
-            async write(chunk: any) {
-              // Support FileSystemWritableFileStream-like write params.
-              const isWriteParams = chunk && typeof chunk === "object" && "type" in chunk;
-              if (isWriteParams) {
-                const kind = (chunk as any).type;
-                if (kind === "write") {
-                  const data = (chunk as any).data;
-                  const position = (chunk as any).position;
-                  const text = await normalizeToString(data);
-                  if (typeof position === "number" && position >= 0) {
-                    const prefix = currentContent.slice(0, position);
-                    const suffix = currentContent.slice(position + text.length);
-                    currentContent = `${prefix}${text}${suffix}`;
-                  } else {
-                    currentContent += text;
-                  }
-                  return;
-                }
-                if (kind === "truncate") {
-                  const size = (chunk as any).size ?? 0;
-                  currentContent = currentContent.slice(0, size);
-                  return;
-                }
-              }
-              const text = await normalizeToString(chunk);
-              currentContent += text;
-            },
-            async close() {
-              if (!nativeBridge) {
-                throw new Error("Native file save unavailable");
-              }
-              console.log("[NativeBridge] close() invoked", {
-                hasCurrentFile: hasCurrentFileRef.current,
-                name: fileName,
-              });
-              if (hasCurrentFileRef.current) {
-                console.log("[NativeBridge] saveSceneToCurrentDocument ->", {
-                  bytes: currentContent.length,
-                  name: fileName,
-                });
-                nativeBridge?.saveSceneToCurrentDocument?.(currentContent);
-              } else {
-                console.log("[NativeBridge] saveSceneToDocument ->", {
-                  bytes: currentContent.length,
-                  name: fileName,
-                });
-                nativeBridge?.saveSceneToDocument?.(currentContent);
-              }
-            },
-            abort() {
-              currentContent = fileContent;
-            },
-          });
-
-          return writable;
-        },
-      };
-    },
-    [nativeBridge]
-  );
-
-  const applyFileHandleToAppState = useCallback(
-    (handle: any, opts?: { suppressDirty?: boolean }) => {
-      if (!api) return;
-      if (opts?.suppressDirty) {
-        suppressNextDirtyRef.current = true;
-      }
-      currentFileHandleRef.current = handle;
-      const appState = api.getAppState();
-      api.updateScene({ appState: { ...appState, fileHandle: handle } });
-    },
-    [api]
-  );
-
-  const syncFileHandle = useCallback(
-    (rawName: string, fileContent = "", hasFileHandle = true, opts?: { suppressDirty?: boolean }) => {
-      const displayName = stripExtension(rawName || "Unsaved");
-      const handle = createNativeFileHandle(displayName || "Unsaved", fileContent);
-      currentFileHandleRef.current = handle;
-      hasCurrentFileRef.current = hasFileHandle;
-      setCurrentFileName(displayName || "Unsaved");
-      if (api) {
-        applyFileHandleToAppState(handle, opts);
-      }
-      return handle;
-    },
-    [api, applyFileHandleToAppState, createNativeFileHandle]
-  );
-
-  useEffect(() => {
-    if (!api) return;
-    if (hasCurrentFileRef.current && !currentFileHandleRef.current && currentFileName !== "Unsaved") {
-      syncFileHandle(currentFileName, "", hasCurrentFileRef.current);
-    }
-  }, [api, currentFileName, syncFileHandle]);
-
-  useEffect(() => {
-    if (!nativeBridge || !api) return undefined;
-    const originalSavePicker = (window as any).showSaveFilePicker;
-    (window as any).showSaveFilePicker = async (opts?: { suggestedName?: string }) => {
-      const base = stripExtension(opts?.suggestedName || currentFileName || "diagram");
-      const handle = createNativeFileHandle(base);
-      currentFileHandleRef.current = handle;
-      applyFileHandleToAppState(handle);
-      return handle;
-    };
-    return () => {
-      (window as any).showSaveFilePicker = originalSavePicker;
-    };
-  }, [api, applyFileHandleToAppState, createNativeFileHandle, currentFileName, nativeBridge]);
+  useNativePickers({
+    nativeBridge,
+    currentFileName,
+    createNativeFileHandle,
+    applyFileHandleToAppState,
+    openFileResolveRef,
+    openFileRejectRef,
+    api,
+  });
 
   const performSave = useCallback(() => {
     if (!api || !nativeBridge?.saveScene) return;
@@ -344,7 +96,6 @@ export default function App() {
       setStatus({ text: `Save failed: ${String(err)}`, tone: "err" });
     }
   }, [api, nativeBridge, serializeScenePayload]);
-
 
   const handleSaveNow = useCallback(() => {
     if (!nativeBridge?.saveScene) {
@@ -370,157 +121,37 @@ export default function App() {
     }
   }, [api, nativeBridge, serializeScenePayload]);
 
-  useEffect(() => {
-    if (!api) return undefined;
-    const unsubscribe = api.onChange((elements, appState) => {
-      const tool = appState.activeTool?.type as ToolType | undefined;
-      if (tool) {
-        setActiveTool(tool);
-      }
+  useSceneChangeSubscription({
+    api,
+    setActiveTool,
+    setCurrentFileName,
+    setIsDirty,
+    setStatus,
+    clearFileAssociation,
+    suppressNextDirtyRef,
+    prevSceneSigRef,
+    prevNonEmptySceneRef,
+    hydratedSceneRef,
+    lastDialogRef,
+    handleSaveToDocument,
+  });
 
-      const visibleCount = elements.filter((el) => !el.isDeleted).length;
-      const hadNonEmptyScene = prevNonEmptySceneRef.current;
-      const becameEmpty = hydratedSceneRef.current && hadNonEmptyScene && visibleCount === 0;
+  const nativeCallbacks = useNativeMessageHandlers({
+    api,
+    currentFileName,
+    syncFileHandle,
+    setLastSaved,
+    setIsDirty,
+    setStatus,
+    suppressNextDirtyRef,
+    prevSceneSigRef,
+    prevNonEmptySceneRef,
+    nativeBridge,
+    openFileResolveRef,
+    openFileRejectRef,
+  });
 
-      if (hydratedSceneRef.current) {
-        const sig = computeSceneSignature(elements, appState);
-        if (becameEmpty) {
-          setCurrentFileName("Unsaved");
-          setIsDirty(false);
-          suppressNextDirtyRef.current = true;
-          prevSceneSigRef.current = EMPTY_SCENE_SIG;
-          prevNonEmptySceneRef.current = false;
-          clearFileAssociation();
-          setStatus({ text: "Canvas cleared", tone: "warn" });
-        } else {
-          if (suppressNextDirtyRef.current) {
-            // First change after a programmatic load; treat as baseline.
-            suppressNextDirtyRef.current = false;
-            prevSceneSigRef.current = sig;
-            prevNonEmptySceneRef.current = visibleCount > 0;
-          } else {
-            if (prevSceneSigRef.current && sig !== prevSceneSigRef.current) {
-              setIsDirty(true);
-            }
-            prevSceneSigRef.current = sig;
-            prevNonEmptySceneRef.current = visibleCount > 0;
-          }
-        }
-      }
-
-      const dialogName = appState.openDialog?.name ?? null;
-      if (dialogName !== lastDialogRef.current) {
-        lastDialogRef.current = dialogName;
-        if (dialogName === "jsonExport") {
-          handleSaveToDocument();
-          api.updateScene({ appState: { ...appState, openDialog: null } });
-        }
-      }
-    });
-    return () => unsubscribe();
-  }, [api, handleSaveToDocument]);
-
-  const handleNativeMessage = useCallback(
-    (payload?: { event?: string; success?: boolean; message?: string; fileName?: string }) => {
-      if (!payload) return;
-      console.log("[NativeBridge] onNativeMessage", payload);
-      if (payload.event === "onSaveComplete") {
-        const resolvedName = payload.fileName?.trim() ? payload.fileName : currentFileName;
-        const displayName = stripExtension(resolvedName);
-        if (payload.success) {
-          setLastSaved(new Date());
-          syncFileHandle(displayName || "Untitled", "", true);
-          setIsDirty(false);
-          suppressNextDirtyRef.current = true;
-          if (api) {
-            const elements = api.getSceneElementsIncludingDeleted();
-            prevSceneSigRef.current = computeSceneSignature(elements, api.getAppState());
-            prevNonEmptySceneRef.current = elements.some((el) => !el.isDeleted);
-          }
-          setStatus({ text: `Saved${displayName ? `: ${displayName}` : ""}`, tone: "ok" });
-        } else {
-          setStatus({
-            text: `Save failed${payload.message ? `: ${payload.message}` : ""}`,
-            tone: "err",
-          });
-        }
-        return;
-      }
-      if (payload.event === "onExportComplete") {
-        setStatus({
-          text: payload.success
-            ? "Exported to gallery"
-            : `Export failed${payload.message ? `: ${payload.message}` : ""}`,
-          tone: payload.success ? "ok" : "err",
-        });
-        return;
-      }
-      if (payload.event === "onNativeMessage" && payload.success === false) {
-        if (openFileRejectRef.current) {
-          openFileRejectRef.current(
-            new DOMException(payload.message ?? "Open canceled", "AbortError")
-          );
-          openFileResolveRef.current = null;
-          openFileRejectRef.current = null;
-        }
-      }
-      setStatus({ text: payload.message ?? "Native event", tone: "warn" });
-    },
-    [currentFileName, syncFileHandle]
-  );
-
-  useEffect(() => {
-    window.NativeBridgeCallbacks = {
-      onNativeMessage: handleNativeMessage,
-      onSceneLoaded: (sceneJson: string, fileName?: string) => {
-        console.log("[NativeBridge] onSceneLoaded", { fileName, bytes: sceneJson.length });
-        let parsed: any = null;
-        let nextSig = EMPTY_SCENE_SIG;
-        let hasElements = false;
-        try {
-          parsed = JSON.parse(sceneJson);
-          nextSig = computeSceneSignatureFromScene(parsed);
-          hasElements = Array.isArray(parsed?.elements)
-            ? parsed.elements.some((el: any) => !el.isDeleted)
-            : false;
-        } catch (_err) {
-          parsed = null;
-          nextSig = EMPTY_SCENE_SIG;
-          hasElements = false;
-        }
-
-        const parsedName = parsed?.appState?.name?.trim();
-        const resolvedName = fileName?.trim()
-          ? fileName
-          : nativeBridge?.getCurrentFileName?.()?.trim() || parsedName || "Unsaved";
-        const displayName = stripExtension(resolvedName);
-        const handle = syncFileHandle(displayName, sceneJson, true, { suppressDirty: true });
-
-        suppressNextDirtyRef.current = true;
-        setIsDirty(false);
-        prevSceneSigRef.current = nextSig;
-        prevNonEmptySceneRef.current = hasElements;
-
-        if (openFileResolveRef.current) {
-          openFileResolveRef.current([handle]);
-        } else if (api) {
-          if (parsed) {
-            api.updateScene(parsed);
-            setStatus({ text: `Loaded${displayName !== "Unsaved" ? `: ${displayName}` : ""}`, tone: "ok" });
-          } else {
-            setStatus({ text: "Load failed: invalid scene", tone: "err" });
-          }
-        }
-        openFileResolveRef.current = null;
-        openFileRejectRef.current = null;
-      },
-    };
-    return () => {
-      if (window.NativeBridgeCallbacks) {
-        delete window.NativeBridgeCallbacks;
-      }
-    };
-  }, [api, handleNativeMessage, syncFileHandle]);
+  useNativeBridgeCallbacks(nativeCallbacks);
 
   useEffect(() => {
     if (!status) return undefined;
@@ -528,129 +159,25 @@ export default function App() {
     return () => window.clearTimeout(id);
   }, [status]);
 
-  useEffect(() => {
-    if (!api || !pendingScene) return;
-    api.updateScene(pendingScene);
-    setPendingScene(null);
-    hydratedSceneRef.current = true;
-    prevNonEmptySceneRef.current = Array.isArray((pendingScene as any)?.elements)
-      ? (pendingScene as any).elements.some((el: any) => !el.isDeleted)
-      : false;
-    setIsDirty(false);
-    suppressNextDirtyRef.current = true;
-    prevSceneSigRef.current = computeSceneSignatureFromScene(pendingScene);
-    setStatus({ text: "Restored previous drawing", tone: "ok" });
-  }, [api, pendingScene, computeSceneSignatureFromScene]);
-
   // Autosave temporarily disabled to avoid spamming native save notifications
   // and interfering with explicit save/load actions. Re-enable with a debounced
   // onChange hook if needed, but ensure native UX can tolerate the frequency.
 
-  const handleLoadFromNative = useCallback(() => {
-    if (!api) {
-      setStatus({ text: "Canvas not ready", tone: "warn" });
-      return;
-    }
-    if (!nativeBridge?.loadScene) {
-      setStatus({ text: "Native loader unavailable", tone: "warn" });
-      return;
-    }
-    const saved = nativeBridge.loadScene();
-    if (!saved) {
-      setStatus({ text: "No saved drawing found", tone: "warn" });
-      return;
-    }
-    try {
-      const parsed = JSON.parse(saved);
-      const nextSig = computeSceneSignatureFromScene(parsed);
-      const hasElements = Array.isArray(parsed?.elements)
-        ? parsed.elements.some((el: any) => !el.isDeleted)
-        : false;
-      suppressNextDirtyRef.current = true;
-      prevSceneSigRef.current = nextSig;
-      prevNonEmptySceneRef.current = hasElements;
-      setIsDirty(false);
-      api.updateScene(parsed);
-      setStatus({ text: "Loaded saved drawing", tone: "ok" });
-    } catch (err) {
-      setStatus({ text: `Load failed: ${String(err)}`, tone: "err" });
-    }
-  }, [api, nativeBridge, computeSceneSignatureFromScene]);
-
-  const blobToDataUrl = useCallback((blob: Blob) => {
-    return new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.onerror = () => reject(new Error("Unable to read image"));
-      reader.readAsDataURL(blob);
-    });
-  }, []);
-
-  const handleExportPng = useCallback(async () => {
-    if (!api) {
-      setStatus({ text: "Canvas not ready", tone: "warn" });
-      return;
-    }
-    if (!nativeBridge?.exportPng) {
-      setStatus({ text: "PNG export unavailable", tone: "warn" });
-      return;
-    }
-    setExporting("png");
-    try {
-      const elements = api.getSceneElements();
-      const appState = api.getAppState();
-      const files = api.getFiles();
-      const blob = await exportToBlob({
-        elements,
-        appState: {
-          ...appState,
-          exportWithDarkMode: appState.theme === "dark",
-          exportEmbedScene: true,
-        },
-        files,
-        mimeType: "image/png",
-      });
-      const dataUrl = await blobToDataUrl(blob);
-      nativeBridge.exportPng(dataUrl);
-    } catch (err) {
-      setStatus({ text: `PNG export failed: ${String(err)}`, tone: "err" });
-    } finally {
-      setExporting(null);
-    }
-  }, [api, blobToDataUrl, nativeBridge]);
-
-  const handleExportSvg = useCallback(async () => {
-    if (!api) {
-      setStatus({ text: "Canvas not ready", tone: "warn" });
-      return;
-    }
-    if (!nativeBridge?.exportSvg) {
-      setStatus({ text: "SVG export unavailable", tone: "warn" });
-      return;
-    }
-    setExporting("svg");
-    try {
-      const elements = api.getSceneElements();
-      const appState = api.getAppState();
-      const files = api.getFiles();
-      const svg = await exportToSvg({
-        elements,
-        appState: {
-          ...appState,
-          exportEmbedScene: true,
-          exportWithDarkMode: appState.theme === "dark",
-        },
-        files,
-      });
-      const serialized = new XMLSerializer().serializeToString(svg);
-      const dataUrl = `data:image/svg+xml;base64,${window.btoa(unescape(encodeURIComponent(serialized)))}`;
-      nativeBridge.exportSvg(dataUrl);
-    } catch (err) {
-      setStatus({ text: `SVG export failed: ${String(err)}`, tone: "err" });
-    } finally {
-      setExporting(null);
-    }
-  }, [api, nativeBridge]);
+  const { handleLoadFromNative } = useNativeSceneLoader({
+    api,
+    nativeBridge,
+    setStatus,
+    setIsDirty,
+    suppressNextDirtyRef,
+    prevSceneSigRef,
+    prevNonEmptySceneRef,
+  });
+  const { handleExportPng, handleExportSvg } = useExportActions(
+    api,
+    nativeBridge,
+    setStatus,
+    setExporting,
+  );
 
   const handleSelectTool = (tool: ToolType) => {
     setActiveTool(tool);
@@ -658,15 +185,7 @@ export default function App() {
   };
 
   return (
-    <div
-      className={HIDE_BUILTIN_TOOLBAR ? "hide-builtin-toolbar" : undefined}
-      style={{
-        height: "100vh",
-        width: "100vw",
-        background: "#f5f5f5",
-        color: "#0f172a",
-      }}
-    >
+    <div className={`app-shell${HIDE_BUILTIN_TOOLBAR ? " hide-builtin-toolbar" : ""}`}>
       <Excalidraw
         theme="light"
         initialData={initialData}
@@ -687,12 +206,15 @@ export default function App() {
           </WelcomeScreen.Center>
         </WelcomeScreen>
       </Excalidraw>
-      <div className={`file-chip${isDirty ? " is-dirty" : ""}`} aria-label="Current file">
-        {currentFileName || "Unsaved"}
-        {isDirty ? " *" : ""}
-      </div>
-      <CustomToolbar activeTool={activeTool} onSelect={handleSelectTool} />
-      <NativeStatus present={nativePresent} lastSaved={lastSaved} status={status} />
+      <ChromeOverlay
+        fileName={currentFileName}
+        isDirty={isDirty}
+        activeTool={activeTool}
+        onSelectTool={handleSelectTool}
+        nativePresent={nativePresent}
+        lastSaved={lastSaved}
+        status={status}
+      />
     </div>
   );
 }
