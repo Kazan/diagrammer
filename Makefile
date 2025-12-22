@@ -1,9 +1,8 @@
 ADB ?= adb
 APP_ID ?= com.example.diagrammerapp
 SCENE_BASENAME ?= sample-scene.excalidraw
-# Push to /data/local/tmp (adb-writeable) and copy into public Documents/Diagrammer.
-SCENE_PUSH ?= /data/local/tmp/$(SCENE_BASENAME)
-SCENE_REMOTE_DIR ?= /sdcard/Documents/Diagrammer
+# Push into the public Downloads directory for picker-based loading.
+SCENE_REMOTE_DIR ?= /sdcard/Download
 SCENE_REMOTE ?= $(SCENE_REMOTE_DIR)/$(SCENE_BASENAME)
 SCENE_URI ?= file://$(SCENE_REMOTE)
 SCENE_FILE ?= research/sample-scene.excalidraw
@@ -14,10 +13,8 @@ AVDMANAGER ?= avdmanager
 start:
 	$(ADB) shell am force-stop $(APP_ID)
 	$(ADB) shell pm clear $(APP_ID)
-	$(ADB) shell appops set --user 0 $(APP_ID) MANAGE_EXTERNAL_STORAGE allow || true
-	$(ADB) push $(SCENE_FILE) $(SCENE_PUSH)
 	$(ADB) shell "mkdir -p $(SCENE_REMOTE_DIR)"
-	$(ADB) shell "cp $(SCENE_PUSH) $(SCENE_REMOTE)"
+	$(ADB) push $(SCENE_FILE) $(SCENE_REMOTE)
 	$(ADB) shell "ls -l $(SCENE_REMOTE)"
 	$(ADB) shell am start -S -W -n $(APP_ID)/.MainActivity --es LOAD_SCENE_URI $(SCENE_URI)
 WEB_DIR := web

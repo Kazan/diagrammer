@@ -142,9 +142,9 @@ class MainActivity : ComponentActivity() {
                     mainHandler = mainHandler,
                     webView = this,
                     startDocumentPicker = { envelope ->
-                        exitImmersive()
                         val suggested = envelope.suggestedName?.takeIf { it.isNotBlank() }
                             ?: "diagram_${dateFormat.format(Date())}.excalidraw"
+                        exitImmersive()
                         createDocumentLauncher.launch(suggested)
                     },
                     startOpenDocument = {
@@ -214,6 +214,8 @@ class MainActivity : ComponentActivity() {
     private fun rememberPickerUri(uri: Uri) {
         prefs.edit().putString(KEY_LAST_PICKER_URI, uri.toString()).apply()
     }
+
+    // No upfront directory grant; rely on user-selected locations via picker.
 
     private fun handleLoadSceneExtra(intent: Intent) {
         if (!BuildConfig.DEBUG) return
