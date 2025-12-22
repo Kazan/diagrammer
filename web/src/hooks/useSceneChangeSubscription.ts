@@ -19,6 +19,7 @@ export type SceneChangeOptions = {
   loadSkipRef: React.MutableRefObject<number>;
   lastDialogRef: React.MutableRefObject<string | null>;
   handleSaveToDocument: () => void;
+  handleOpenWithNativePicker: () => boolean;
 };
 
 export function useSceneChangeSubscription(opts: SceneChangeOptions) {
@@ -38,6 +39,7 @@ export function useSceneChangeSubscription(opts: SceneChangeOptions) {
     loadSkipRef,
     lastDialogRef,
     handleSaveToDocument,
+    handleOpenWithNativePicker,
   } = opts;
 
   useEffect(() => {
@@ -106,12 +108,41 @@ export function useSceneChangeSubscription(opts: SceneChangeOptions) {
         }
       }
 
-      const dialogName = appState.openDialog?.name ?? null;
-      if (dialogName !== lastDialogRef.current) {
+      // Excalidraw openDialog name is loosely typed; coerce to string for comparison.
+      const dialogName = ((appState.openDialog as any)?.name as string | null) ?? null;
+      const previousDialog = lastDialogRef.current;
+      if (dialogName !== previousDialog) {
         lastDialogRef.current = dialogName;
+        if (!dialogName) {
+          // Reset when dialog closes so future opens are intercepted.
+          return;
+        }
         if (dialogName === "jsonExport") {
           handleSaveToDocument();
           api.updateScene({ appState: { ...appState, openDialog: null } });
+        } else {
+          const skipDialogs = new Set([
+            "imageExport",
+            "help",
+            "ttd",
+            "commandPalette",
+            "elementLinkSelector",
+          ]);
+
+          const shouldHijackOpen =
+            !skipDialogs.has(dialogName) &&
+            (dialogName === "jsonImport" ||
+              dialogName === "loadScene" ||
+              dialogName === "load" ||
+              dialogName === "loadSceneFromFile" ||
+              true);
+
+          if (shouldHijackOpen && handleOpenWithNativePicker()) {
+            console.log("[NativeBridge] intercepted open dialog", dialogName);
+            api.updateScene({ appState: { ...appState, openDialog: null } });
+          } else {
+            console.log("[NativeBridge] dialog opened", dialogName);
+          }
         }
       }
     });
@@ -132,5 +163,6 @@ export function useSceneChangeSubscription(opts: SceneChangeOptions) {
     setIsDirty,
     setStatus,
     suppressNextDirtyRef,
+    handleOpenWithNativePicker,
   ]);
 }

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import type { NativeBridge, NativeFileHandle } from "../native-bridge";
 import { stripExtension } from "../scene-utils";
@@ -22,28 +22,37 @@ export function useNativePickers({
   openFileRejectRef,
   api,
 }: Options) {
+  const openWithNativePicker = useCallback(() => {
+    const bridge = nativeBridge;
+    const openSceneFromDocument = bridge?.openSceneFromDocument;
+    if (!bridge || !openSceneFromDocument) {
+      return Promise.reject(new DOMException("Native open unavailable", "NotSupportedError"));
+    }
+    return new Promise<NativeFileHandle[]>((resolve, reject) => {
+      openFileResolveRef.current = (handles) => {
+        resolve(handles);
+        openFileResolveRef.current = null;
+        openFileRejectRef.current = null;
+      };
+      openFileRejectRef.current = (reason) => {
+        reject(reason);
+        openFileResolveRef.current = null;
+        openFileRejectRef.current = null;
+      };
+      // Call through the injected bridge instance to keep Java interface context intact.
+      openSceneFromDocument.call(bridge);
+    });
+  }, [nativeBridge, openFileRejectRef, openFileResolveRef]);
+
   // Hook the native open picker
   useEffect(() => {
     if (!nativeBridge?.openSceneFromDocument) return undefined;
     const originalShowPicker = (window as any).showOpenFilePicker;
-    (window as any).showOpenFilePicker = () =>
-      new Promise((resolve, reject) => {
-        openFileResolveRef.current = (handles) => {
-          resolve(handles);
-          openFileResolveRef.current = null;
-          openFileRejectRef.current = null;
-        };
-        openFileRejectRef.current = (reason) => {
-          reject(reason);
-          openFileResolveRef.current = null;
-          openFileRejectRef.current = null;
-        };
-        nativeBridge?.openSceneFromDocument?.();
-      });
+    (window as any).showOpenFilePicker = () => openWithNativePicker();
     return () => {
       (window as any).showOpenFilePicker = originalShowPicker;
     };
-  }, [nativeBridge, openFileRejectRef, openFileResolveRef]);
+  }, [nativeBridge, openWithNativePicker]);
 
   // Hook the native save picker
   useEffect(() => {
@@ -59,4 +68,6 @@ export function useNativePickers({
       (window as any).showSaveFilePicker = originalSavePicker;
     };
   }, [api, applyFileHandleToAppState, createNativeFileHandle, currentFileName, nativeBridge]);
+
+  return { openWithNativePicker } as const;
 }

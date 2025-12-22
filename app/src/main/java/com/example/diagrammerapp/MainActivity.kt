@@ -25,6 +25,7 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.app.AlertDialog
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContract
@@ -71,6 +72,13 @@ class MainActivity : ComponentActivity() {
         OpenSceneDocumentContract(::pickerInitialUri)
     ) { uri ->
         nativeBridge?.completeDocumentLoad(uri)
+        enterImmersive()
+    }
+
+    private val overwriteDocumentLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        nativeBridge?.completeDocumentSave(uri)
         enterImmersive()
     }
 
@@ -144,8 +152,7 @@ class MainActivity : ComponentActivity() {
                     startDocumentPicker = { envelope ->
                         val suggested = envelope.suggestedName?.takeIf { it.isNotBlank() }
                             ?: "diagram_${dateFormat.format(Date())}.excalidraw"
-                        exitImmersive()
-                        createDocumentLauncher.launch(suggested)
+                        promptSaveTargetChoice(suggested)
                     },
                     startOpenDocument = {
                         exitImmersive()
@@ -172,16 +179,9 @@ class MainActivity : ComponentActivity() {
             }
         )
 
-        // Debug-only: allow automated launch with a pre-specified scene URI for e2e testing.
-        handleLoadSceneExtra(intent)
+        // onCreate ends here; keep additional lifecycle callbacks top-level.
     }
 
-    override fun onNewIntent(intent: Intent?) {
-        super.onNewIntent(intent)
-        if (intent != null) {
-            handleLoadSceneExtra(intent)
-        }
-    }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
@@ -215,16 +215,23 @@ class MainActivity : ComponentActivity() {
         prefs.edit().putString(KEY_LAST_PICKER_URI, uri.toString()).apply()
     }
 
-    // No upfront directory grant; rely on user-selected locations via picker.
-
-    private fun handleLoadSceneExtra(intent: Intent) {
-        if (!BuildConfig.DEBUG) return
-        val uriString = intent.getStringExtra("LOAD_SCENE_URI")?.takeIf { it.isNotBlank() }
-        if (uriString == null) return
-        val uri = runCatching { Uri.parse(uriString) }.getOrNull() ?: return
-        Log.d("NativeBridge", "handleLoadSceneExtra uri=$uri")
-        nativeBridge?.completeDocumentLoad(uri)
+    private fun promptSaveTargetChoice(suggestedName: String) {
+        AlertDialog.Builder(this)
+            .setTitle("Save scene")
+            .setMessage("Create a new file or overwrite an existing one. Overwrite will replace the selected file's contents.")
+            .setPositiveButton("Overwrite existing") { _, _ ->
+                exitImmersive()
+                overwriteDocumentLauncher.launch(SAVE_MIME_TYPES)
+            }
+            .setNegativeButton("Create new") { _, _ ->
+                exitImmersive()
+                createDocumentLauncher.launch(suggestedName)
+            }
+            .setOnCancelListener { enterImmersive() }
+            .show()
     }
+
+    // No upfront directory grant; rely on user-selected locations via picker.
 
     private inner class DiagrammerWebViewClient : WebViewClient() {
         override fun shouldInterceptRequest(
@@ -743,3 +750,4 @@ private class NativeBridge(
 }
 
 private const val KEY_LAST_PICKER_URI = "last_picker_uri"
+private val SAVE_MIME_TYPES = arrayOf("application/json", "application/octet-stream", "*/*")

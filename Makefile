@@ -1,11 +1,5 @@
 ADB ?= adb
 APP_ID ?= com.example.diagrammerapp
-SCENE_BASENAME ?= sample-scene.excalidraw
-# Push into the public Downloads directory for picker-based loading.
-SCENE_REMOTE_DIR ?= /sdcard/Download
-SCENE_REMOTE ?= $(SCENE_REMOTE_DIR)/$(SCENE_BASENAME)
-SCENE_URI ?= file://$(SCENE_REMOTE)
-SCENE_FILE ?= research/sample-scene.excalidraw
 SDKMANAGER ?= sdkmanager
 AVDMANAGER ?= avdmanager
 
@@ -13,10 +7,7 @@ AVDMANAGER ?= avdmanager
 start:
 	$(ADB) shell am force-stop $(APP_ID)
 	$(ADB) shell pm clear $(APP_ID)
-	$(ADB) shell "mkdir -p $(SCENE_REMOTE_DIR)"
-	$(ADB) push $(SCENE_FILE) $(SCENE_REMOTE)
-	$(ADB) shell "ls -l $(SCENE_REMOTE)"
-	$(ADB) shell am start -S -W -n $(APP_ID)/.MainActivity --es LOAD_SCENE_URI $(SCENE_URI)
+	$(ADB) shell am start -S -W -n $(APP_ID)/.MainActivity
 WEB_DIR := web
 WEB_PORT ?= 5173
 AVD_NAME ?= tablet_eink_android_36
@@ -33,6 +24,8 @@ web:
 	cd $(WEB_DIR) && (npm run dev -- --host --port $(WEB_PORT) --strictPort & \
 	DEV_PID=$$!; sleep 2; open "http://localhost:$(WEB_PORT)/assets/web/"; \
 	wait $$DEV_PID)
+
+run: install start
 
 install:
 	$(MAKE) deps

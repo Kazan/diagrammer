@@ -90,7 +90,7 @@ export default function App() {
 
   const { buildSceneEnvelope } = useSceneSerialization(api);
 
-  useNativePickers({
+  const { openWithNativePicker } = useNativePickers({
     nativeBridge,
     currentFileName,
     createNativeFileHandle,
@@ -99,6 +99,15 @@ export default function App() {
     openFileRejectRef,
     api,
   });
+
+  const handleOpenWithNativePicker = useCallback(() => {
+    if (!nativeBridge?.openSceneFromDocument) return false;
+    void openWithNativePicker().catch((err) => {
+      console.warn("Native open failed", err);
+      setStatus({ text: `Open failed: ${String(err?.message ?? err)}`, tone: "err" });
+    });
+    return true;
+  }, [nativeBridge, openWithNativePicker, setStatus]);
 
   const performSave = useCallback(async () => {
     if (!api || (!nativeBridge?.persistScene && !nativeBridge?.saveScene)) return;
@@ -161,6 +170,7 @@ export default function App() {
     loadSkipRef,
     lastDialogRef,
     handleSaveToDocument,
+    handleOpenWithNativePicker,
   });
 
   const nativeCallbacks = useNativeMessageHandlers({
