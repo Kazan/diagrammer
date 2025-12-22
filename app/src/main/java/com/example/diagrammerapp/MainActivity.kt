@@ -5,6 +5,7 @@ package com.example.diagrammerapp
 import android.annotation.SuppressLint
 import android.content.ContentValues
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -26,13 +27,13 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.contract.ActivityResultContract
 import androidx.activity.result.contract.ActivityResultContracts
-import android.content.Intent
-import com.example.diagrammerapp.BuildConfig
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.webkit.WebViewAssetLoader
+import com.example.diagrammerapp.BuildConfig
 import com.example.diagrammerapp.databinding.ActivityMainBinding
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -40,7 +41,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.File
 import java.io.IOException
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
@@ -56,16 +56,19 @@ class MainActivity : ComponentActivity() {
     private val dateFormat = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
     private val ioScope = CoroutineScope(Dispatchers.IO + Job())
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val prefs by lazy {
+        getSharedPreferences("diagrammer_prefs", Context.MODE_PRIVATE)
+    }
 
     private val createDocumentLauncher = registerForActivityResult(
-        ActivityResultContracts.CreateDocument("application/vnd.excalidraw+json")
+        CreateSceneDocumentContract(::pickerInitialUri)
     ) { uri ->
         nativeBridge?.completeDocumentSave(uri)
         enterImmersive()
     }
 
     private val openDocumentLauncher = registerForActivityResult(
-        ActivityResultContracts.OpenDocument()
+        OpenSceneDocumentContract(::pickerInitialUri)
     ) { uri ->
         nativeBridge?.completeDocumentLoad(uri)
         enterImmersive()
@@ -147,7 +150,8 @@ class MainActivity : ComponentActivity() {
                     startOpenDocument = {
                         exitImmersive()
                         openDocumentLauncher.launch(arrayOf("application/json", "application/octet-stream", "*/*"))
-                    }
+                    },
+                    rememberPickerUri = ::rememberPickerUri
                 ).also { nativeBridge = it },
                 "NativeBridge"
             )
@@ -204,6 +208,13 @@ class MainActivity : ComponentActivity() {
             WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
     }
 
+    private fun pickerInitialUri(): Uri? =
+        runCatching { prefs.getString(KEY_LAST_PICKER_URI, null)?.let(Uri::parse) }.getOrNull()
+
+    private fun rememberPickerUri(uri: Uri) {
+        prefs.edit().putString(KEY_LAST_PICKER_URI, uri.toString()).apply()
+    }
+
     private fun handleLoadSceneExtra(intent: Intent) {
         if (!BuildConfig.DEBUG) return
         val uriString = intent.getStringExtra("LOAD_SCENE_URI")?.takeIf { it.isNotBlank() }
@@ -245,10 +256,11 @@ class MainActivity : ComponentActivity() {
     private inner class DiagrammerWebChromeClient : WebChromeClient() {
         override fun onConsoleMessage(message: android.webkit.ConsoleMessage?): Boolean {
             if (message != null) {
-                Log.d(
-                    "DiagrammerWebView",
-                    "${message.messageLevel()}: ${message.message()} @ ${message.sourceId()}:${message.lineNumber()}"
-                )
+                val tag = "DiagrammerWebView"
+                val text = "${message.messageLevel()}: ${message.message()} @ ${message.sourceId()}:${message.lineNumber()}"
+                Log.d(tag, text)
+                // Also mirror to NativeBridge tag for unified capture in e2e logs.
+                Log.d("NativeBridge", "[webview-console] ${text}")
             }
             return super.onConsoleMessage(message)
         }
@@ -266,13 +278,50 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-    private data class SaveEnvelope(
-        val json: String,
-        val byteLength: Long,
-        val sha256: String?,
-        val suggestedName: String?,
-        val createdAt: Long,
-    )
+private class CreateSceneDocumentContract(
+    private val initialUriProvider: () -> Uri?
+) : ActivityResultContracts.CreateDocument("application/vnd.excalidraw+json") {
+    override fun createIntent(context: Context, input: String): Intent {
+        return super.createIntent(context, input).apply {
+            putExtra(DocumentsContract.EXTRA_INITIAL_URI, initialUriProvider())
+            addFlags(
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
+                    Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+            )
+        }
+    }
+}
+
+private class OpenSceneDocumentContract(
+    private val initialUriProvider: () -> Uri?
+) : ActivityResultContract<Array<String>, Uri?>() {
+    override fun createIntent(context: Context, input: Array<String>): Intent {
+        return Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+            putExtra(Intent.EXTRA_MIME_TYPES, input)
+            putExtra(DocumentsContract.EXTRA_INITIAL_URI, initialUriProvider())
+            addFlags(
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
+                    Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+            )
+        }
+    }
+
+    override fun parseResult(resultCode: Int, intent: Intent?): Uri? {
+        return ActivityResultContracts.OpenDocument().parseResult(resultCode, intent)
+    }
+}
+
+private data class SaveEnvelope(
+    val json: String,
+    val byteLength: Long,
+    val sha256: String?,
+    val suggestedName: String?,
+    val createdAt: Long,
+)
 
 private class NativeBridge(
     private val context: Context,
@@ -280,7 +329,8 @@ private class NativeBridge(
     private val mainHandler: Handler,
     private val webView: WebView,
     private val startDocumentPicker: (SaveEnvelope) -> Unit,
-    private val startOpenDocument: () -> Unit
+    private val startOpenDocument: () -> Unit,
+    private val rememberPickerUri: (Uri) -> Unit
 ) {
     private val prefs = context.getSharedPreferences("diagrammer_prefs", Context.MODE_PRIVATE)
     private val dateFormat = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
@@ -418,19 +468,6 @@ private class NativeBridge(
         )
     }
 
-    private suspend fun writeEnvelopeToFile(file: File, envelope: SaveEnvelope, source: String) {
-        Log.d(
-            "NativeBridge",
-            "$source: writing to file=${file.name}, bytes=${envelope.byteLength}, suggested=${envelope.suggestedName}"
-        )
-        runCatching { file.writeText(envelope.json) }
-            .onSuccess { notifyJs("onSaveComplete", true, null, envelope.suggestedName) }
-            .onFailure {
-                Log.e("NativeBridge", "$source: write failed", it)
-                notifyJs("onSaveComplete", false, it.message, envelope.suggestedName)
-            }
-    }
-
     private suspend fun writeEnvelopeToUri(uri: Uri, envelope: SaveEnvelope, source: String) {
         Log.d(
             "NativeBridge",
@@ -458,6 +495,7 @@ private class NativeBridge(
             currentDocumentUri = finalUri
             currentDocumentName = finalName ?: currentDocumentName
             persistCurrentFile(currentDocumentUri, currentDocumentName)
+            rememberPickerUri(finalUri)
             notifyJs("onSaveComplete", true, null, currentDocumentName)
         }.onFailure {
             Log.e("NativeBridge", "$source: write failed", it)
@@ -470,7 +508,7 @@ private class NativeBridge(
         ioScope.launch {
             val envelope = parseEnvelope(envelopeJson, "persistScene") ?: return@launch
             if (!validateEnvelope(envelope, "persistScene")) return@launch
-            writeEnvelopeToFile(File(context.filesDir, "autosave.excalidraw.json"), envelope, "persistScene")
+            Log.d("NativeBridge", "persistScene: autosave disabled; skipping file write")
         }
     }
 
@@ -510,7 +548,7 @@ private class NativeBridge(
         ioScope.launch {
             val envelope = legacyEnvelope(json, currentDocumentName)
             if (!validateEnvelope(envelope, "saveScene")) return@launch
-            writeEnvelopeToFile(File(context.filesDir, "autosave.excalidraw.json"), envelope, "saveScene")
+            Log.d("NativeBridge", "saveScene (legacy): autosave disabled; skipping file write")
         }
     }
 
@@ -553,10 +591,8 @@ private class NativeBridge(
 
     @JavascriptInterface
     fun loadScene(): String? {
-        val file = File(context.filesDir, "autosave.excalidraw.json")
-        val result = runCatching { file.takeIf { it.exists() }?.readText() }.getOrNull()
-        Log.d("NativeBridge", "loadScene -> bytes=${result?.length ?: 0}")
-        return result
+        Log.d("NativeBridge", "loadScene -> disabled (autosave removed)")
+        return null
     }
 
     @JavascriptInterface
@@ -662,31 +698,38 @@ private class NativeBridge(
             return
         }
         ioScope.launch {
-            val content = runCatching {
-                context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
-            }.getOrNull()
+            val (content, normalizedName) = runCatching {
+                val text = context.contentResolver.openInputStream(uri)
+                    ?.bufferedReader()
+                    ?.use { it.readText() }
+                text to (getDisplayName(uri) ?: uri.lastPathSegment)
+            }.getOrNull() ?: (null to null)
+
             if (content == null) {
                 notifyJs("onNativeMessage", false, "Unable to read file", null)
                 return@launch
             }
-            Log.d("NativeBridge", "completeDocumentLoad: read bytes=${content.length}")
-            val displayName = getDisplayName(uri)
-            val normalizedName = displayName ?: uri.lastPathSegment
-            try {
-                context.contentResolver.takePersistableUriPermission(
-                    uri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                )
-            } catch (_: SecurityException) {
-                // ignore if not persistable
+            Log.d("NativeBridge", "completeDocumentLoad: uri=$uri bytes=${content.length}")
+            if (uri.scheme != "file") {
+                try {
+                    context.contentResolver.takePersistableUriPermission(
+                        uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                    )
+                } catch (_: SecurityException) {
+                    // ignore if not persistable
+                }
             }
+
             currentDocumentUri = uri
             currentDocumentName = normalizedName
             persistCurrentFile(currentDocumentUri, currentDocumentName)
+            rememberPickerUri(uri)
             val escaped = JSONObject.quote(content)
             val name = JSONObject.quote(currentDocumentName ?: "")
             val script = "window.NativeBridgeCallbacks && window.NativeBridgeCallbacks.onSceneLoaded(${escaped}, ${name});"
             mainHandler.post {
+                Log.d("NativeBridge", "completeDocumentLoad: delivering to JS name=${currentDocumentName}")
                 webView.evaluateJavascript(script, null)
             }
         }
@@ -694,4 +737,7 @@ private class NativeBridge(
 
     @JavascriptInterface
     fun getCurrentFileName(): String? = currentDocumentName
+
 }
+
+private const val KEY_LAST_PICKER_URI = "last_picker_uri"

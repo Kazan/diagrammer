@@ -24,6 +24,17 @@ export type NativeMessageDeps = {
   sceneLoadInProgressRef: MutableRefObject<boolean>;
   expectedSceneSigRef: MutableRefObject<string | null>;
   loadSkipRef: MutableRefObject<number>;
+  pendingSceneRef: MutableRefObject<
+    | {
+        sceneJson: string;
+        displayName: string;
+        parsed: any;
+        sig: string;
+        hasElements: boolean;
+      }
+    | null
+  >;
+  setCurrentFileName: (name: string) => void;
 };
 
 export function useNativeMessageHandlers(deps: NativeMessageDeps) {
@@ -37,12 +48,14 @@ export function useNativeMessageHandlers(deps: NativeMessageDeps) {
     suppressNextDirtyRef,
     prevSceneSigRef,
     prevNonEmptySceneRef,
-    nativeBridge,
+    pendingSceneRef,
+    setCurrentFileName,
     openFileRejectRef,
     openFileResolveRef,
     sceneLoadInProgressRef,
     expectedSceneSigRef,
     loadSkipRef,
+    nativeBridge,
   } = deps;
 
   const handleNativeMessage = useCallback(
@@ -108,7 +121,6 @@ export function useNativeMessageHandlers(deps: NativeMessageDeps) {
 
   const handleSceneLoaded = useCallback(
     (sceneJson: string, fileName?: string) => {
-      console.log("[NativeBridge] onSceneLoaded", { fileName, bytes: sceneJson.length });
       let parsed: any = null;
       let nextSig = EMPTY_SCENE_SIG;
       let hasElements = false;
@@ -124,12 +136,19 @@ export function useNativeMessageHandlers(deps: NativeMessageDeps) {
         hasElements = false;
       }
 
+      console.log("[NativeBridge] onSceneLoaded", {
+        fileName,
+        bytes: sceneJson.length,
+        parsedName: parsed?.appState?.name,
+      });
+
       const parsedName = parsed?.appState?.name?.trim();
       const resolvedName = fileName?.trim()
         ? fileName
         : nativeBridge?.getCurrentFileName?.()?.trim() || parsedName || "Unsaved";
       const displayName = stripExtension(resolvedName);
       const handle = syncFileHandle(displayName, sceneJson, true, { suppressDirty: true });
+      console.log("[NativeBridge] syncFileHandle", { displayName });
 
       sceneLoadInProgressRef.current = true;
       // Seed signature and suppress dirty before updating the scene so the first onChange
@@ -139,6 +158,9 @@ export function useNativeMessageHandlers(deps: NativeMessageDeps) {
       prevSceneSigRef.current = nextSig;
       prevNonEmptySceneRef.current = hasElements;
       setIsDirty(false);
+      expectedSceneSigRef.current = nextSig;
+      loadSkipRef.current = 3;
+      setCurrentFileName(displayName);
 
       if (openFileResolveRef.current) {
         openFileResolveRef.current([handle]);
@@ -151,12 +173,25 @@ export function useNativeMessageHandlers(deps: NativeMessageDeps) {
           prevNonEmptySceneRef.current = elements.some((el) => !el.isDeleted);
           suppressNextDirtyRef.current = true;
           expectedSceneSigRef.current = prevSceneSigRef.current;
-          loadSkipRef.current = 2;
+          loadSkipRef.current = 3;
           setIsDirty(false);
+          setCurrentFileName(displayName);
           setStatus({ text: `Loaded${displayName !== "Unsaved" ? `: ${displayName}` : ""}`, tone: "ok" });
         } else {
           setStatus({ text: "Load failed: invalid scene", tone: "err" });
         }
+      } else {
+        pendingSceneRef.current = {
+          sceneJson,
+          displayName,
+          parsed,
+          sig: nextSig,
+          hasElements,
+        };
+        console.log("[NativeBridge] queued scene until canvas ready", {
+          bytes: sceneJson.length,
+          displayName,
+        });
       }
       sceneLoadInProgressRef.current = false;
       openFileResolveRef.current = null;
@@ -169,6 +204,7 @@ export function useNativeMessageHandlers(deps: NativeMessageDeps) {
       openFileResolveRef,
       prevNonEmptySceneRef,
       prevSceneSigRef,
+      pendingSceneRef,
       setIsDirty,
       setStatus,
       suppressNextDirtyRef,

@@ -47,6 +47,7 @@ export function useSceneChangeSubscription(opts: SceneChangeOptions) {
         const sig = computeSceneSignature(elements, appState);
         prevSceneSigRef.current = sig;
         prevNonEmptySceneRef.current = elements.some((el) => !el.isDeleted);
+        console.log("[NativeBridge] onChange during load", { sig, visible: elements.length });
         return;
       }
 
@@ -74,6 +75,7 @@ export function useSceneChangeSubscription(opts: SceneChangeOptions) {
         const sig = computeSceneSignature(elements, appState);
 
         if (expectedSceneSigRef.current && sig === expectedSceneSigRef.current) {
+          console.log("[NativeBridge] expected signature matched", { sig });
           suppressNextDirtyRef.current = false;
           expectedSceneSigRef.current = null;
           prevSceneSigRef.current = sig;

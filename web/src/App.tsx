@@ -16,7 +16,7 @@ import { useSceneHydration } from "./hooks/useSceneHydration";
 import { useNativeSceneLoader } from "./hooks/useNativeSceneLoader";
 import type { NativeFileHandle } from "./native-bridge";
 
-import { stripExtension } from "./scene-utils";
+import { computeSceneSignature, stripExtension } from "./scene-utils";
 
 export default function App() {
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null);
@@ -43,6 +43,16 @@ export default function App() {
   const loadSkipRef = useRef(0);
   const suppressNextDirtyRef = useRef(false);
   const prevSceneSigRef = useRef<string | null>(null);
+  const pendingSceneRef = useRef<
+    | {
+        sceneJson: string;
+        displayName: string;
+        parsed: any;
+        sig: string;
+        hasElements: boolean;
+      }
+    | null
+  >(null);
 
   const {
     createNativeFileHandle,
@@ -160,6 +170,7 @@ export default function App() {
     setLastSaved,
     setIsDirty,
     setStatus,
+    setCurrentFileName,
     suppressNextDirtyRef,
     prevSceneSigRef,
     prevNonEmptySceneRef,
@@ -169,6 +180,7 @@ export default function App() {
     sceneLoadInProgressRef,
     expectedSceneSigRef,
     loadSkipRef,
+    pendingSceneRef,
   });
 
   useNativeBridgeCallbacks(nativeCallbacks);
@@ -178,6 +190,48 @@ export default function App() {
     const id = window.setTimeout(() => setStatus(null), 2400);
     return () => window.clearTimeout(id);
   }, [status]);
+
+  useEffect(() => {
+    if (!api) return;
+    const pending = pendingSceneRef.current;
+    if (!pending) return;
+    pendingSceneRef.current = null;
+    const parsed = pending.parsed ?? (() => {
+      try {
+        return JSON.parse(pending.sceneJson);
+      } catch (_err) {
+        return null;
+      }
+    })();
+    if (!parsed) {
+      setStatus({ text: "Load failed: invalid scene", tone: "err" });
+      return;
+    }
+    sceneLoadInProgressRef.current = true;
+    api.updateScene(parsed);
+    const elements = api.getSceneElementsIncludingDeleted();
+    const appState = api.getAppState();
+    prevSceneSigRef.current = computeSceneSignature(elements, appState);
+    prevNonEmptySceneRef.current = elements.some((el) => !el.isDeleted);
+    suppressNextDirtyRef.current = true;
+    expectedSceneSigRef.current = prevSceneSigRef.current;
+    loadSkipRef.current = 3;
+    setIsDirty(false);
+    setCurrentFileName(pending.displayName);
+    setStatus({ text: `Loaded: ${pending.displayName}`, tone: "ok" });
+    sceneLoadInProgressRef.current = false;
+  }, [
+    api,
+    expectedSceneSigRef,
+    loadSkipRef,
+    prevNonEmptySceneRef,
+    prevSceneSigRef,
+    sceneLoadInProgressRef,
+    setCurrentFileName,
+    setIsDirty,
+    setStatus,
+    suppressNextDirtyRef,
+  ]);
 
   // Autosave temporarily disabled to avoid spamming native save notifications
   // and interfering with explicit save/load actions. Re-enable with a debounced
