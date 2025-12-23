@@ -29,7 +29,7 @@ export default function App() {
   const [status, setStatus] = useState<StatusMessage | null>(null);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [exporting, setExporting] = useState<"png" | "svg" | null>(null);
-  const [activeTool, setActiveTool] = useState<ToolType>("rectangle");
+  const [activeTool, setActiveTool] = useState<ToolType>("selection");
   const [currentFileName, setCurrentFileName] = useState(initialStoredName || "Unsaved");
   const [isDirty, setIsDirty] = useState(false);
   const HIDE_BUILTIN_TOOLBAR = false;
@@ -154,6 +154,13 @@ export default function App() {
     }
   }, [api, buildSceneEnvelope, currentFileName, nativeBridge, setStatus]);
 
+  const handleOpenFromOverlay = useCallback(() => {
+    const opened = handleOpenWithNativePicker();
+    if (!opened) {
+      setStatus({ text: "Native picker unavailable", tone: "warn" });
+    }
+  }, [handleOpenWithNativePicker, setStatus]);
+
   useSceneChangeSubscription({
     api,
     setActiveTool,
@@ -276,7 +283,7 @@ export default function App() {
         excalidrawAPI={(api) => {
           apiRef.current = api;
           setApi(api);
-          api.setActiveTool({ type: "rectangle" });
+          api.setActiveTool({ type: "selection" });
         }}
       >
         {/* Render a stripped-down welcome screen so the default menu items stay hidden */}
@@ -298,6 +305,12 @@ export default function App() {
         nativePresent={nativePresent}
         lastSaved={lastSaved}
         status={status}
+        onOpen={handleOpenFromOverlay}
+        onSaveNow={handleSaveNow}
+        onSaveToDocument={handleSaveToDocument}
+        onExportPng={handleExportPng}
+        onExportSvg={handleExportSvg}
+        exporting={exporting}
       />
     </div>
   );

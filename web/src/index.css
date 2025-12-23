@@ -41,6 +41,145 @@ body {
   color: var(--text);
 }
 
+.chrome-overlay {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 28;
+  pointer-events: none;
+}
+
+.chrome-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  box-shadow: var(--shadow);
+  backdrop-filter: var(--blur);
+  pointer-events: auto;
+}
+
+.chrome-strip__meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.chrome-strip__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--panel-border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.status-chip--ok {
+  color: var(--accent);
+  border-color: rgba(63, 207, 142, 0.45);
+  background: rgba(63, 207, 142, 0.12);
+}
+
+.status-chip--warn {
+  color: var(--warn);
+  border-color: rgba(245, 158, 11, 0.45);
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.status-chip--err {
+  color: var(--error);
+  border-color: rgba(239, 68, 68, 0.45);
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.chrome-strip__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.chrome-button {
+  appearance: none;
+  border: 1px solid var(--panel-border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+
+.chrome-button:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(148, 163, 184, 0.5);
+}
+
+.chrome-button[aria-busy="true"] {
+  opacity: 0.7;
+  cursor: progress;
+}
+
+.chrome-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.chrome-strip__divider {
+  width: 1px;
+  height: 24px;
+  background: var(--panel-border);
+  display: inline-block;
+}
+
+.chrome-banner {
+  pointer-events: none;
+  align-self: flex-start;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-weight: 600;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--panel-border);
+  box-shadow: var(--shadow);
+}
+
+.chrome-banner--ok {
+  border-color: rgba(63, 207, 142, 0.5);
+  color: var(--accent);
+}
+
+.chrome-banner--warn {
+  border-color: rgba(245, 158, 11, 0.5);
+  color: var(--warn);
+}
+
+.chrome-banner--err {
+  border-color: rgba(239, 68, 68, 0.5);
+  color: var(--error);
+}
+
 /* Hide built-in Excalidraw toolbar (scoped via optional class) */
 .hide-builtin-toolbar .excalidraw .App-top-bar,
 .hide-builtin-toolbar .excalidraw .App-toolbar,
@@ -52,11 +191,11 @@ body {
 
 .custom-toolbar {
   position: fixed;
-  right: 28px;
-  bottom: 28px;
+  left: 24px;
+  top: 140px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   background: var(--panel);
   border: 1px solid var(--panel-border);
   border-radius: var(--radius);
@@ -67,17 +206,53 @@ body {
   animation: float-in 260ms ease both;
 }
 
+.custom-toolbar__section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 4px;
+  border-top: 1px solid var(--panel-border);
+}
+
+.custom-toolbar__section:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.custom-toolbar__section-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  padding: 0 2px;
+}
+
+.custom-toolbar__buttons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
 .custom-tool {
   appearance: none;
   border: 1px solid var(--panel-border);
   background: rgba(255, 255, 255, 0.04);
   color: var(--text);
-  padding: 8px 10px;
+  padding: 10px;
   border-radius: 8px;
-  text-align: left;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
   font-size: 14px;
   cursor: pointer;
   transition: background 120ms ease, border-color 120ms ease;
+}
+
+.custom-tool svg {
+  width: 18px;
+  height: 18px;
 }
 
 .custom-tool:hover {
@@ -139,15 +314,15 @@ body {
 }
 
 .file-chip {
-  position: fixed;
-  top: 26px;
-  left: 60px;
-  padding: 0;
-  background: transparent;
-  color: #0f172a;
-  border: none;
-  border-radius: 0;
-  font-weight: 500;
+  position: relative;
+  top: auto;
+  left: auto;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  font-weight: 600;
   line-height: 1.25;
   letter-spacing: -0.01em;
   max-width: 220px;
@@ -163,12 +338,31 @@ body {
 }
 
 @media (max-width: 768px) {
+  .chrome-overlay {
+    top: 12px;
+    left: 12px;
+    right: 12px;
+  }
+
+  .chrome-strip {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .chrome-strip__actions {
+    width: 100%;
+  }
+
   .custom-toolbar {
-    right: 16px;
+    left: 12px;
+    top: auto;
     bottom: 16px;
-    flex-direction: row;
     padding: 10px;
-    gap: 6px;
+    gap: 8px;
+  }
+
+  .custom-toolbar__buttons {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .custom-tool {
