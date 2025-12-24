@@ -325,7 +325,7 @@ export default function App() {
           </WelcomeScreen.Center>
         </WelcomeScreen>
       </Excalidraw>
-      <SelectionPropertiesRail selection={selectionInfo} />
+      <SelectionPropertiesRail selection={selectionInfo} api={api} />
       <ChromeOverlay
         fileName={currentFileName}
         isDirty={isDirty}

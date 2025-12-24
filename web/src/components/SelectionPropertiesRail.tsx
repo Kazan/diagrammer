@@ -1,12 +1,15 @@
+import { useMemo, useState } from "react";
 import type React from "react";
-import type { ExcalidrawElement } from "@excalidraw/excalidraw/types";
+import type { ExcalidrawElement, ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import { Palette, PaintBucket, SlidersHorizontal } from "lucide-react";
 import type { SelectionInfo } from "./SelectionFlyout";
+import ColorPicker from "./ColorPicker";
 
 export type PropertyKind = "stroke" | "background" | "style";
 
 type Props = {
   selection: SelectionInfo | null;
+  api: ExcalidrawImperativeAPI | null;
   onRequestOpen?: (kind: PropertyKind) => void;
 };
 
@@ -43,12 +46,20 @@ function resolveSwatchStyle(color: string | null): React.CSSProperties {
   return { backgroundColor: color, border: "1px solid rgba(15,23,42,0.12)" };
 }
 
-export function SelectionPropertiesRail({ selection, onRequestOpen }: Props) {
+export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props) {
   const elements = selection?.elements ?? [];
   if (!elements.length) return null;
 
-  const strokeColor = getCommonValue(elements, (el) => (el as any).strokeColor) ?? DEFAULT_STROKE;
-  const backgroundColor = getCommonValue(elements, (el) => (el as any).backgroundColor) ?? DEFAULT_FILL;
+  const strokeColor = useMemo(
+    () => getCommonValue(elements, (el) => (el as any).strokeColor) ?? DEFAULT_STROKE,
+    [elements],
+  );
+  const backgroundColor = useMemo(
+    () => getCommonValue(elements, (el) => (el as any).backgroundColor) ?? DEFAULT_FILL,
+    [elements],
+  );
+
+  const [openKind, setOpenKind] = useState<PropertyKind | null>(null);
 
   const hasFillCapable = elements.some((el) => !LINE_LIKE_TYPES.has(el.type) && el.type !== "text");
   const hasStyleControls = elements.some((el) => el.type !== "text");
@@ -65,6 +76,17 @@ export function SelectionPropertiesRail({ selection, onRequestOpen }: Props) {
     items.push({ id: "style", label: "Stroke and fill style", Icon: SlidersHorizontal });
   }
 
+  const applyToSelection = (mutate: (el: ExcalidrawElement) => ExcalidrawElement) => {
+    if (!api || !elements.length) return;
+    const ids = new Set(elements.map((el) => el.id));
+    const nextElements = api.getSceneElements().map((el) => (ids.has(el.id) ? mutate({ ...el }) : el));
+    api.updateScene({ elements: nextElements });
+  };
+
+  const handleStrokeChange = (color: string) => {
+    applyToSelection((el) => ({ ...el, strokeColor: color } as ExcalidrawElement));
+  };
+
   return (
     <div className="selection-props-rail" role="toolbar" aria-label="Selection properties">
       {items.map((item) => (
@@ -73,7 +95,10 @@ export function SelectionPropertiesRail({ selection, onRequestOpen }: Props) {
           type="button"
           className="selection-props-rail__button"
           aria-label={item.label}
-          onClick={() => onRequestOpen?.(item.id)}
+          onClick={() => {
+            setOpenKind((prev) => (prev === item.id ? null : item.id));
+            onRequestOpen?.(item.id);
+          }}
         >
           {item.swatch ? (
             <span className="selection-props-rail__swatch" style={resolveSwatchStyle(item.swatch)} aria-hidden="true" />
@@ -81,6 +106,12 @@ export function SelectionPropertiesRail({ selection, onRequestOpen }: Props) {
           <item.Icon size={18} aria-hidden="true" />
         </button>
       ))}
+
+      {openKind === "stroke" ? (
+        <div className="selection-props-rail__flyout" role="dialog" aria-label="Stroke color">
+          <ColorPicker value={strokeColor} onChange={handleStrokeChange} title="Stroke color" />
+        </div>
+      ) : null}
     </div>
   );
 }
