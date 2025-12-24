@@ -59,7 +59,7 @@ function isText(el: ExcalidrawElement) {
 export function SelectionFlyout({ api, selection }: Props) {
   const [expanded, setExpanded] = useState(true);
 
-  const { elements, viewportBounds } = selection ?? { elements: [], viewportBounds: null };
+  const { elements } = selection ?? { elements: [], viewportBounds: null };
   const hasSelection = elements.length > 0;
 
   const strokeColor = useMemo(() => getCommonValue(elements, (el) => (el as any).strokeColor), [elements]);
@@ -102,17 +102,15 @@ export function SelectionFlyout({ api, selection }: Props) {
     });
   };
 
-  const panelStyle = viewportBounds
-    ? {
-        top: `${viewportBounds.top - 12}px`,
-        left: `${viewportBounds.left + viewportBounds.width + 12}px`,
-      }
-    : { top: "80px", left: "280px" };
-
   if (!hasSelection) return null;
 
   return (
-    <div className={`selection-flyout${expanded ? "" : " is-collapsed"}`} style={panelStyle} role="region" aria-label="Selection properties">
+    <div
+      className={`selection-flyout selection-flyout--docked${expanded ? "" : " is-collapsed"}`}
+      style={{ top: "140px", left: "190px" }}
+      role="region"
+      aria-label="Selection properties"
+    >
       <div className="selection-flyout__header">
         <span>Properties</span>
         <button type="button" className="selection-flyout__toggle" onClick={() => setExpanded((v) => !v)}>

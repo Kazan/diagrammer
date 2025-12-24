@@ -263,7 +263,7 @@ body {
 }
 
 .selection-flyout {
-  position: absolute;
+  position: fixed;
   background: linear-gradient(145deg, rgba(12, 17, 32, 0.74), rgba(10, 14, 28, 0.56));
   border: none;
   border-radius: 12px;
@@ -274,6 +274,8 @@ body {
   max-width: 360px;
   z-index: 24;
   color: var(--text);
+  top: 140px;
+  left: 190px;
 }
 
 .selection-flyout.is-collapsed .selection-flyout__content {
@@ -359,6 +361,11 @@ body {
   background: rgba(63, 207, 142, 0.12);
 }
 
+.selection-flyout--docked {
+  top: 140px;
+  left: 190px;
+}
+
 @media (max-width: 768px) {
   .selection-flyout {
     left: 12px !important;
@@ -375,6 +382,15 @@ body {
 .hide-default-props [data-testid="selected-shape-actions"] *,
 .hide-default-props .selected-shape-actions,
 .hide-default-props .selected-shape-actions * {
+  display: none !important;
+}
+
+.hide-builtin-toolbar .excalidraw [aria-label="Main menu"],
+.hide-builtin-toolbar .excalidraw [aria-label="Canvas menu"],
+.hide-builtin-toolbar .excalidraw [data-testid="main-menu-button"],
+.hide-builtin-toolbar .excalidraw [data-testid="canvas-menu"],
+.hide-builtin-toolbar .excalidraw .layer-ui__wrapper__menu,
+.hide-builtin-toolbar .excalidraw .App-top-bar__menus {
   display: none !important;
 }
 
@@ -453,8 +469,8 @@ body {
   left: auto;
   padding: 6px 10px;
   background: rgba(255, 255, 255, 0.05);
-  color: var(--text);
-  border: 1px solid var(--panel-border);
+  color: var(--accent);
+  border: none;
   border-radius: 12px;
   font-weight: 600;
   line-height: 1.25;
