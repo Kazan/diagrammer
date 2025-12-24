@@ -1,7 +1,18 @@
 import { useEffect } from "react";
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type {
+  ExcalidrawElement,
+  ExcalidrawImperativeAPI,
+} from "@excalidraw/excalidraw/types";
 import type { ToolType } from "../components/CustomToolbar";
 import { EMPTY_SCENE_SIG, computeSceneSignature } from "../scene-utils";
+
+const appStateSnapshot = {
+  scrollX: 0,
+  scrollY: 0,
+  zoom: { value: 1 },
+  offsetLeft: 0,
+  offsetTop: 0,
+};
 
 export type SceneChangeOptions = {
   api: ExcalidrawImperativeAPI | null;
@@ -20,7 +31,45 @@ export type SceneChangeOptions = {
   lastDialogRef: React.MutableRefObject<string | null>;
   handleSaveToDocument: () => void;
   handleOpenWithNativePicker: () => boolean;
+  onSelectionChange?: (payload: {
+    elements: ExcalidrawElement[];
+    appState: typeof appStateSnapshot;
+    bounds: { minX: number; minY: number; maxX: number; maxY: number } | null;
+    viewportBounds: { left: number; top: number; width: number; height: number } | null;
+  }) => void;
 };
+
+function computeBounds(elements: ExcalidrawElement[]) {
+  const nonDeleted = elements.filter((el) => !el.isDeleted);
+  if (!nonDeleted.length) return null;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const el of nonDeleted) {
+    const x1 = el.x;
+    const y1 = el.y;
+    const x2 = el.x + el.width;
+    const y2 = el.y + el.height;
+    minX = Math.min(minX, x1);
+    minY = Math.min(minY, y1);
+    maxX = Math.max(maxX, x2);
+    maxY = Math.max(maxY, y2);
+  }
+  return { minX, minY, maxX, maxY };
+}
+
+function toViewportBounds(
+  bounds: { minX: number; minY: number; maxX: number; maxY: number },
+  appState: typeof appStateSnapshot,
+) {
+  const zoom = appState.zoom?.value ?? 1;
+  const left = (bounds.minX + appState.scrollX) * zoom + (appState.offsetLeft ?? 0);
+  const top = (bounds.minY + appState.scrollY) * zoom + (appState.offsetTop ?? 0);
+  const width = (bounds.maxX - bounds.minX) * zoom;
+  const height = (bounds.maxY - bounds.minY) * zoom;
+  return { left, top, width, height };
+}
 
 export function useSceneChangeSubscription(opts: SceneChangeOptions) {
   const {
@@ -40,10 +89,12 @@ export function useSceneChangeSubscription(opts: SceneChangeOptions) {
     lastDialogRef,
     handleSaveToDocument,
     handleOpenWithNativePicker,
+    onSelectionChange,
   } = opts;
 
   useEffect(() => {
     if (!api) return undefined;
+    let selectionRaf = 0;
     const unsubscribe = api.onChange((elements, appState) => {
       if (sceneLoadInProgressRef.current) {
         const sig = computeSceneSignature(elements, appState);
@@ -145,6 +196,21 @@ export function useSceneChangeSubscription(opts: SceneChangeOptions) {
           }
         }
       }
+
+        if (
+          onSelectionChange &&
+          hydratedSceneRef.current &&
+          !sceneLoadInProgressRef.current
+        ) {
+          const selectedIds = new Set(Object.keys(appState.selectedElementIds || {}));
+          const selected = elements.filter((el) => !el.isDeleted && selectedIds.has(el.id));
+          if (selectionRaf) window.cancelAnimationFrame(selectionRaf);
+          selectionRaf = window.requestAnimationFrame(() => {
+            const bounds = computeBounds(selected);
+            const viewportBounds = bounds ? toViewportBounds(bounds, appState as any) : null;
+            onSelectionChange({ elements: selected, appState: appState as any, bounds, viewportBounds });
+          });
+        }
     });
     return () => unsubscribe();
   }, [
@@ -164,5 +230,6 @@ export function useSceneChangeSubscription(opts: SceneChangeOptions) {
     setStatus,
     suppressNextDirtyRef,
     handleOpenWithNativePicker,
+    onSelectionChange,
   ]);
 }

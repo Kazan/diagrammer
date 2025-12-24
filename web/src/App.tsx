@@ -5,6 +5,7 @@ import "@excalidraw/excalidraw/index.css";
 import { ChromeOverlay } from "./components/ChromeOverlay";
 import { type ToolType } from "./components/CustomToolbar";
 import { type StatusMessage } from "./components/NativeStatus";
+import { SelectionFlyout, type SelectionInfo } from "./components/SelectionFlyout";
 import { useNativeBridge, useNativeBridgeCallbacks } from "./hooks/useNativeBridge";
 import { useNativeFileHandles } from "./hooks/useNativeFileHandles";
 import { useNativePickers } from "./hooks/useNativePickers";
@@ -32,7 +33,10 @@ export default function App() {
   const [activeTool, setActiveTool] = useState<ToolType>("selection");
   const [currentFileName, setCurrentFileName] = useState(initialStoredName || "Unsaved");
   const [isDirty, setIsDirty] = useState(false);
-  const HIDE_BUILTIN_TOOLBAR = false;
+  const [selectionInfo, setSelectionInfo] = useState<SelectionInfo | null>(null);
+  const selectionSigRef = useRef<string | null>(null);
+  const HIDE_DEFAULT_PROPS_FLYOUT = true;
+  const HIDE_BUILTIN_TOOLBAR = true;
   const lastDialogRef = useRef<string | null>(null);
   const openFileResolveRef = useRef<((handles: NativeFileHandle[]) => void) | null>(null);
   const openFileRejectRef = useRef<((reason: any) => void) | null>(null);
@@ -178,6 +182,18 @@ export default function App() {
     lastDialogRef,
     handleSaveToDocument,
     handleOpenWithNativePicker,
+    onSelectionChange: ({ elements, viewportBounds }) => {
+      if (elements.length === 0) {
+        if (selectionSigRef.current === "none") return;
+        selectionSigRef.current = "none";
+        setSelectionInfo(null);
+        return;
+      }
+      const sig = `${elements.map((el) => el.id).join(",")}::${viewportBounds ? `${viewportBounds.left.toFixed(2)}|${viewportBounds.top.toFixed(2)}|${viewportBounds.width.toFixed(2)}|${viewportBounds.height.toFixed(2)}` : "none"}`;
+      if (selectionSigRef.current === sig) return;
+      selectionSigRef.current = sig;
+      setSelectionInfo({ elements, viewportBounds });
+    },
   });
 
   const nativeCallbacks = useNativeMessageHandlers({
@@ -275,8 +291,10 @@ export default function App() {
     apiRef.current?.setActiveTool({ type: tool });
   };
 
-  return (
-    <div className={`app-shell${HIDE_BUILTIN_TOOLBAR ? " hide-builtin-toolbar" : ""}`}>
+    return (
+      <div
+        className={`app-shell${HIDE_BUILTIN_TOOLBAR ? " hide-builtin-toolbar" : ""}${HIDE_DEFAULT_PROPS_FLYOUT ? " hide-default-props" : ""}`}
+      >
       <Excalidraw
         theme="light"
         initialData={initialData}
@@ -312,6 +330,7 @@ export default function App() {
         onExportSvg={handleExportSvg}
         exporting={exporting}
       />
+      <SelectionFlyout api={api} selection={selectionInfo} />
     </div>
   );
 }

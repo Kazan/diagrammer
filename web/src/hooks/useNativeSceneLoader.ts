@@ -46,7 +46,7 @@ export function useNativeSceneLoader(options: {
       prevSceneSigRef.current = nextSig;
       prevNonEmptySceneRef.current = hasElements;
       setIsDirty(false);
-      api.updateScene(parsed);
+      api.resetScene(parsed as any, { resetLoadingState: true, replaceFiles: true });
       setStatus({ text: "Loaded saved drawing", tone: "ok" });
     } catch (err) {
       setStatus({ text: `Load failed: ${String(err)}`, tone: "err" });

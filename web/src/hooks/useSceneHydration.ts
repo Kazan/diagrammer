@@ -49,7 +49,7 @@ export function useSceneHydration(options: {
 
   useEffect(() => {
     if (!api || !pendingScene) return;
-    api.updateScene(pendingScene);
+    api.resetScene(pendingScene as any, { resetLoadingState: true, replaceFiles: true });
     setPendingScene(null);
     hydratedSceneRef.current = true;
     prevNonEmptySceneRef.current = Array.isArray((pendingScene as any)?.elements)

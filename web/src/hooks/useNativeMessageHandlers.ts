@@ -166,7 +166,7 @@ export function useNativeMessageHandlers(deps: NativeMessageDeps) {
         openFileResolveRef.current([handle]);
       } else if (api) {
         if (parsed) {
-          api.updateScene(parsed);
+          api.resetScene(parsed as any, { resetLoadingState: true, replaceFiles: true });
           const elements = api.getSceneElementsIncludingDeleted();
           const appState = api.getAppState();
           prevSceneSigRef.current = computeSceneSignature(elements, appState);
