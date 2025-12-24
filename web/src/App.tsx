@@ -16,7 +16,6 @@ import { useSceneChangeSubscription } from "./hooks/useSceneChangeSubscription";
 import { useSceneSerialization } from "./hooks/useSceneSerialization";
 import { useExportActions } from "./hooks/useExportActions";
 import { useSceneHydration } from "./hooks/useSceneHydration";
-import { useNativeSceneLoader } from "./hooks/useNativeSceneLoader";
 import type { NativeFileHandle } from "./native-bridge";
 
 import { computeSceneSignature, stripExtension } from "./scene-utils";
@@ -289,15 +288,6 @@ export default function App() {
   // and interfering with explicit save/load actions. Re-enable with a debounced
   // onChange hook if needed, but ensure native UX can tolerate the frequency.
 
-  const { handleLoadFromNative } = useNativeSceneLoader({
-    api,
-    nativeBridge,
-    setStatus,
-    setIsDirty,
-    suppressNextDirtyRef,
-    prevSceneSigRef,
-    prevNonEmptySceneRef,
-  });
   const { handleExportPng, handleExportSvg } = useExportActions(
     api,
     nativeBridge,

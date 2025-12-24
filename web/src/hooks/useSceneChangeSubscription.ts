@@ -1,15 +1,16 @@
 import { useEffect } from "react";
+import type { MutableRefObject } from "react";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import type { ToolType } from "../components/CustomToolbar";
 import { EMPTY_SCENE_SIG, computeSceneSignature } from "../scene-utils";
 
-const appStateSnapshot = {
-  scrollX: 0,
-  scrollY: 0,
-  zoom: { value: 1 },
-  offsetLeft: 0,
-  offsetTop: 0,
+type AppStateSnapshot = {
+  scrollX: number;
+  scrollY: number;
+  zoom: { value: number };
+  offsetLeft: number;
+  offsetTop: number;
 };
 
 export type SceneChangeOptions = {
@@ -19,22 +20,22 @@ export type SceneChangeOptions = {
   setIsDirty: (dirty: boolean) => void;
   setStatus: (status: { text: string; tone: "ok" | "warn" | "err" }) => void;
   clearFileAssociation: () => void;
-  suppressNextDirtyRef: React.MutableRefObject<boolean>;
-  prevSceneSigRef: React.MutableRefObject<string | null>;
-  prevNonEmptySceneRef: React.MutableRefObject<boolean>;
-  hydratedSceneRef: React.MutableRefObject<boolean>;
-  sceneLoadInProgressRef: React.MutableRefObject<boolean>;
-  expectedSceneSigRef: React.MutableRefObject<string | null>;
-  loadSkipRef: React.MutableRefObject<number>;
-  lastDialogRef: React.MutableRefObject<string | null>;
+  suppressNextDirtyRef: MutableRefObject<boolean>;
+  prevSceneSigRef: MutableRefObject<string | null>;
+  prevNonEmptySceneRef: MutableRefObject<boolean>;
+  hydratedSceneRef: MutableRefObject<boolean>;
+  sceneLoadInProgressRef: MutableRefObject<boolean>;
+  expectedSceneSigRef: MutableRefObject<string | null>;
+  loadSkipRef: MutableRefObject<number>;
+  lastDialogRef: MutableRefObject<string | null>;
   handleSaveToDocument: () => void;
   handleOpenWithNativePicker: () => boolean;
-  onSelectionChange?: (payload: {
-    elements: ExcalidrawElement[];
-    appState: typeof appStateSnapshot;
-    bounds: { minX: number; minY: number; maxX: number; maxY: number } | null;
-    viewportBounds: { left: number; top: number; width: number; height: number } | null;
-  }) => void;
+    onSelectionChange?: (payload: {
+      elements: ExcalidrawElement[];
+      appState: AppStateSnapshot;
+      bounds: { minX: number; minY: number; maxX: number; maxY: number } | null;
+      viewportBounds: { left: number; top: number; width: number; height: number } | null;
+    }) => void;
 };
 
 function computeBounds(elements: ExcalidrawElement[]) {
@@ -59,7 +60,7 @@ function computeBounds(elements: ExcalidrawElement[]) {
 
 function toViewportBounds(
   bounds: { minX: number; minY: number; maxX: number; maxY: number },
-  appState: typeof appStateSnapshot,
+  appState: AppStateSnapshot,
 ) {
   const zoom = appState.zoom?.value ?? 1;
   const left = (bounds.minX + appState.scrollX) * zoom + (appState.offsetLeft ?? 0);
@@ -113,7 +114,7 @@ export function useSceneChangeSubscription(opts: SceneChangeOptions) {
         return;
       }
 
-      const tool = appState.activeTool?.type as ToolType | undefined;
+      const tool = appState.activeTool?.type as unknown as ToolType | undefined;
       if (tool) {
         setActiveTool(tool);
       }
@@ -183,8 +184,7 @@ export function useSceneChangeSubscription(opts: SceneChangeOptions) {
             (dialogName === "jsonImport" ||
               dialogName === "loadScene" ||
               dialogName === "load" ||
-              dialogName === "loadSceneFromFile" ||
-              true);
+              dialogName === "loadSceneFromFile");
 
           if (shouldHijackOpen && handleOpenWithNativePicker()) {
             console.log("[NativeBridge] intercepted open dialog", dialogName);
@@ -205,8 +205,8 @@ export function useSceneChangeSubscription(opts: SceneChangeOptions) {
           if (selectionRaf) window.cancelAnimationFrame(selectionRaf);
           selectionRaf = window.requestAnimationFrame(() => {
             const bounds = computeBounds(selected);
-            const viewportBounds = bounds ? toViewportBounds(bounds, appState as any) : null;
-            onSelectionChange({ elements: selected, appState: appState as any, bounds, viewportBounds });
+            const viewportBounds = bounds ? toViewportBounds(bounds, appState as AppStateSnapshot) : null;
+            onSelectionChange({ elements: selected, appState: appState as AppStateSnapshot, bounds, viewportBounds });
           });
         }
     });
