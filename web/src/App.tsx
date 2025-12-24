@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Excalidraw, WelcomeScreen } from "@excalidraw/excalidraw";
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { ExcalidrawElement, ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import "@excalidraw/excalidraw/index.css";
 import { ChromeOverlay } from "./components/ChromeOverlay";
 import { type ToolType } from "./components/CustomToolbar";
+import { SelectionPropertiesRail } from "./components/SelectionPropertiesRail";
+import type { SelectionInfo } from "./components/SelectionFlyout";
 import { type StatusMessage } from "./components/NativeStatus";
-import { SelectionFlyout, type SelectionInfo } from "./components/SelectionFlyout";
 import { useNativeBridge, useNativeBridgeCallbacks } from "./hooks/useNativeBridge";
 import { useNativeFileHandles } from "./hooks/useNativeFileHandles";
 import { useNativePickers } from "./hooks/useNativePickers";
@@ -34,9 +35,7 @@ export default function App() {
   const [currentFileName, setCurrentFileName] = useState(initialStoredName || "Unsaved");
   const [isDirty, setIsDirty] = useState(false);
   const [selectionInfo, setSelectionInfo] = useState<SelectionInfo | null>(null);
-  const selectionSigRef = useRef<string | null>(null);
-  const HIDE_DEFAULT_PROPS_FLYOUT = true;
-  const HIDE_BUILTIN_TOOLBAR = true;
+  const HIDE_DEFAULT_PROPS_FLYOUT = false;
   const lastDialogRef = useRef<string | null>(null);
   const openFileResolveRef = useRef<((handles: NativeFileHandle[]) => void) | null>(null);
   const openFileRejectRef = useRef<((reason: any) => void) | null>(null);
@@ -178,6 +177,17 @@ export default function App() {
     }
   }, [handleOpenWithNativePicker, setStatus]);
 
+  const handleSelectionChange = useCallback(
+    ({ elements, viewportBounds }: { elements: ExcalidrawElement[]; viewportBounds: SelectionInfo["viewportBounds"] }) => {
+      if (!elements.length) {
+        setSelectionInfo(null);
+        return;
+      }
+      setSelectionInfo({ elements, viewportBounds });
+    },
+    [],
+  );
+
   useSceneChangeSubscription({
     api,
     setActiveTool,
@@ -195,18 +205,7 @@ export default function App() {
     lastDialogRef,
     handleSaveToDocument,
     handleOpenWithNativePicker,
-    onSelectionChange: ({ elements, viewportBounds }) => {
-      if (elements.length === 0) {
-        if (selectionSigRef.current === "none") return;
-        selectionSigRef.current = "none";
-        setSelectionInfo(null);
-        return;
-      }
-      const sig = `${elements.map((el) => el.id).join(",")}::${viewportBounds ? `${viewportBounds.left.toFixed(2)}|${viewportBounds.top.toFixed(2)}|${viewportBounds.width.toFixed(2)}|${viewportBounds.height.toFixed(2)}` : "none"}`;
-      if (selectionSigRef.current === sig) return;
-      selectionSigRef.current = sig;
-      setSelectionInfo({ elements, viewportBounds });
-    },
+    onSelectionChange: handleSelectionChange,
   });
 
   const nativeCallbacks = useNativeMessageHandlers({
@@ -304,10 +303,8 @@ export default function App() {
     apiRef.current?.setActiveTool({ type: tool });
   };
 
-    return (
-      <div
-        className={`app-shell${HIDE_BUILTIN_TOOLBAR ? " hide-builtin-toolbar" : ""}${HIDE_DEFAULT_PROPS_FLYOUT ? " hide-default-props" : ""}`}
-      >
+  return (
+    <div className={`app-shell${HIDE_DEFAULT_PROPS_FLYOUT ? " hide-default-props" : ""}`}>
       <Excalidraw
         theme="light"
         initialData={initialData}
@@ -328,6 +325,7 @@ export default function App() {
           </WelcomeScreen.Center>
         </WelcomeScreen>
       </Excalidraw>
+      <SelectionPropertiesRail selection={selectionInfo} />
       <ChromeOverlay
         fileName={currentFileName}
         isDirty={isDirty}
@@ -343,7 +341,6 @@ export default function App() {
         onExportSvg={handleExportSvg}
         exporting={exporting}
       />
-      <SelectionFlyout api={api} selection={selectionInfo} />
     </div>
   );
 }

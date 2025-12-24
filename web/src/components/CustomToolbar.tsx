@@ -44,14 +44,12 @@ type Props = {
 
 type ToolSection = {
   id: string;
-  label: string;
   tools: { id: ToolType; label: string; Icon: React.ComponentType<{ size?: number }> }[];
 };
 
 const TOOL_SECTIONS: ToolSection[] = [
   {
     id: "navigate",
-    label: "Navigate",
     tools: [
       { id: "selection", label: "Select", Icon: MousePointer2 },
       { id: "hand", label: "Hand", Icon: Hand },
@@ -62,7 +60,6 @@ const TOOL_SECTIONS: ToolSection[] = [
   },
   {
     id: "draw",
-    label: "Draw",
     tools: [
       { id: "rectangle", label: "Rectangle", Icon: Square },
       { id: "diamond", label: "Diamond", Icon: Diamond },
@@ -78,9 +75,8 @@ const TOOL_SECTIONS: ToolSection[] = [
 export function CustomToolbar({ activeTool, onSelect }: Props) {
   return (
     <div className="custom-toolbar" role="toolbar" aria-label="Drawing tools">
-      {TOOL_SECTIONS.map((section) => (
-        <div key={section.id} className="custom-toolbar__section" role="group" aria-label={section.label}>
-          <div className="custom-toolbar__section-label">{section.label}</div>
+      {TOOL_SECTIONS.map((section, index) => (
+        <div key={section.id} className="custom-toolbar__section" role="group" aria-label={section.id}>
           <div className="custom-toolbar__buttons">
             {section.tools.map((tool) => {
               const isActive = activeTool === tool.id;
@@ -99,6 +95,7 @@ export function CustomToolbar({ activeTool, onSelect }: Props) {
               );
             })}
           </div>
+          {index < TOOL_SECTIONS.length - 1 ? <div className="custom-toolbar__divider" aria-hidden="true" /> : null}
         </div>
       ))}
     </div>
