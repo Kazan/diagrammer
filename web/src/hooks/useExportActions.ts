@@ -121,7 +121,7 @@ export function useExportActions(
         },
         files,
         exportPadding,
-        getDimensions: (w, h) => ({
+        getDimensions: (w: number, h: number) => ({
           width: Math.round(w * exportScale),
           height: Math.round(h * exportScale),
           scale: exportScale,
