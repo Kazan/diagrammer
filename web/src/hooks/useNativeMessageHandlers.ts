@@ -126,6 +126,12 @@ export function useNativeMessageHandlers(deps: NativeMessageDeps) {
       let hasElements = false;
       try {
         parsed = JSON.parse(sceneJson);
+        if (parsed?.appState?.viewBackgroundColor === "transparent") {
+          parsed = {
+            ...parsed,
+            appState: { ...parsed.appState, viewBackgroundColor: "#ffffff" },
+          };
+        }
         nextSig = computeSceneSignatureFromScene(parsed);
         hasElements = Array.isArray(parsed?.elements)
           ? parsed.elements.some((el: any) => !el.isDeleted)

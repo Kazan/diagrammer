@@ -114,27 +114,40 @@ export default function App() {
   }, [nativeBridge, openWithNativePicker, setStatus]);
 
   const performSave = useCallback(async () => {
-    if (!api || (!nativeBridge?.persistScene && !nativeBridge?.saveScene)) return;
+    if (!api) return;
     try {
       const envelope = await buildSceneEnvelope({ suggestedName: currentFileName });
       const serialized = JSON.stringify(envelope);
-      if (nativeBridge.persistScene) {
-        nativeBridge.persistScene(serialized);
-      } else {
-        nativeBridge.saveScene?.(envelope.json);
+
+      if (hasCurrentFileRef.current) {
+        if (nativeBridge?.persistSceneToCurrentDocument) {
+          nativeBridge.persistSceneToCurrentDocument(serialized);
+          return;
+        }
+        if (nativeBridge?.saveSceneToCurrentDocument) {
+          nativeBridge.saveSceneToCurrentDocument(envelope.json);
+          return;
+        }
       }
+
+      if (nativeBridge?.persistScene) {
+        nativeBridge.persistScene(serialized);
+        return;
+      }
+      if (nativeBridge?.saveScene) {
+        nativeBridge.saveScene(envelope.json);
+        return;
+      }
+
+      setStatus({ text: "Native save unavailable", tone: "warn" });
     } catch (err) {
       setStatus({ text: `Save failed: ${String(err)}`, tone: "err" });
     }
-  }, [api, buildSceneEnvelope, currentFileName, nativeBridge, setStatus]);
+  }, [api, buildSceneEnvelope, currentFileName, hasCurrentFileRef, nativeBridge, setStatus]);
 
   const handleSaveNow = useCallback(() => {
-    if (!nativeBridge?.persistScene && !nativeBridge?.saveScene) {
-      setStatus({ text: "Native save unavailable", tone: "warn" });
-      return;
-    }
     void performSave();
-  }, [nativeBridge, performSave, setStatus]);
+  }, [performSave]);
 
   const handleSaveToDocument = useCallback(async () => {
     if (!api) {
