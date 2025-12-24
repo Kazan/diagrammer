@@ -389,6 +389,12 @@ body {
 .hide-builtin-toolbar .excalidraw [aria-label="Canvas menu"],
 .hide-builtin-toolbar .excalidraw [data-testid="main-menu-button"],
 .hide-builtin-toolbar .excalidraw [data-testid="canvas-menu"],
+.hide-builtin-toolbar .excalidraw [data-testid="main-menu-trigger"],
+.hide-builtin-toolbar .excalidraw [aria-label="Menu"],
+.hide-builtin-toolbar .excalidraw button[aria-label*="menu" i],
+.hide-builtin-toolbar .excalidraw .dropdown-menu,
+.hide-builtin-toolbar .excalidraw .dropdown-menu-trigger,
+.hide-builtin-toolbar .excalidraw .App-menu,
 .hide-builtin-toolbar .excalidraw .layer-ui__wrapper__menu,
 .hide-builtin-toolbar .excalidraw .App-top-bar__menus {
   display: none !important;

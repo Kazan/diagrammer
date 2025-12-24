@@ -51,7 +51,6 @@ export function ChromeOverlay({
             <FileChip name={fileName} isDirty={isDirty} />
             <div className="chrome-strip__chips" aria-label="File state">
               <StatusChip tone={isDirty ? "warn" : "ok"} label={isDirty ? "Dirty" : "Clean"} />
-              <StatusChip tone={nativePresent ? "ok" : "warn"} label={nativePresent ? "Native ready" : "Native missing"} />
               <StatusChip
                 tone={lastSaved ? "ok" : "warn"}
                 label={lastSaved ? `Saved ${lastSaved.toLocaleTimeString()}` : "Unsaved"}
