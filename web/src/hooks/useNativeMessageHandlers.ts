@@ -170,11 +170,13 @@ export function useNativeMessageHandlers(deps: NativeMessageDeps) {
             api.updateScene(parsed as any);
             const elements = api.getSceneElementsIncludingDeleted();
             const appState = api.getAppState();
+            const normalizedAppState = { ...appState, zoom: { value: 1 } };
+            api.updateScene({ appState: normalizedAppState });
             const visible = elements.filter((el) => !el.isDeleted);
             if (visible.length) {
-              api.scrollToContent(visible as any, { fitToViewport: true, animate: false });
+              api.scrollToContent(visible as any, { fitToViewport: false, animate: false });
             }
-            prevSceneSigRef.current = computeSceneSignature(elements, appState);
+            prevSceneSigRef.current = computeSceneSignature(elements, normalizedAppState);
             prevNonEmptySceneRef.current = visible.length > 0;
             suppressNextDirtyRef.current = true;
             expectedSceneSigRef.current = prevSceneSigRef.current;
