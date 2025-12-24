@@ -37,6 +37,8 @@ export default function App() {
   const [currentFileName, setCurrentFileName] = useState(initialStoredName || "Unsaved");
   const [isDirty, setIsDirty] = useState(false);
   const [selectionInfo, setSelectionInfo] = useState<SelectionInfo | null>(null);
+  const [zoom, setZoom] = useState<{ value: number }>({ value: 1 });
+  const lastZoomRef = useRef(1);
   const HIDE_DEFAULT_PROPS_FLYOUT = false;
   const lastDialogRef = useRef<string | null>(null);
   const openFileResolveRef = useRef<((handles: NativeFileHandle[]) => void) | null>(null);
@@ -284,6 +286,15 @@ export default function App() {
   useEffect(() => {
     if (!api) return;
     api.setActiveTool({ type: "selection" });
+
+    const unsubscribe = api.onChange((_elements, appState) => {
+      const nextZoom = appState?.zoom?.value ?? 1;
+      if (Math.abs(nextZoom - lastZoomRef.current) > 0.0001) {
+        lastZoomRef.current = nextZoom;
+        setZoom({ value: nextZoom });
+      }
+    });
+    return () => unsubscribe();
   }, [api]);
 
   // Autosave temporarily disabled to avoid spamming native save notifications
@@ -297,10 +308,38 @@ export default function App() {
     setExporting,
   );
 
+  const handleZoomIn = useCallback(() => {
+    if (!api) return;
+    const next = Math.min((api.getAppState().zoom?.value ?? 1) * 1.1, 4);
+    api.setAppState({ zoom: { value: next } });
+    setZoom({ value: next });
+  }, [api]);
+
+  const handleZoomOut = useCallback(() => {
+    if (!api) return;
+    const next = Math.max((api.getAppState().zoom?.value ?? 1) / 1.1, 0.1);
+    api.setAppState({ zoom: { value: next } });
+    setZoom({ value: next });
+  }, [api]);
+
+  const handleZoomToContent = useCallback(() => {
+    if (!api) return;
+    const elements = api.getSceneElements().filter((el) => !el.isDeleted);
+    if (!elements.length) {
+      setStatus({ text: "Nothing to focus", tone: "warn" });
+      return;
+    }
+    api.scrollToContent(elements as any, { fitToViewport: true, animate: true });
+  }, [api, setStatus]);
+
+  const handleUndo = useCallback(() => {
+    if (!api) return;
+    api.history?.undo?.();
+  }, [api]);
+
   const handleSelectTool = (tool: ToolType) => {
     if (tool === "image") {
       setActiveTool("image");
-      apiRef.current?.setActiveTool({ type: "image" });
       if (imageInputRef.current) {
         imageInputRef.current.value = "";
         imageInputRef.current.click();
@@ -443,6 +482,11 @@ export default function App() {
         onExportPng={handleExportPng}
         onExportSvg={handleExportSvg}
         exporting={exporting}
+        zoom={zoom}
+        onZoomIn={handleZoomIn}
+        onZoomOut={handleZoomOut}
+        onZoomToContent={handleZoomToContent}
+        onUndo={handleUndo}
       />
     </div>
   );

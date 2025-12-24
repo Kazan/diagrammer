@@ -1,6 +1,7 @@
 import { CustomToolbar, type ToolType } from "./CustomToolbar";
 import { FileChip } from "./FileChip";
 import { NativeStatus, type StatusMessage } from "./NativeStatus";
+import { ZoomControls } from "./ZoomControls";
 
 type Props = {
   fileName: string;
@@ -17,6 +18,11 @@ type Props = {
   onExportPng: () => void;
   onExportSvg: () => void;
   exporting: "png" | "svg" | null;
+  zoom: { value: number };
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  onZoomToContent: () => void;
+  onUndo: () => void;
 };
 
 function StatusChip({
@@ -44,6 +50,11 @@ export function ChromeOverlay({
   onExportPng,
   onExportSvg,
   exporting,
+  zoom,
+  onZoomIn,
+  onZoomOut,
+  onZoomToContent,
+  onUndo,
 }: Props) {
   return (
     <>
@@ -100,6 +111,13 @@ export function ChromeOverlay({
       </div>
       <CustomToolbar activeTool={activeTool} onSelect={onSelectTool} />
       <NativeStatus present={nativePresent} lastSaved={lastSaved} status={status} />
+      <ZoomControls
+        zoom={zoom}
+        onZoomIn={onZoomIn}
+        onZoomOut={onZoomOut}
+        onCenter={onZoomToContent}
+        onUndo={onUndo}
+      />
     </>
   );
 }
