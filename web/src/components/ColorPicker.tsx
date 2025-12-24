@@ -6,6 +6,9 @@ export type ColorSwatch = {
   label: string;
   value: string;
   title?: string;
+  darkest?: string;
+  lightest?: string;
+  disableShades?: boolean;
 };
 
 export type PaletteId = "default" | "eink";
@@ -19,12 +22,12 @@ declare global {
 export const DEFAULT_COLOR = "#6741d9";
 
 export const DEFAULT_SWATCHES: ColorSwatch[] = [
-  { key: "q", label: "q", value: "transparent", title: "Transparent" },
-  { key: "w", label: "w", value: "#ffffff", title: "White" },
-  { key: "e", label: "e", value: "#0f172a", title: "Charcoal" },
-  { key: "r", label: "r", value: "#111827", title: "Midnight" },
-  { key: "t", label: "t", value: "#8b5c3b", title: "Brown" },
-  { key: "a", label: "a", value: "#0ea5e9", title: "Teal" },
+  { key: "q", label: "q", value: "transparent", title: "Transparent", disableShades: true },
+  { key: "w", label: "w", value: "#ffffff", title: "White", disableShades: true },
+  { key: "e", label: "e", value: "#ced4da", title: "Charcoal", darkest: "#343a40", lightest: "#f8f9fa" },
+  { key: "r", label: "r", value: "#1e1e1e", title: "Midnight", disableShades: true },
+  { key: "t", label: "t", value: "#d2bab0", title: "Brown", darkest: "#846358", lightest: "#f8f1ee" },
+  { key: "a", label: "a", value: "#3bc9db", title: "Teal", darkest: "#0c8599", lightest: "#e3fafc" },
   { key: "s", label: "s", value: "#2563eb", title: "Blue" },
   { key: "d", label: "d", value: "#7c3aed", title: "Purple" },
   { key: "f", label: "f", value: "#d946ef", title: "Fuchsia" },
@@ -122,6 +125,13 @@ function adjustColor(hex: string, factor: number) {
   });
 }
 
+function mixColor(a: string, b: string, t: number) {
+  const ca = hexToRgb(a);
+  const cb = hexToRgb(b);
+  const lerp = (x: number, y: number) => x + (y - x) * t;
+  return rgbToHex({ r: lerp(ca.r, cb.r), g: lerp(ca.g, cb.g), b: lerp(ca.b, cb.b) });
+}
+
 function parseColorInput(input: string): { value: string; alpha: number } | null {
   const value = input.trim();
   if (!value) return null;
@@ -164,21 +174,61 @@ export default function ColorPicker({
   const [shadeIndex, setShadeIndex] = useState<1 | 2 | 3 | 4 | 5>(initialShadeIndex);
   const colorInputRef = useRef<HTMLInputElement>(null);
 
-  const { hex: normalizedHex, alpha: derivedAlpha, display } = useMemo(() => decomposeColor(value), [value]);
-  const shadeFactors = [-0.35, -0.18, 0, 0.18, 0.35] as const;
-  const shadeFactor = shadeFactors[shadeIndex - 1];
-  const tintedBase = useMemo(() => adjustColor(baseHex, shadeFactor), [baseHex, shadeFactor]);
-  const isShadeDisabled = useMemo(() => {
-    const normalized = normalizeHex(value);
-    return normalized === normalizeHex("transparent") || normalized === normalizeHex("#ffffff");
-  }, [value]);
-
-  const shades = useMemo(() => (isShadeDisabled ? [] : getShades(tintedBase)), [isShadeDisabled, tintedBase]);
-
   const paletteSwatches = useMemo(() => {
     if (swatches && swatches.length) return swatches;
     return COLOR_PALETTES[paletteId] ?? COLOR_PALETTES.default;
   }, [paletteId, swatches]);
+
+  const { hex: normalizedHex, alpha: derivedAlpha, display } = useMemo(() => decomposeColor(value), [value]);
+  const shadeFactors = [-0.35, -0.18, 0, 0.18, 0.35] as const;
+  const shadeFactor = shadeFactors[shadeIndex - 1];
+
+  const currentSwatch = useMemo(() => {
+    const normalized = normalizeHex(baseHex);
+    return paletteSwatches.find((s) => normalizeHex(s.value) === normalized);
+  }, [baseHex, paletteSwatches]);
+
+  const isShadeDisabled = useMemo(() => {
+    return Boolean(currentSwatch?.disableShades);
+  }, [currentSwatch]);
+
+  const computeSwatchShades = useMemo(() => {
+    return (hex: string, swatch?: ColorSwatch): string[] => {
+      if (swatch?.disableShades) return [];
+      const central = normalizeHex(hex);
+      if (swatch?.darkest && swatch?.lightest) {
+        const darkest = normalizeHex(swatch.darkest);
+        const lightest = normalizeHex(swatch.lightest);
+        const mid1 = mixColor(darkest, central, 0.5);
+        const mid4 = mixColor(central, lightest, 0.5);
+        return [darkest, mid1, central, mid4, lightest];
+      }
+      return getShades(central);
+    };
+  }, []);
+
+  const shades = useMemo(() => {
+    if (isShadeDisabled) return [];
+    return computeSwatchShades(baseHex, currentSwatch);
+  }, [baseHex, computeSwatchShades, currentSwatch, isShadeDisabled]);
+
+  const shadePlaceholders = useMemo(() => Array.from({ length: 5 }, (_, index) => `placeholder-${index + 1}`), []);
+
+  const tintedBase = useMemo(() => {
+    if (isShadeDisabled) return normalizeHex(baseHex);
+    if (!shades.length) return adjustColor(baseHex, shadeFactor);
+    return shades[shadeIndex - 1];
+  }, [baseHex, isShadeDisabled, shadeFactor, shadeIndex, shades]);
+
+  const tintColor = useMemo(() => {
+    return (hex: string, swatchOverride?: ColorSwatch) => {
+      const swatch = swatchOverride ?? paletteSwatches.find((s) => normalizeHex(s.value) === normalizeHex(hex));
+      if (swatch?.disableShades) return normalizeHex(hex);
+      const shadesForSwatch = computeSwatchShades(hex, swatch);
+      if (shadesForSwatch.length === 5) return shadesForSwatch[shadeIndex - 1];
+      return adjustColor(normalizeHex(hex), shadeFactor);
+    };
+  }, [computeSwatchShades, paletteSwatches, shadeFactor, shadeIndex]);
 
   const skipBaseSyncRef = useRef(false);
 
@@ -231,7 +281,7 @@ export default function ColorPicker({
         <div className="color-picker__swatches">
           {paletteSwatches.map((swatch) => {
             const normalizedSwatch = swatch.value === "transparent" ? DEFAULT_COLOR : normalizeHex(swatch.value);
-            const displayColor = swatch.value === "transparent" ? swatch.value : adjustColor(normalizedSwatch, shadeFactor);
+            const displayColor = swatch.value === "transparent" ? swatch.value : tintColor(normalizedSwatch, swatch);
             const isActive =
               value === swatch.value ||
               (swatch.value !== "transparent" && normalizeHex(value) === normalizeHex(displayColor) && decomposeColor(value).alpha === alpha);
@@ -244,12 +294,12 @@ export default function ColorPicker({
                 onClick={() => {
                   const nextBase = normalizedSwatch;
                   const nextAlpha = swatch.value === "transparent" ? 0 : alpha;
-                  const tinted = swatch.value === "transparent" ? combineColor(nextBase, 0) : combineColor(adjustColor(nextBase, shadeFactor), nextAlpha);
+                  const tintedColor = swatch.value === "transparent" ? combineColor(nextBase, 0) : combineColor(tintColor(nextBase, swatch), nextAlpha);
                   setBaseHex(nextBase);
                   setAlpha(nextAlpha);
-                  setInputValue(swatch.value === "transparent" ? "transparent" : tinted);
+                  setInputValue(swatch.value === "transparent" ? "transparent" : tintedColor);
                   skipBaseSyncRef.current = true;
-                  onChange(tinted);
+                  onChange(tintedColor);
                 }}
                 aria-pressed={isActive}
                 aria-label={swatch.title ?? swatch.value}
@@ -261,37 +311,43 @@ export default function ColorPicker({
         </div>
       </div>
 
-      {!isShadeDisabled ? (
-        <div className="color-picker__group">
-          <div className="color-picker__title">Shades</div>
-          <div className="color-picker__shades">
-            {shades.map((shade, index) => {
-              const shadeValue = combineColor(shade, alpha);
-              const isActive = index + 1 === shadeIndex;
-              return (
-                <button
-                  key={shadeValue}
-                  type="button"
-                  className={`color-shade${isActive ? " is-active" : ""}`}
-                  style={{ backgroundColor: shade, color: shade }}
-                  onClick={() => {
-                    const nextIndex = (index + 1) as 1 | 2 | 3 | 4 | 5;
-                    setShadeIndex(nextIndex);
-                    const nextFactor = shadeFactors[nextIndex - 1];
-                    const tinted = combineColor(adjustColor(baseHex, nextFactor), alpha);
-                    setInputValue(tinted);
-                    skipBaseSyncRef.current = true;
-                    onChange(tinted);
-                  }}
-                  aria-label={`Shade ${index + 1}`}
-                >
-                  ↑{index + 1}
-                </button>
-              );
-            })}
-          </div>
+      <div className="color-picker__group">
+        <div className="color-picker__title">Shades</div>
+        <div className="color-picker__shades">
+          {(isShadeDisabled ? shadePlaceholders : shades).map((shade, index) => {
+            const shadeValue = isShadeDisabled ? shade : combineColor(shade, alpha);
+            const isActive = !isShadeDisabled && index + 1 === shadeIndex;
+            const shadeStyle = isShadeDisabled
+              ? { backgroundColor: "rgba(0, 0, 0, 0.06)", color: "rgba(0, 0, 0, 0.06)" }
+              : { backgroundColor: shade, color: shade };
+            return (
+              <button
+                key={shadeValue}
+                type="button"
+                className={`color-shade${isActive ? " is-active" : ""}${isShadeDisabled ? " is-disabled" : ""}`}
+                style={shadeStyle}
+                disabled={isShadeDisabled}
+                onClick={() => {
+                  if (isShadeDisabled) return;
+                  const nextIndex = (index + 1) as 1 | 2 | 3 | 4 | 5;
+                  setShadeIndex(nextIndex);
+                  const nextFactor = shadeFactors[nextIndex - 1];
+                  const swatch = currentSwatch;
+                  const shadesForSwatch = swatch ? computeSwatchShades(baseHex, swatch) : undefined;
+                  const nextTint = shadesForSwatch && shadesForSwatch.length === 5 ? shadesForSwatch[nextIndex - 1] : adjustColor(baseHex, nextFactor);
+                  const tinted = combineColor(nextTint, alpha);
+                  setInputValue(tinted);
+                  skipBaseSyncRef.current = true;
+                  onChange(tinted);
+                }}
+                aria-label={`Shade ${index + 1}${isShadeDisabled ? " disabled" : ""}`}
+              >
+                ↑{index + 1}
+              </button>
+            );
+          })}
         </div>
-      ) : null}
+      </div>
 
       <div className="color-picker__hex">
         <label className="color-picker__title" htmlFor={inputId}>

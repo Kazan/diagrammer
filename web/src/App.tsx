@@ -278,6 +278,11 @@ export default function App() {
     suppressNextDirtyRef,
   ]);
 
+  useEffect(() => {
+    if (!api) return;
+    api.setActiveTool({ type: "selection" });
+  }, [api]);
+
   // Autosave temporarily disabled to avoid spamming native save notifications
   // and interfering with explicit save/load actions. Re-enable with a debounced
   // onChange hook if needed, but ensure native UX can tolerate the frequency.
@@ -311,7 +316,6 @@ export default function App() {
         excalidrawAPI={(api) => {
           apiRef.current = api;
           setApi(api);
-          api.setActiveTool({ type: "selection" });
         }}
       >
         {/* Render a stripped-down welcome screen so the default menu items stay hidden */}
