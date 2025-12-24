@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Excalidraw, WelcomeScreen } from "@excalidraw/excalidraw";
+import type { ChangeEvent } from "react";
+import { Excalidraw, WelcomeScreen, convertToExcalidrawElements } from "@excalidraw/excalidraw";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import "@excalidraw/excalidraw/index.css";
@@ -23,6 +24,7 @@ import { computeSceneSignature, stripExtension } from "./scene-utils";
 export default function App() {
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null);
   const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
   const { nativeBridge, nativePresent } = useNativeBridge({});
   const initialStoredName = useMemo(
     () => stripExtension(window.NativeBridge?.getCurrentFileName?.() ?? ""),
@@ -296,12 +298,116 @@ export default function App() {
   );
 
   const handleSelectTool = (tool: ToolType) => {
+    if (tool === "image") {
+      setActiveTool("image");
+      apiRef.current?.setActiveTool({ type: "image" });
+      if (imageInputRef.current) {
+        imageInputRef.current.value = "";
+        imageInputRef.current.click();
+      }
+      return;
+    }
     setActiveTool(tool);
     apiRef.current?.setActiveTool({ type: tool });
   };
 
+  const handleImageFile = useCallback(
+    async (file: File) => {
+      if (!api) return;
+      const toDataUrl = (input: File) =>
+        new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result));
+          reader.onerror = () => reject(new Error("Unable to read image"));
+          reader.readAsDataURL(input);
+        });
+
+      const loadImageDimensions = (dataUrl: string) =>
+        new Promise<{ width: number; height: number }>((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => resolve({ width: img.naturalWidth || img.width, height: img.naturalHeight || img.height });
+          img.onerror = () => reject(new Error("Unable to load image"));
+          img.src = dataUrl;
+        });
+
+      try {
+        const dataURL = await toDataUrl(file);
+        const { width, height } = await loadImageDimensions(dataURL);
+        const fileId = `image-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const now = Date.now();
+        api.addFiles({
+          [fileId]: {
+            id: fileId,
+            dataURL,
+            mimeType: file.type || "image/png",
+            created: now,
+            lastRetrieved: now,
+          },
+        });
+
+        const appState = api.getAppState();
+        const zoom = appState.zoom?.value ?? 1;
+        const offsetLeft = appState.offsetLeft ?? 0;
+        const offsetTop = appState.offsetTop ?? 0;
+        const scrollX = appState.scrollX ?? 0;
+        const scrollY = appState.scrollY ?? 0;
+        const centerX = (window.innerWidth / 2 - offsetLeft) / zoom - scrollX;
+        const centerY = (window.innerHeight / 2 - offsetTop) / zoom - scrollY;
+        const [imageElement] = convertToExcalidrawElements([
+          {
+            type: "image",
+            fileId,
+            x: centerX - width / 2,
+            y: centerY - height / 2,
+            width,
+            height,
+            angle: 0,
+          },
+        ]);
+
+        api.updateScene({
+          elements: [...api.getSceneElements(), imageElement as ExcalidrawElement],
+          appState: {
+            ...appState,
+            selectedElementIds: { [imageElement.id]: true },
+            selectedGroupIds: {},
+            editingElement: null,
+            selectedLinearElement: null,
+            draggingElement: null,
+            resizingElement: null,
+            multiElement: null,
+          },
+        });
+
+        setActiveTool("selection");
+        apiRef.current?.setActiveTool({ type: "selection" });
+        setStatus({ text: `Inserted image${file.name ? `: ${file.name}` : ""}`, tone: "ok" });
+      } catch (err) {
+        setStatus({ text: `Image insert failed: ${String((err as Error)?.message ?? err)}`, tone: "err" });
+      }
+    },
+    [api, setStatus]
+  );
+
+  const handleImageInputChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      void handleImageFile(file);
+    },
+    [handleImageFile]
+  );
+
   return (
     <div className={`app-shell${HIDE_DEFAULT_PROPS_FLYOUT ? " hide-default-props" : ""}`}>
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: "none" }}
+        onChange={handleImageInputChange}
+        aria-label="Insert image"
+      />
       <Excalidraw
         theme="light"
         initialData={initialData}

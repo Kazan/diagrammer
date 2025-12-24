@@ -1,5 +1,4 @@
 import type React from "react";
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import {
   MousePointer2,
   Hand,
@@ -13,16 +12,10 @@ import {
   Minus,
   Pencil,
   Type as TypeIcon,
+  Image as ImageIcon,
 } from "lucide-react";
 
-type ExcalidrawToolType = ExcalidrawImperativeAPI["setActiveTool"] extends (
-  input: { type: infer T },
-) => void
-  ? T
-  : never;
-
-export type ToolType = Extract<
-  ExcalidrawToolType,
+export type ToolType =
   | "selection"
   | "hand"
   | "eraser"
@@ -35,7 +28,7 @@ export type ToolType = Extract<
   | "line"
   | "freedraw"
   | "text"
->;
+  | "image";
 
 type Props = {
   activeTool: ToolType;
@@ -44,7 +37,7 @@ type Props = {
 
 type ToolSection = {
   id: string;
-  tools: { id: ToolType; label: string; Icon: React.ComponentType<{ size?: number }> }[];
+  tools: { id: ToolType; label: string; Icon: React.ComponentType<{ size?: number | string }> }[];
 };
 
 const TOOL_SECTIONS: ToolSection[] = [
@@ -68,6 +61,7 @@ const TOOL_SECTIONS: ToolSection[] = [
       { id: "line", label: "Line", Icon: Minus },
       { id: "freedraw", label: "Freehand", Icon: Pencil },
       { id: "text", label: "Text", Icon: TypeIcon },
+      { id: "image", label: "Image", Icon: ImageIcon },
     ],
   },
 ];
