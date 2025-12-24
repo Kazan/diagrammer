@@ -1,8 +1,6 @@
 import { useEffect } from "react";
-import type {
-  ExcalidrawElement,
-  ExcalidrawImperativeAPI,
-} from "@excalidraw/excalidraw/types";
+import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import type { ToolType } from "../components/CustomToolbar";
 import { EMPTY_SCENE_SIG, computeSceneSignature } from "../scene-utils";
 

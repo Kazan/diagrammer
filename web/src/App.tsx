@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Excalidraw, WelcomeScreen } from "@excalidraw/excalidraw";
-import type { ExcalidrawElement, ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import "@excalidraw/excalidraw/index.css";
 import { ChromeOverlay } from "./components/ChromeOverlay";
 import { type ToolType } from "./components/CustomToolbar";
@@ -165,10 +166,11 @@ export default function App() {
       } else {
         nativeBridge.saveSceneToDocument?.(envelope.json);
       }
+      hasCurrentFileRef.current = true;
     } catch (err) {
       setStatus({ text: `Save failed: ${String(err)}`, tone: "err" });
     }
-  }, [api, buildSceneEnvelope, currentFileName, nativeBridge, setStatus]);
+  }, [api, buildSceneEnvelope, currentFileName, hasCurrentFileRef, nativeBridge, setStatus]);
 
   const handleOpenFromOverlay = useCallback(() => {
     const opened = handleOpenWithNativePicker();
@@ -333,6 +335,7 @@ export default function App() {
       <ChromeOverlay
         fileName={currentFileName}
         isDirty={isDirty}
+        canSave={hasCurrentFileRef.current}
         activeTool={activeTool}
         onSelectTool={handleSelectTool}
         nativePresent={nativePresent}

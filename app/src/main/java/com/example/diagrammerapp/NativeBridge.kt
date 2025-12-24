@@ -315,6 +315,7 @@ internal class NativeBridge(
                 notifyJs("onExportComplete", false, "Invalid PNG data", null)
                 return@launch
             }
+            Log.d("NativeBridge", "exportPng: bytes=${bytes.size}, dataUrlLength=${base64DataUrl.length}")
             val displayName = "diagram_${dateFormat.format(Date())}.png"
             saveToMediaStore(bytes, "image/png", displayName)
         }
@@ -327,6 +328,7 @@ internal class NativeBridge(
                 notifyJs("onExportComplete", false, "Invalid SVG data", null)
                 return@launch
             }
+            Log.d("NativeBridge", "exportSvg: bytes=${bytes.size}, dataUrlLength=${base64DataUrl.length}")
             val displayName = "diagram_${dateFormat.format(Date())}.svg"
             saveToMediaStore(bytes, "image/svg+xml", displayName)
         }

@@ -1,9 +1,6 @@
 import { useMemo, useState } from "react";
-import type {
-  ExcalidrawElement,
-  ExcalidrawImperativeAPI,
-  ExcalidrawLinearElement,
-} from "@excalidraw/excalidraw/types";
+import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { ExcalidrawElement, ExcalidrawLinearElement } from "@excalidraw/excalidraw/element/types";
 import {
   Droplets,
   Paintbrush2,
@@ -16,6 +13,8 @@ import {
   ArrowLeftRight,
   ArrowDownUp,
   Wand2,
+  Copy,
+  Trash2,
 } from "lucide-react";
 
 export type SelectionViewport = {
@@ -87,7 +86,7 @@ export function SelectionFlyout({ api, selection }: Props) {
   const applyToSelection = (mutate: (el: ExcalidrawElement) => ExcalidrawElement) => {
     if (!api || !elements.length) return;
     const ids = new Set(elements.map((el) => el.id));
-    const nextElements = api.getSceneElements().map((el) => (ids.has(el.id) ? mutate({ ...el }) : el));
+    const nextElements = api.getSceneElements().map((el: ExcalidrawElement) => (ids.has(el.id) ? mutate({ ...el }) : el));
     api.updateScene({ elements: nextElements });
   };
 
@@ -102,6 +101,28 @@ export function SelectionFlyout({ api, selection }: Props) {
     });
   };
 
+  const duplicateSelection = () => {
+    if (!api || !elements.length) return;
+    const scene = api.getSceneElements();
+    const randomId = () => Math.random().toString(36).slice(2, 10);
+    const randomNonce = () => Math.floor(Math.random() * 1_000_000_000);
+    const clones = elements.map((el, index) => ({
+      ...(el as any),
+      id: randomId(),
+      seed: randomNonce(),
+      version: 1,
+      versionNonce: randomNonce(),
+      isDeleted: false,
+      x: el.x + 16 + index * 4,
+      y: el.y + 16 + index * 4,
+    })) as ExcalidrawElement[];
+    api.updateScene({ elements: [...scene, ...clones] });
+  };
+
+  const deleteSelection = () => {
+    applyToSelection((el) => ({ ...(el as any), isDeleted: true } as ExcalidrawElement));
+  };
+
   if (!hasSelection) return null;
 
   return (
@@ -113,6 +134,14 @@ export function SelectionFlyout({ api, selection }: Props) {
     >
       <div className="selection-flyout__header">
         <span>Properties</span>
+        <div className="selection-flyout__actions" role="group" aria-label="Selection actions">
+          <button type="button" className="selection-flyout__btn" onClick={duplicateSelection} aria-label="Duplicate selection">
+            <Copy size={16} aria-hidden="true" />
+          </button>
+          <button type="button" className="selection-flyout__btn" onClick={deleteSelection} aria-label="Delete selection">
+            <Trash2 size={16} aria-hidden="true" />
+          </button>
+        </div>
         <button type="button" className="selection-flyout__toggle" onClick={() => setExpanded((v) => !v)}>
           {expanded ? "–" : "+"}
         </button>

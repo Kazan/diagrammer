@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import type React from "react";
-import type { ExcalidrawElement, ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
-import { Palette, PaintBucket, SlidersHorizontal } from "lucide-react";
+import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
+import { Palette, PaintBucket, SlidersHorizontal, Copy, Trash2 } from "lucide-react";
 import type { SelectionInfo } from "./SelectionFlyout";
 import ColorPicker from "./ColorPicker";
 import type { PaletteId } from "./ColorPicker";
@@ -84,6 +85,46 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
     api.updateScene({ elements: nextElements });
   };
 
+  const duplicateSelection = () => {
+    if (!api || !elements.length) return;
+    const scene = api.getSceneElements();
+    const appState = api.getAppState();
+    const randomId = () => Math.random().toString(36).slice(2, 10);
+    const randomNonce = () => Math.floor(Math.random() * 1_000_000_000);
+    const clones = elements.map((el, index) => ({
+      ...(el as any),
+      id: randomId(),
+      seed: randomNonce(),
+      version: 1,
+      versionNonce: randomNonce(),
+      isDeleted: false,
+      x: el.x + 16 + index * 4,
+      y: el.y + 16 + index * 4,
+    })) as ExcalidrawElement[];
+    const nextSelectedElementIds = clones.reduce<Record<string, boolean>>((acc, clone) => {
+      acc[clone.id] = true;
+      return acc;
+    }, {});
+    api.updateScene({
+      elements: [...scene, ...clones],
+      appState: {
+        ...appState,
+        selectedElementIds: nextSelectedElementIds,
+        selectedGroupIds: {},
+        editingLinearElement: null,
+        editingElement: null,
+        selectedLinearElement: null,
+        draggingElement: null,
+        resizingElement: null,
+        multiElement: null,
+      },
+    });
+  };
+
+  const deleteSelection = () => {
+    applyToSelection((el) => ({ ...(el as any), isDeleted: true } as ExcalidrawElement));
+  };
+
   const handleStrokeChange = (color: string) => {
     applyToSelection((el) => ({ ...el, strokeColor: color } as ExcalidrawElement));
   };
@@ -120,6 +161,25 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
           <item.Icon size={18} aria-hidden="true" />
         </button>
       ))}
+
+      <div className="selection-props-rail__actions" role="group" aria-label="Selection actions">
+        <button
+          type="button"
+          className="selection-props-rail__button"
+          onClick={duplicateSelection}
+          aria-label="Duplicate selection"
+        >
+          <Copy size={18} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className="selection-props-rail__button"
+          onClick={deleteSelection}
+          aria-label="Delete selection"
+        >
+          <Trash2 size={18} aria-hidden="true" />
+        </button>
+      </div>
 
       {openKind === "stroke" ? (
         <div className="selection-props-rail__flyout" role="dialog" aria-label="Stroke color" style={{ top: flyoutTop }}>

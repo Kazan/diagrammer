@@ -10,6 +10,7 @@ type Props = {
   nativePresent: boolean;
   lastSaved: Date | null;
   status: StatusMessage | null;
+  canSave: boolean;
   onOpen: () => void;
   onSaveNow: () => void;
   onSaveToDocument: () => void;
@@ -36,6 +37,7 @@ export function ChromeOverlay({
   nativePresent,
   lastSaved,
   status,
+  canSave,
   onOpen,
   onSaveNow,
   onSaveToDocument,
@@ -61,9 +63,11 @@ export function ChromeOverlay({
             <button type="button" className="chrome-button" onClick={onOpen}>
               Open
             </button>
-            <button type="button" className="chrome-button" onClick={onSaveNow}>
-              Save
-            </button>
+            {canSave ? (
+              <button type="button" className="chrome-button" onClick={onSaveNow}>
+                Save
+              </button>
+            ) : null}
             <button type="button" className="chrome-button" onClick={onSaveToDocument}>
               Save as…
             </button>

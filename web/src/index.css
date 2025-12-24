@@ -362,6 +362,12 @@ body {
   min-width: 280px;
 }
 
+.selection-props-rail__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .color-picker {
   display: flex;
   flex-direction: column;
