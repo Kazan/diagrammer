@@ -50,6 +50,12 @@ export function useSceneHydration(options: {
   useEffect(() => {
     if (!api || !pendingScene) return;
     api.resetScene(pendingScene as any, { resetLoadingState: true, replaceFiles: true });
+    const elements = Array.isArray((pendingScene as any)?.elements)
+      ? (pendingScene as any).elements.filter((el: any) => !el.isDeleted)
+      : [];
+    if (elements.length) {
+      api.scrollToContent(elements as any, { fitToViewport: true, animate: false });
+    }
     setPendingScene(null);
     hydratedSceneRef.current = true;
     prevNonEmptySceneRef.current = Array.isArray((pendingScene as any)?.elements)

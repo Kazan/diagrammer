@@ -162,25 +162,32 @@ export function useNativeMessageHandlers(deps: NativeMessageDeps) {
       loadSkipRef.current = 3;
       setCurrentFileName(displayName);
 
-      if (openFileResolveRef.current) {
-        openFileResolveRef.current([handle]);
-      } else if (api) {
-        if (parsed) {
-          api.resetScene(parsed as any, { resetLoadingState: true, replaceFiles: true });
-          const elements = api.getSceneElementsIncludingDeleted();
-          const appState = api.getAppState();
-          prevSceneSigRef.current = computeSceneSignature(elements, appState);
-          prevNonEmptySceneRef.current = elements.some((el) => !el.isDeleted);
-          suppressNextDirtyRef.current = true;
-          expectedSceneSigRef.current = prevSceneSigRef.current;
-          loadSkipRef.current = 3;
-          setIsDirty(false);
-          setCurrentFileName(displayName);
-          setStatus({ text: `Loaded${displayName !== "Unsaved" ? `: ${displayName}` : ""}`, tone: "ok" });
-        } else {
-          setStatus({ text: "Load failed: invalid scene", tone: "err" });
+      const applySceneToCanvas = () => {
+        if (api) {
+          if (parsed) {
+            // Use updateScene to merge the loaded payload into the current session;
+            // resetScene is more aggressive and was proving flaky in some WebView builds.
+            api.updateScene(parsed as any);
+            const elements = api.getSceneElementsIncludingDeleted();
+            const appState = api.getAppState();
+            const visible = elements.filter((el) => !el.isDeleted);
+            if (visible.length) {
+              api.scrollToContent(visible as any, { fitToViewport: true, animate: false });
+            }
+            prevSceneSigRef.current = computeSceneSignature(elements, appState);
+            prevNonEmptySceneRef.current = visible.length > 0;
+            suppressNextDirtyRef.current = true;
+            expectedSceneSigRef.current = prevSceneSigRef.current;
+            loadSkipRef.current = 3;
+            setIsDirty(false);
+            setCurrentFileName(displayName);
+            setStatus({ text: `Loaded${displayName !== "Unsaved" ? `: ${displayName}` : ""}`, tone: "ok" });
+          } else {
+            setStatus({ text: "Load failed: invalid scene", tone: "err" });
+          }
+          return;
         }
-      } else {
+
         pendingSceneRef.current = {
           sceneJson,
           displayName,
@@ -192,6 +199,12 @@ export function useNativeMessageHandlers(deps: NativeMessageDeps) {
           bytes: sceneJson.length,
           displayName,
         });
+      };
+
+      applySceneToCanvas();
+
+      if (openFileResolveRef.current) {
+        openFileResolveRef.current([handle]);
       }
       sceneLoadInProgressRef.current = false;
       openFileResolveRef.current = null;

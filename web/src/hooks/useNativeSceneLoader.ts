@@ -47,6 +47,12 @@ export function useNativeSceneLoader(options: {
       prevNonEmptySceneRef.current = hasElements;
       setIsDirty(false);
       api.resetScene(parsed as any, { resetLoadingState: true, replaceFiles: true });
+      const elements = Array.isArray((parsed as any)?.elements)
+        ? (parsed as any).elements.filter((el: any) => !el.isDeleted)
+        : [];
+      if (elements.length) {
+        api.scrollToContent(elements as any, { fitToViewport: true, animate: false });
+      }
       setStatus({ text: "Loaded saved drawing", tone: "ok" });
     } catch (err) {
       setStatus({ text: `Load failed: ${String(err)}`, tone: "err" });
