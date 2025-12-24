@@ -90,7 +90,8 @@ function combineColor(hex: string, alpha: number) {
 }
 
 function getShades(base: string) {
-  const factors = [-0.25, -0.12, 0, 0.12, 0.25];
+  // shade1 darkest, shade5 lightest; shade3 is base color
+  const factors = [-0.35, -0.18, 0, 0.18, 0.35];
   return factors.map((f) => adjustColor(base, f));
 }
 
@@ -140,10 +141,16 @@ export default function ColorPicker({ value, onChange, swatches = DEFAULT_STROKE
   const { hex: normalizedHex, alpha: derivedAlpha, display } = useMemo(() => decomposeColor(value), [value]);
   const shades = useMemo(() => getShades(baseHex), [baseHex]);
 
+  const skipBaseSyncRef = useRef(false);
+
   useEffect(() => {
     setInputValue(display);
     setAlpha(derivedAlpha);
-    setBaseHex(normalizedHex);
+    if (skipBaseSyncRef.current) {
+      skipBaseSyncRef.current = false;
+    } else {
+      setBaseHex(normalizedHex);
+    }
   }, [display, derivedAlpha, normalizedHex]);
 
   const applyInputValue = () => {
@@ -226,7 +233,7 @@ export default function ColorPicker({ value, onChange, swatches = DEFAULT_STROKE
                 className={`color-shade${isActive ? " is-active" : ""}`}
                 style={{ backgroundColor: shade, color: shade }}
                 onClick={() => {
-                  setBaseHex(normalizeHex(shade));
+                  skipBaseSyncRef.current = true;
                   onChange(shadeValue);
                   setInputValue(shadeValue);
                 }}

@@ -87,6 +87,19 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
     applyToSelection((el) => ({ ...el, strokeColor: color } as ExcalidrawElement));
   };
 
+  const handleBackgroundChange = (color: string) => {
+    applyToSelection((el) => ({ ...el, backgroundColor: color } as ExcalidrawElement));
+  };
+
+  const flyoutTop = (() => {
+    if (!openKind) return 0;
+    const idx = items.findIndex((item) => item.id === openKind);
+    if (idx === -1) return 0;
+    const BUTTON = 44;
+    const GAP = 8;
+    return 4 + idx * (BUTTON + GAP);
+  })();
+
   return (
     <div className="selection-props-rail" role="toolbar" aria-label="Selection properties">
       {items.map((item) => (
@@ -108,8 +121,14 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
       ))}
 
       {openKind === "stroke" ? (
-        <div className="selection-props-rail__flyout" role="dialog" aria-label="Stroke color">
+        <div className="selection-props-rail__flyout" role="dialog" aria-label="Stroke color" style={{ top: flyoutTop }}>
           <ColorPicker value={strokeColor} onChange={handleStrokeChange} title="Stroke color" />
+        </div>
+      ) : null}
+
+      {openKind === "background" ? (
+        <div className="selection-props-rail__flyout" role="dialog" aria-label="Fill color" style={{ top: flyoutTop }}>
+          <ColorPicker value={backgroundColor} onChange={handleBackgroundChange} title="Fill color" />
         </div>
       ) : null}
     </div>
