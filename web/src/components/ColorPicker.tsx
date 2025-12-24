@@ -8,6 +8,8 @@ export type ColorSwatch = {
   title?: string;
 };
 
+export type PaletteId = "default" | "eink";
+
 declare global {
   interface Window {
     EyeDropper?: new () => { open: () => Promise<{ sRGBHex: string }> };
@@ -16,7 +18,7 @@ declare global {
 
 export const DEFAULT_COLOR = "#6741d9";
 
-export const DEFAULT_STROKE_SWATCHES: ColorSwatch[] = [
+export const DEFAULT_SWATCHES: ColorSwatch[] = [
   { key: "q", label: "q", value: "transparent", title: "Transparent" },
   { key: "w", label: "w", value: "#ffffff", title: "White" },
   { key: "e", label: "e", value: "#0f172a", title: "Charcoal" },
@@ -33,6 +35,20 @@ export const DEFAULT_STROKE_SWATCHES: ColorSwatch[] = [
   { key: "v", label: "v", value: "#f97316", title: "Orange" },
   { key: "b", label: "b", value: "#ef4444", title: "Red" },
 ];
+
+export const EINK_SWATCHES: ColorSwatch[] = [
+  { key: "q", label: "q", value: "transparent", title: "Transparent" },
+  { key: "w", label: "w", value: "#ffffff", title: "White" },
+  { key: "e", label: "e", value: "#111827", title: "Black" },
+  { key: "r", label: "r", value: "#e5e7eb", title: "Light gray" },
+  { key: "t", label: "t", value: "#9ca3af", title: "Gray" },
+  { key: "y", label: "y", value: "#4b5563", title: "Dark gray" },
+];
+
+export const COLOR_PALETTES: Record<PaletteId, ColorSwatch[]> = {
+  default: DEFAULT_SWATCHES,
+  eink: EINK_SWATCHES,
+};
 
 function expandShortHex(hex: string) {
   if (hex.length === 4 || hex.length === 5) {
@@ -129,17 +145,40 @@ export type ColorPickerProps = {
   onChange: (color: string) => void;
   swatches?: ColorSwatch[];
   title?: string;
+  initialShadeIndex?: 1 | 2 | 3 | 4 | 5;
+  paletteId?: PaletteId;
 };
 
-export default function ColorPicker({ value, onChange, swatches = DEFAULT_STROKE_SWATCHES, title = "Colors" }: ColorPickerProps) {
+export default function ColorPicker({
+  value,
+  onChange,
+  swatches,
+  title = "Colors",
+  initialShadeIndex = 3,
+  paletteId = "default",
+}: ColorPickerProps) {
   const inputId = useId();
   const [inputValue, setInputValue] = useState(value ?? DEFAULT_COLOR);
   const [alpha, setAlpha] = useState(1);
   const [baseHex, setBaseHex] = useState(() => decomposeColor(value).hex);
+  const [shadeIndex, setShadeIndex] = useState<1 | 2 | 3 | 4 | 5>(initialShadeIndex);
   const colorInputRef = useRef<HTMLInputElement>(null);
 
   const { hex: normalizedHex, alpha: derivedAlpha, display } = useMemo(() => decomposeColor(value), [value]);
-  const shades = useMemo(() => getShades(baseHex), [baseHex]);
+  const shadeFactors = [-0.35, -0.18, 0, 0.18, 0.35] as const;
+  const shadeFactor = shadeFactors[shadeIndex - 1];
+  const tintedBase = useMemo(() => adjustColor(baseHex, shadeFactor), [baseHex, shadeFactor]);
+  const isShadeDisabled = useMemo(() => {
+    const normalized = normalizeHex(value);
+    return normalized === normalizeHex("transparent") || normalized === normalizeHex("#ffffff");
+  }, [value]);
+
+  const shades = useMemo(() => (isShadeDisabled ? [] : getShades(tintedBase)), [isShadeDisabled, tintedBase]);
+
+  const paletteSwatches = useMemo(() => {
+    if (swatches && swatches.length) return swatches;
+    return COLOR_PALETTES[paletteId] ?? COLOR_PALETTES.default;
+  }, [paletteId, swatches]);
 
   const skipBaseSyncRef = useRef(false);
 
@@ -190,25 +229,27 @@ export default function ColorPicker({ value, onChange, swatches = DEFAULT_STROKE
       <div className="color-picker__group">
         <div className="color-picker__title">{title}</div>
         <div className="color-picker__swatches">
-          {swatches.map((swatch) => {
+          {paletteSwatches.map((swatch) => {
             const normalizedSwatch = swatch.value === "transparent" ? DEFAULT_COLOR : normalizeHex(swatch.value);
+            const displayColor = swatch.value === "transparent" ? swatch.value : adjustColor(normalizedSwatch, shadeFactor);
             const isActive =
               value === swatch.value ||
-              (swatch.value !== "transparent" && normalizeHex(value) === normalizedSwatch && decomposeColor(value).alpha === alpha);
+              (swatch.value !== "transparent" && normalizeHex(value) === normalizeHex(displayColor) && decomposeColor(value).alpha === alpha);
             return (
               <button
                 key={swatch.key}
                 type="button"
                 className={`color-swatch${swatch.value === "transparent" ? " color-swatch--transparent" : ""}${isActive ? " is-active" : ""}`}
-                style={swatch.value === "transparent" ? undefined : { backgroundColor: swatch.value, color: swatch.value }}
+                style={swatch.value === "transparent" ? undefined : { backgroundColor: displayColor, color: displayColor }}
                 onClick={() => {
-                  const nextHex = normalizedSwatch;
+                  const nextBase = normalizedSwatch;
                   const nextAlpha = swatch.value === "transparent" ? 0 : alpha;
-                  setBaseHex(nextHex);
+                  const tinted = swatch.value === "transparent" ? combineColor(nextBase, 0) : combineColor(adjustColor(nextBase, shadeFactor), nextAlpha);
+                  setBaseHex(nextBase);
                   setAlpha(nextAlpha);
-                  const next = swatch.value === "transparent" ? combineColor(nextHex, 0) : combineColor(nextHex, nextAlpha);
-                  onChange(next);
-                  setInputValue(swatch.value === "transparent" ? "transparent" : next);
+                  setInputValue(swatch.value === "transparent" ? "transparent" : tinted);
+                  skipBaseSyncRef.current = true;
+                  onChange(tinted);
                 }}
                 aria-pressed={isActive}
                 aria-label={swatch.title ?? swatch.value}
@@ -220,31 +261,37 @@ export default function ColorPicker({ value, onChange, swatches = DEFAULT_STROKE
         </div>
       </div>
 
-      <div className="color-picker__group">
-        <div className="color-picker__title">Shades</div>
-        <div className="color-picker__shades">
-          {shades.map((shade, index) => {
-            const shadeValue = combineColor(shade, alpha);
-            const isActive = normalizeHex(value) === normalizeHex(shade) && decomposeColor(value).alpha === alpha;
-            return (
-              <button
-                key={shadeValue}
-                type="button"
-                className={`color-shade${isActive ? " is-active" : ""}`}
-                style={{ backgroundColor: shade, color: shade }}
-                onClick={() => {
-                  skipBaseSyncRef.current = true;
-                  onChange(shadeValue);
-                  setInputValue(shadeValue);
-                }}
-                aria-label={`Shade ${index + 1}`}
-              >
-                ↑{index + 1}
-              </button>
-            );
-          })}
+      {!isShadeDisabled ? (
+        <div className="color-picker__group">
+          <div className="color-picker__title">Shades</div>
+          <div className="color-picker__shades">
+            {shades.map((shade, index) => {
+              const shadeValue = combineColor(shade, alpha);
+              const isActive = index + 1 === shadeIndex;
+              return (
+                <button
+                  key={shadeValue}
+                  type="button"
+                  className={`color-shade${isActive ? " is-active" : ""}`}
+                  style={{ backgroundColor: shade, color: shade }}
+                  onClick={() => {
+                    const nextIndex = (index + 1) as 1 | 2 | 3 | 4 | 5;
+                    setShadeIndex(nextIndex);
+                    const nextFactor = shadeFactors[nextIndex - 1];
+                    const tinted = combineColor(adjustColor(baseHex, nextFactor), alpha);
+                    setInputValue(tinted);
+                    skipBaseSyncRef.current = true;
+                    onChange(tinted);
+                  }}
+                  aria-label={`Shade ${index + 1}`}
+                >
+                  ↑{index + 1}
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      ) : null}
 
       <div className="color-picker__hex">
         <label className="color-picker__title" htmlFor={inputId}>

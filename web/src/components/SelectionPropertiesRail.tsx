@@ -4,6 +4,7 @@ import type { ExcalidrawElement, ExcalidrawImperativeAPI } from "@excalidraw/exc
 import { Palette, PaintBucket, SlidersHorizontal } from "lucide-react";
 import type { SelectionInfo } from "./SelectionFlyout";
 import ColorPicker from "./ColorPicker";
+import type { PaletteId } from "./ColorPicker";
 
 export type PropertyKind = "stroke" | "background" | "style";
 
@@ -122,13 +123,13 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
 
       {openKind === "stroke" ? (
         <div className="selection-props-rail__flyout" role="dialog" aria-label="Stroke color" style={{ top: flyoutTop }}>
-          <ColorPicker value={strokeColor} onChange={handleStrokeChange} title="Stroke color" />
+          <ColorPicker value={strokeColor} onChange={handleStrokeChange} title="Stroke color" initialShadeIndex={3} paletteId={"default" satisfies PaletteId} />
         </div>
       ) : null}
 
       {openKind === "background" ? (
         <div className="selection-props-rail__flyout" role="dialog" aria-label="Fill color" style={{ top: flyoutTop }}>
-          <ColorPicker value={backgroundColor} onChange={handleBackgroundChange} title="Fill color" />
+          <ColorPicker value={backgroundColor} onChange={handleBackgroundChange} title="Fill color" initialShadeIndex={5} paletteId={"default" satisfies PaletteId} />
         </div>
       ) : null}
     </div>
