@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type React from "react";
+import { convertToExcalidrawElements } from "@excalidraw/excalidraw";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import { Palette, PaintBucket, SlidersHorizontal, Copy, Trash2 } from "lucide-react";
@@ -19,17 +20,17 @@ type Props = {
 type PropertyButton = {
   id: PropertyKind;
   label: string;
-  Icon: React.ComponentType<{ size?: number }>;
+  Icon: React.ComponentType<{ size?: number | string }>;
   swatch?: string | null;
 };
 
 const DEFAULT_STROKE = "#0f172a";
 const DEFAULT_FILL = "#b7f5c4";
-const LINE_LIKE_TYPES = new Set(["line", "arrow"]);
+const LINE_LIKE_TYPES = new Set<ExcalidrawElement["type"]>(["line", "arrow"]);
 
 const isClosedPolyline = (el: ExcalidrawElement) => {
   if (el.type !== "line") return false;
-  const points = (el as any).points as ReadonlyArray<readonly [number, number]> | undefined;
+  const points = el.points;
   if (!points || points.length < 3) return false;
   const [firstX, firstY] = points[0];
   const [lastX, lastY] = points[points.length - 1];
@@ -37,7 +38,10 @@ const isClosedPolyline = (el: ExcalidrawElement) => {
   return Math.abs(firstX - lastX) <= epsilon && Math.abs(firstY - lastY) <= epsilon;
 };
 
-function getCommonValue<T>(elements: ExcalidrawElement[], pick: (el: ExcalidrawElement) => T): T | null {
+function getCommonValue<T>(
+  elements: readonly ExcalidrawElement[],
+  pick: (el: ExcalidrawElement) => T,
+): T | null {
   if (!elements.length) return null;
   const first = pick(elements[0]);
   for (let i = 1; i < elements.length; i += 1) {
@@ -66,11 +70,16 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
   const hasImage = elements.some((el) => el.type === "image");
 
   const strokeColor = useMemo(
-    () => getCommonValue(elements, (el) => (el as any).strokeColor) ?? DEFAULT_STROKE,
+    () =>
+      getCommonValue<string | null>(elements, (el) => el.strokeColor ?? null) ?? DEFAULT_STROKE,
     [elements],
   );
   const backgroundColor = useMemo(
-    () => getCommonValue(elements, (el) => (el as any).backgroundColor) ?? DEFAULT_FILL,
+    () =>
+      getCommonValue<string | null>(
+        elements,
+        (el) => el.backgroundColor ?? null,
+      ) ?? DEFAULT_FILL,
     [elements],
   );
 
@@ -102,42 +111,56 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
 
   const duplicateSelection = () => {
     if (!api || !elements.length) return;
+    const sourceElements = elements.filter((el) => el.type !== "selection");
+    if (!sourceElements.length) return;
     const scene = api.getSceneElements();
     const appState = api.getAppState();
-    const randomId = () => Math.random().toString(36).slice(2, 10);
-    const randomNonce = () => Math.floor(Math.random() * 1_000_000_000);
-    const clones = elements.map((el, index) => ({
-      ...(el as any),
-      id: randomId(),
-      seed: randomNonce(),
-      version: 1,
-      versionNonce: randomNonce(),
-      isDeleted: false,
-      x: el.x + 16 + index * 4,
-      y: el.y + 16 + index * 4,
-    })) as ExcalidrawElement[];
-    const nextSelectedElementIds = clones.reduce<Record<string, boolean>>((acc, clone) => {
+
+    const canUseSkeletonDuplication = sourceElements.every((el) => {
+      if (el.type === "frame" || el.type === "magicframe") return false;
+      if (el.type === "image" && !el.fileId) return false;
+      return true;
+    });
+
+    const clones: ExcalidrawElement[] = canUseSkeletonDuplication
+      ? convertToExcalidrawElements(
+          sourceElements as unknown as NonNullable<Parameters<typeof convertToExcalidrawElements>[0]>,
+          { regenerateIds: true },
+        ).map((el, index) => ({
+          ...el,
+          x: el.x + 16 + index * 4,
+          y: el.y + 16 + index * 4,
+        }))
+      : (() => {
+          const randomId = () => Math.random().toString(36).slice(2, 10);
+          const randomNonce = () => Math.floor(Math.random() * 1_000_000_000);
+          return sourceElements.map((el, index) => ({
+            ...el,
+            id: randomId(),
+            seed: randomNonce(),
+            version: 1,
+            versionNonce: randomNonce(),
+            isDeleted: false,
+            x: el.x + 16 + index * 4,
+            y: el.y + 16 + index * 4,
+          }));
+        })();
+
+    const nextSelectedElementIds = clones.reduce<Record<string, true>>((acc, clone) => {
       acc[clone.id] = true;
       return acc;
     }, {});
     api.updateScene({
       elements: [...scene, ...clones],
       appState: {
-        ...appState,
         selectedElementIds: nextSelectedElementIds,
         selectedGroupIds: {},
-        editingLinearElement: null,
-        editingElement: null,
-        selectedLinearElement: null,
-        draggingElement: null,
-        resizingElement: null,
-        multiElement: null,
       },
     });
   };
 
   const deleteSelection = () => {
-    applyToSelection((el) => ({ ...(el as any), isDeleted: true } as ExcalidrawElement));
+    applyToSelection((el) => ({ ...el, isDeleted: true }));
   };
 
   // Close flyouts that are not applicable (e.g., when images are selected).
@@ -146,11 +169,11 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
   }
 
   const handleStrokeChange = (color: string) => {
-    applyToSelection((el) => ({ ...el, strokeColor: color } as ExcalidrawElement));
+    applyToSelection((el) => ({ ...el, strokeColor: color }));
   };
 
   const handleBackgroundChange = (color: string) => {
-    applyToSelection((el) => ({ ...el, backgroundColor: color } as ExcalidrawElement));
+    applyToSelection((el) => ({ ...el, backgroundColor: color }));
   };
 
   const flyoutTop = (() => {

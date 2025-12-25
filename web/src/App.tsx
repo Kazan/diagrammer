@@ -1,8 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
-import { Excalidraw, WelcomeScreen, convertToExcalidrawElements } from "@excalidraw/excalidraw";
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
-import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
+import {
+  CaptureUpdateAction,
+  Excalidraw,
+  MainMenu,
+  MIME_TYPES,
+  THEME,
+  WelcomeScreen,
+  convertToExcalidrawElements,
+} from "@excalidraw/excalidraw";
+import type {
+  BinaryFileData,
+  DataURL,
+  ExcalidrawImperativeAPI,
+  NormalizedZoomValue,
+} from "@excalidraw/excalidraw/types";
+import type { ExcalidrawElement, FileId } from "@excalidraw/excalidraw/element/types";
 import "@excalidraw/excalidraw/index.css";
 import { ChromeOverlay } from "./components/ChromeOverlay";
 import { type ToolType } from "./components/CustomToolbar";
@@ -18,6 +31,12 @@ import { useSceneSerialization } from "./hooks/useSceneSerialization";
 import { useExportActions } from "./hooks/useExportActions";
 import { useSceneHydration } from "./hooks/useSceneHydration";
 import type { NativeFileHandle } from "./native-bridge";
+
+import {
+  applyRestoredScene,
+  buildDefaultLocalAppStateOverrides,
+  restoreSceneForApp,
+} from "./excalidraw-restore";
 
 import { computeSceneSignature, stripExtension } from "./scene-utils";
 
@@ -42,7 +61,6 @@ export default function App() {
   const [zoom, setZoom] = useState<{ value: number }>({ value: 1 });
   const lastZoomRef = useRef(1);
   const HIDE_DEFAULT_PROPS_FLYOUT = false;
-  const lastDialogRef = useRef<string | null>(null);
   const openFileResolveRef = useRef<((handles: NativeFileHandle[]) => void) | null>(null);
   const openFileRejectRef = useRef<((reason: any) => void) | null>(null);
   const prevNonEmptySceneRef = useRef(false);
@@ -70,7 +88,7 @@ export default function App() {
     | {
         sceneJson: string;
         displayName: string;
-        parsed: any;
+        parsedScene: unknown;
         sig: string;
         hasElements: boolean;
       }
@@ -131,7 +149,17 @@ export default function App() {
     // Preserve localStorage for browser fallback; clear only in native contexts.
     if (window.NativeBridge) {
       try {
-        window.localStorage.clear();
+        const prefix = "diagrammer.";
+        const keys: string[] = [];
+        for (let i = 0; i < window.localStorage.length; i += 1) {
+          const key = window.localStorage.key(i);
+          if (key && key.startsWith(prefix)) {
+            keys.push(key);
+          }
+        }
+        for (const key of keys) {
+          window.localStorage.removeItem(key);
+        }
       } catch (_err) {
         // ignore if storage unavailable
       }
@@ -139,6 +167,35 @@ export default function App() {
   }, []);
 
   const { buildSceneEnvelope } = useSceneSerialization(api);
+
+  const excalidrawUIOptions = useMemo(
+    () => ({
+      canvasActions: {
+        changeViewBackgroundColor: false,
+        clearCanvas: false,
+        export: false as const,
+        loadScene: false,
+        saveAsImage: false,
+        saveToActiveFile: false,
+        toggleTheme: null,
+      },
+      tools: {
+        image: false,
+      },
+    }),
+    [],
+  );
+
+  const toNormalizedZoomValue = useCallback((value: number): NormalizedZoomValue => {
+    return value as NormalizedZoomValue;
+  }, []);
+
+  const toImageMimeType = useCallback((value: string): BinaryFileData["mimeType"] => {
+    if (value && value.startsWith("image/")) {
+      return value as BinaryFileData["mimeType"];
+    }
+    return MIME_TYPES.png;
+  }, []);
 
   const cloneSnapshot = useCallback((): SceneSnapshot | null => {
     if (!api) return null;
@@ -181,11 +238,10 @@ export default function App() {
       if (historyApplyingRef.current) return;
       if (sceneLoadInProgressRef.current || loadSkipRef.current > 0) return;
       const isInteracting = Boolean(
-        appState.draggingElement ||
-          appState.resizingElement ||
+        appState.selectedElementsAreBeingDragged ||
           appState.multiElement ||
-          (appState as any).editingLinearElement ||
-          appState.editingElement,
+          appState.editingLinearElement ||
+          appState.editingTextElement,
       );
       const sig = computeSceneSignature(elements, appState);
       if (historySigRef.current === sig) {
@@ -255,10 +311,18 @@ export default function App() {
         return false;
       }
       const parsed = JSON.parse(entry.scene);
-      api.resetScene(parsed as any, { resetLoadingState: true, replaceFiles: true });
-      const elements = api.getSceneElements().filter((el) => !el.isDeleted);
+      const restored = restoreSceneForApp(
+        parsed,
+        buildDefaultLocalAppStateOverrides({
+          viewBackgroundColor: "#ffffff",
+          objectsSnapModeEnabled: true,
+          zoomValue: 1,
+        }),
+      );
+      applyRestoredScene(api, restored);
+      const elements = api.getSceneElements();
       if (elements.length) {
-        api.scrollToContent(elements as any, { fitToViewport: true, animate: false });
+        api.scrollToContent(elements, { fitToViewport: true, animate: false });
       }
       prevSceneSigRef.current = computeSceneSignature(api.getSceneElements(), api.getAppState());
       prevNonEmptySceneRef.current = elements.some((el) => !el.isDeleted);
@@ -406,7 +470,6 @@ export default function App() {
     sceneLoadInProgressRef,
     expectedSceneSigRef,
     loadSkipRef,
-    lastDialogRef,
     handleSaveToDocument,
     handleOpenWithNativePicker,
     onSelectionChange: handleSelectionChange,
@@ -445,19 +508,39 @@ export default function App() {
     const pending = pendingSceneRef.current;
     if (!pending) return;
     pendingSceneRef.current = null;
-    const parsed = pending.parsed ?? (() => {
+
+    const isRecord = (value: unknown): value is Record<string, unknown> => {
+      return Boolean(value && typeof value === "object");
+    };
+    const isValidSceneData = (value: unknown): value is Record<string, unknown> => {
+      if (!isRecord(value)) return false;
+      return Array.isArray(value["elements"]);
+    };
+
+    const parsedScene = (() => {
+      if (isValidSceneData(pending.parsedScene)) return pending.parsedScene;
       try {
-        return JSON.parse(pending.sceneJson);
+        const next = JSON.parse(pending.sceneJson);
+        return isValidSceneData(next) ? next : null;
       } catch (_err) {
         return null;
       }
     })();
-    if (!parsed) {
+
+    if (!parsedScene) {
       setStatus({ text: "Load failed: invalid scene", tone: "err" });
       return;
     }
     sceneLoadInProgressRef.current = true;
-    api.updateScene(parsed);
+    const restored = restoreSceneForApp(
+      parsedScene,
+      buildDefaultLocalAppStateOverrides({
+        viewBackgroundColor: "#ffffff",
+        objectsSnapModeEnabled: true,
+        zoomValue: 1,
+      }),
+    );
+    applyRestoredScene(api, restored);
     const elements = api.getSceneElementsIncludingDeleted();
     const appState = api.getAppState();
     prevSceneSigRef.current = computeSceneSignature(elements, appState);
@@ -533,38 +616,47 @@ export default function App() {
     const instance = apiRef.current;
     if (!instance) return;
     const next = Math.min((instance.getAppState().zoom?.value ?? 1) * 1.1, 4);
-    instance.updateScene({ appState: { ...instance.getAppState(), zoom: { value: next } } });
+    instance.updateScene({
+      appState: { ...instance.getAppState(), zoom: { value: toNormalizedZoomValue(next) } },
+      captureUpdate: CaptureUpdateAction.NEVER,
+    });
     lastZoomRef.current = next;
     setZoom({ value: next });
-  }, []);
+  }, [toNormalizedZoomValue]);
 
   const handleZoomOut = useCallback(() => {
     const instance = apiRef.current;
     if (!instance) return;
     const next = Math.max((instance.getAppState().zoom?.value ?? 1) / 1.1, 0.1);
-    instance.updateScene({ appState: { ...instance.getAppState(), zoom: { value: next } } });
+    instance.updateScene({
+      appState: { ...instance.getAppState(), zoom: { value: toNormalizedZoomValue(next) } },
+      captureUpdate: CaptureUpdateAction.NEVER,
+    });
     lastZoomRef.current = next;
     setZoom({ value: next });
-  }, []);
+  }, [toNormalizedZoomValue]);
 
   const handleResetZoom = useCallback(() => {
     const instance = apiRef.current;
     if (!instance) return;
     const next = 1;
-    instance.updateScene({ appState: { ...instance.getAppState(), zoom: { value: next } } });
+    instance.updateScene({
+      appState: { ...instance.getAppState(), zoom: { value: toNormalizedZoomValue(next) } },
+      captureUpdate: CaptureUpdateAction.NEVER,
+    });
     lastZoomRef.current = next;
     setZoom({ value: next });
-  }, []);
+  }, [toNormalizedZoomValue]);
 
   const handleZoomToContent = useCallback(() => {
     const instance = apiRef.current;
     if (!instance) return;
-    const elements = instance.getSceneElements().filter((el) => !el.isDeleted);
+    const elements = instance.getSceneElements();
     if (!elements.length) {
       setStatus({ text: "Nothing to focus", tone: "warn" });
       return;
     }
-    instance.scrollToContent(elements as any, { fitToViewport: true, animate: true });
+    instance.scrollToContent(elements, { fitToViewport: true, animate: true });
   }, [setStatus]);
 
   const handleUndo = useCallback(() => {
@@ -577,11 +669,13 @@ export default function App() {
     }
     historyApplyingRef.current = true;
     try {
+      const files = structuredClone(snapshot.files);
       api.updateScene({
         elements: structuredClone(snapshot.elements),
         appState: structuredClone(snapshot.appState),
-        files: structuredClone(snapshot.files),
+        captureUpdate: CaptureUpdateAction.NEVER,
       });
+      api.addFiles(Object.values(files));
       historyIndexRef.current = targetIndex;
       historySigRef.current = computeSceneSignature(snapshot.elements, snapshot.appState);
       pendingHistoryRef.current = null;
@@ -628,19 +722,40 @@ export default function App() {
         });
 
       try {
-        const dataURL = await toDataUrl(file);
+        const dataURL = (await toDataUrl(file)) as DataURL;
         const { width, height } = await loadImageDimensions(dataURL);
-        const fileId = `image-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const fileId = (`image-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`) as FileId;
         const now = Date.now();
-        api.addFiles({
-          [fileId]: {
+        api.addFiles([
+          {
             id: fileId,
             dataURL,
-            mimeType: file.type || "image/png",
+            mimeType: toImageMimeType(file.type),
             created: now,
             lastRetrieved: now,
           },
-        });
+        ]);
+
+        if (import.meta.env.DEV) {
+          requestAnimationFrame(() => {
+            const files = api.getFiles();
+            if (!files[fileId]) {
+              console.warn("[ImageInsert] addFiles() missing fileId", { fileId, knownFileIds: Object.keys(files) });
+            }
+            const hasElement = api
+              .getSceneElementsIncludingDeleted()
+              .some(
+                (el) =>
+                  el.type === "image" &&
+                  "fileId" in el &&
+                  typeof el.fileId === "string" &&
+                  el.fileId === fileId,
+              );
+            if (!hasElement) {
+              console.warn("[ImageInsert] Missing image element with fileId", { fileId });
+            }
+          });
+        }
 
         const appState = api.getAppState();
         const zoom = appState.zoom?.value ?? 1;
@@ -665,15 +780,10 @@ export default function App() {
         api.updateScene({
           elements: [...api.getSceneElements(), imageElement as ExcalidrawElement],
           appState: {
-            ...appState,
             selectedElementIds: { [imageElement.id]: true },
             selectedGroupIds: {},
-            editingElement: null,
-            selectedLinearElement: null,
-            draggingElement: null,
-            resizingElement: null,
-            multiElement: null,
           },
+          captureUpdate: CaptureUpdateAction.IMMEDIATELY,
         });
 
         setActiveTool("selection");
@@ -683,7 +793,7 @@ export default function App() {
         setStatus({ text: `Image insert failed: ${String((err as Error)?.message ?? err)}`, tone: "err" });
       }
     },
-    [api, setStatus]
+    [api, setStatus, toImageMimeType]
   );
 
   const handleImageInputChange = useCallback(
@@ -706,14 +816,18 @@ export default function App() {
         aria-label="Insert image"
       />
       <Excalidraw
-        theme="light"
+        theme={THEME.LIGHT}
         initialData={initialData}
         objectsSnapModeEnabled
+        UIOptions={excalidrawUIOptions}
+        handleKeyboardGlobally={false}
         excalidrawAPI={(api) => {
           apiRef.current = api;
           setApi(api);
         }}
       >
+        {/* Override Excalidraw's fallback MainMenu to avoid rendering built-in load/save/export items. */}
+        <MainMenu />
         {/* Render a stripped-down welcome screen so the default menu items stay hidden */}
         <WelcomeScreen>
           <WelcomeScreen.Center>

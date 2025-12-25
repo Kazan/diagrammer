@@ -1,4 +1,5 @@
 import { useMemo, useCallback, type ChangeEvent } from "react";
+import { ROUNDNESS } from "@excalidraw/excalidraw";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 
 const DEFAULT_FILL = "#b7f5c4";
@@ -19,14 +20,15 @@ type Props = {
   onUpdate: (mutate: (el: ExcalidrawElement) => ExcalidrawElement) => void;
 };
 
-type FillOption = "hachure" | "cross-hatch" | "solid";
-type StrokeStyleOption = "solid" | "dashed" | "dotted";
+type FillOption = ExcalidrawElement["fillStyle"];
+type FillActiveOption = "hachure" | "cross-hatch" | "solid";
+type StrokeStyleOption = ExcalidrawElement["strokeStyle"];
 
 type RoundnessKind = "sharp" | "round" | null;
 
-const strokeWidthOptions = [1, 2, 4];
-const strokeStyleOptions: StrokeStyleOption[] = ["solid", "dashed", "dotted"];
-const sloppinessOptions = [0, 1, 2];
+const strokeWidthOptions: ReadonlyArray<number> = [1, 2, 4];
+const strokeStyleOptions: ReadonlyArray<StrokeStyleOption> = ["solid", "dashed", "dotted"];
+const sloppinessOptions: ReadonlyArray<number> = [0, 1, 2];
 
 const edgeOptions: { id: RoundnessKind; label: string }[] = [
   { id: "sharp", label: "Sharp edges" },
@@ -59,64 +61,54 @@ function toRgba(hex: string, alpha: number): string {
 }
 
 function roundnessFromElement(el: ExcalidrawElement): RoundnessKind {
-  const anyEl = el as any;
-  const roundness = anyEl.roundness;
-  if (!roundness) return "sharp";
-  if (typeof roundness === "object") return "round";
-  return "sharp";
-}
-
-function supportsRoundness(el: ExcalidrawElement): boolean {
-  return "roundness" in (el as any);
+  return el.roundness ? "round" : "sharp";
 }
 
 export function SelectionStyleFlyout({ elements, onUpdate }: Props) {
   const baseFillColor = useMemo(() => {
-    const common = getCommonValue(elements, (el) => (el as any).backgroundColor);
+    const common = getCommonValue(elements, (el) => el.backgroundColor);
     if (!common || common === "transparent") return DEFAULT_FILL;
     return common;
   }, [elements]);
 
   const fillStyle = useMemo(
-    () => getCommonValue(elements, (el) => (el as any).fillStyle as FillOption | null) ?? "solid",
+    () => getCommonValue(elements, (el) => el.fillStyle) ?? "solid",
     [elements],
   );
 
   const strokeWidth = useMemo(
-    () => getCommonValue(elements, (el) => (el as any).strokeWidth) ?? DEFAULT_STROKE_WIDTH,
+    () => getCommonValue(elements, (el) => el.strokeWidth) ?? DEFAULT_STROKE_WIDTH,
     [elements],
   );
 
   const strokeStyle = useMemo(
-    () => getCommonValue(elements, (el) => (el as any).strokeStyle as StrokeStyleOption | null) ?? "solid",
+    () => getCommonValue(elements, (el) => el.strokeStyle) ?? "solid",
     [elements],
   );
 
   const roughness = useMemo(
-    () => getCommonValue(elements, (el) => (el as any).roughness) ?? 1,
+    () => getCommonValue(elements, (el) => el.roughness) ?? 1,
     [elements],
   );
 
   const opacity = useMemo(
-    () => getCommonValue(elements, (el) => (el as any).opacity) ?? DEFAULT_OPACITY,
+    () => getCommonValue(elements, (el) => el.opacity) ?? DEFAULT_OPACITY,
     [elements],
   );
 
   const roundness = useMemo(() => {
-    const common = getCommonValue(elements, (el) => (supportsRoundness(el) ? roundnessFromElement(el) : null));
-    return common ?? "sharp";
+    return getCommonValue(elements, roundnessFromElement) ?? "sharp";
   }, [elements]);
 
   const handleFillChange = useCallback(
-    (option: FillOption) => {
+    (option: FillActiveOption) => {
       onUpdate((el) => {
-        const anyEl = el as any;
-        const baseColor = anyEl.backgroundColor && anyEl.backgroundColor !== "transparent" ? anyEl.backgroundColor : DEFAULT_FILL;
+        const baseColor = el.backgroundColor && el.backgroundColor !== "transparent" ? el.backgroundColor : DEFAULT_FILL;
         return {
-          ...(el as any),
+          ...el,
           backgroundColor: baseColor,
           fillStyle: option,
-        } as ExcalidrawElement;
+        };
       });
     },
     [onUpdate],
@@ -124,21 +116,21 @@ export function SelectionStyleFlyout({ elements, onUpdate }: Props) {
 
   const handleStrokeWidthChange = useCallback(
     (value: number) => {
-      onUpdate((el) => ({ ...(el as any), strokeWidth: value } as ExcalidrawElement));
+      onUpdate((el) => ({ ...el, strokeWidth: value }));
     },
     [onUpdate],
   );
 
   const handleStrokeStyleChange = useCallback(
     (value: StrokeStyleOption) => {
-      onUpdate((el) => ({ ...(el as any), strokeStyle: value } as ExcalidrawElement));
+      onUpdate((el) => ({ ...el, strokeStyle: value }));
     },
     [onUpdate],
   );
 
   const handleRoughnessChange = useCallback(
     (value: number) => {
-      onUpdate((el) => ({ ...(el as any), roughness: value } as ExcalidrawElement));
+      onUpdate((el) => ({ ...el, roughness: value }));
     },
     [onUpdate],
   );
@@ -146,11 +138,10 @@ export function SelectionStyleFlyout({ elements, onUpdate }: Props) {
   const handleRoundnessChange = useCallback(
     (value: RoundnessKind) => {
       onUpdate((el) => {
-        if (!supportsRoundness(el)) return el;
         if (value === "round") {
-          return { ...(el as any), roundness: { type: 2 } } as ExcalidrawElement;
+          return { ...el, roundness: { type: ROUNDNESS.PROPORTIONAL_RADIUS } };
         }
-        return { ...(el as any), roundness: null } as ExcalidrawElement;
+        return { ...el, roundness: null };
       });
     },
     [onUpdate],
@@ -159,13 +150,13 @@ export function SelectionStyleFlyout({ elements, onUpdate }: Props) {
   const handleOpacityChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
       const value = Number(event.target.value);
-      onUpdate((el) => ({ ...(el as any), opacity: value } as ExcalidrawElement));
+      onUpdate((el) => ({ ...el, opacity: value }));
     },
     [onUpdate],
   );
 
   const fillActive = resolveFillActive(fillStyle);
-  const showEdges = useMemo(() => elements.some((el) => supportsRoundness(el)), [elements]);
+  const showEdges = useMemo(() => elements.length > 0, [elements]);
 
   return (
     <div className="props-flyout" role="dialog" aria-label="Style options">

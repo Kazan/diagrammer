@@ -255,18 +255,8 @@ body {
 }
 
 
-.excalidraw [aria-label="Main menu"],
-.excalidraw [aria-label="Canvas menu"],
-.excalidraw [data-testid="main-menu-button"],
-.excalidraw [data-testid="canvas-menu"],
-.excalidraw [data-testid="main-menu-trigger"],
-.excalidraw [aria-label="Menu"],
-.excalidraw button[aria-label*="menu" i],
-.excalidraw .dropdown-menu,
-.excalidraw .dropdown-menu-trigger,
-.excalidraw .App-menu,
-.excalidraw .layer-ui__wrapper__menu,
-.excalidraw .App-top-bar__menus {
+/* Hide Excalidraw's main menu trigger (we provide our own open/save/export UI). */
+.excalidraw .main-menu-trigger {
   display: none !important;
 }
 

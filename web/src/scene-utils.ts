@@ -1,8 +1,10 @@
+import { THEME } from "@excalidraw/excalidraw";
+
 export const EMPTY_SCENE = {
   elements: [],
   appState: {
     viewBackgroundColor: "#ecececff",
-    theme: "light" as const,
+    theme: THEME.LIGHT,
     objectsSnapModeEnabled: true,
   },
   files: {},

@@ -1,7 +1,23 @@
 import { useCallback, useMemo, type MutableRefObject } from "react";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
-import type { NativeBridge, NativeBridgeEvent, NativeFileHandle } from "../native-bridge";
-import { EMPTY_SCENE_SIG, computeSceneSignature, computeSceneSignatureFromScene, stripExtension } from "../scene-utils";
+import {
+  isNativeBridgeEvent,
+  type NativeBridge,
+  type NativeBridgeCallbacks,
+  type NativeBridgeEvent,
+  type NativeFileHandle,
+} from "../native-bridge";
+import { EMPTY_SCENE_SIG, computeSceneSignature, stripExtension } from "../scene-utils";
+import { applyRestoredScene, buildDefaultLocalAppStateOverrides, restoreSceneForApp } from "../excalidraw-restore";
+
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  return Boolean(value && typeof value === "object");
+};
+
+const isValidSceneData = (value: unknown): value is Record<string, unknown> => {
+  if (!isRecord(value)) return false;
+  return Array.isArray(value["elements"]);
+};
 
 export type NativeMessageDeps = {
   api: ExcalidrawImperativeAPI | null;
@@ -28,7 +44,7 @@ export type NativeMessageDeps = {
     | {
         sceneJson: string;
         displayName: string;
-        parsed: any;
+        parsedScene: unknown;
         sig: string;
         hasElements: boolean;
       }
@@ -121,34 +137,46 @@ export function useNativeMessageHandlers(deps: NativeMessageDeps) {
 
   const handleSceneLoaded = useCallback(
     (sceneJson: string, fileName?: string) => {
-      let parsed: any = null;
+      let parsedScene: unknown = null;
       let nextSig = EMPTY_SCENE_SIG;
       let hasElements = false;
       try {
-        parsed = JSON.parse(sceneJson);
-        if (parsed?.appState?.viewBackgroundColor === "transparent") {
-          parsed = {
-            ...parsed,
-            appState: { ...parsed.appState, viewBackgroundColor: "#ffffff" },
-          };
+        parsedScene = JSON.parse(sceneJson);
+        if (!isValidSceneData(parsedScene)) {
+          parsedScene = null;
+          throw new Error("Invalid scene payload");
         }
-        nextSig = computeSceneSignatureFromScene(parsed);
-        hasElements = Array.isArray(parsed?.elements)
-          ? parsed.elements.some((el: any) => !el.isDeleted)
-          : false;
+
+        const restoredForSig = restoreSceneForApp(
+          parsedScene,
+          buildDefaultLocalAppStateOverrides({
+            viewBackgroundColor: "#ffffff",
+            objectsSnapModeEnabled: true,
+            zoomValue: 1,
+          }),
+        );
+        nextSig = computeSceneSignature(restoredForSig.elements, restoredForSig.appState);
+        hasElements = restoredForSig.elements.some((el) => !el.isDeleted);
       } catch (_err) {
-        parsed = null;
+        parsedScene = null;
         nextSig = EMPTY_SCENE_SIG;
         hasElements = false;
       }
 
+      const parsedName = (() => {
+        if (!isRecord(parsedScene)) return undefined;
+        const appState = parsedScene["appState"];
+        if (!isRecord(appState)) return undefined;
+        const name = appState["name"];
+        return typeof name === "string" ? name.trim() : undefined;
+      })();
+
       console.log("[NativeBridge] onSceneLoaded", {
         fileName,
         bytes: sceneJson.length,
-        parsedName: parsed?.appState?.name,
+        parsedName,
       });
 
-      const parsedName = parsed?.appState?.name?.trim();
       const resolvedName = fileName?.trim()
         ? fileName
         : nativeBridge?.getCurrentFileName?.()?.trim() || parsedName || "Unsaved";
@@ -170,19 +198,22 @@ export function useNativeMessageHandlers(deps: NativeMessageDeps) {
 
       const applySceneToCanvas = () => {
         if (api) {
-          if (parsed) {
-            // Use updateScene to merge the loaded payload into the current session;
-            // resetScene is more aggressive and was proving flaky in some WebView builds.
-            api.updateScene(parsed as any);
+          if (parsedScene) {
+            const restored = restoreSceneForApp(
+              parsedScene,
+              buildDefaultLocalAppStateOverrides({
+                viewBackgroundColor: "#ffffff",
+                objectsSnapModeEnabled: true,
+                zoomValue: 1,
+              }),
+            );
+            applyRestoredScene(api, restored);
             const elements = api.getSceneElementsIncludingDeleted();
-            const appState = api.getAppState();
-            const normalizedAppState = { ...appState, zoom: { value: 1 } };
-            api.updateScene({ appState: normalizedAppState });
-            const visible = elements.filter((el) => !el.isDeleted);
+            const visible = api.getSceneElements();
             if (visible.length) {
-              api.scrollToContent(visible as any, { fitToViewport: false, animate: false });
+              api.scrollToContent(visible, { fitToViewport: false, animate: false });
             }
-            prevSceneSigRef.current = computeSceneSignature(elements, normalizedAppState);
+            prevSceneSigRef.current = computeSceneSignature(elements, api.getAppState());
             prevNonEmptySceneRef.current = visible.length > 0;
             suppressNextDirtyRef.current = true;
             expectedSceneSigRef.current = prevSceneSigRef.current;
@@ -199,7 +230,7 @@ export function useNativeMessageHandlers(deps: NativeMessageDeps) {
         pendingSceneRef.current = {
           sceneJson,
           displayName,
-          parsed,
+          parsedScene,
           sig: nextSig,
           hasElements,
         };
@@ -233,10 +264,35 @@ export function useNativeMessageHandlers(deps: NativeMessageDeps) {
     ],
   );
 
-  const nativeCallbacks = useMemo(
-    () => ({ onNativeMessage: handleNativeMessage, onSceneLoaded: handleSceneLoaded }),
-    [handleNativeMessage, handleSceneLoaded],
-  );
+  const nativeCallbacks = useMemo<NativeBridgeCallbacks>(() => {
+    return {
+      onNativeMessage: (payload: unknown) => {
+        if (isNativeBridgeEvent(payload)) {
+          handleNativeMessage(payload);
+          return;
+        }
+        console.warn("[NativeBridge] Invalid event payload", payload);
+        handleNativeMessage({
+          event: "onNativeMessage",
+          success: false,
+          message: "Invalid native event payload",
+        });
+      },
+      onSceneLoaded: (sceneJson: unknown, fileName?: unknown) => {
+        if (typeof sceneJson === "string") {
+          handleSceneLoaded(sceneJson, typeof fileName === "string" ? fileName : undefined);
+          return;
+        }
+        console.warn("[NativeBridge] Invalid scene payload", { sceneJson, fileName });
+        // Signal failure via native-message channel so open flows can be rejected.
+        handleNativeMessage({
+          event: "onNativeMessage",
+          success: false,
+          message: "Invalid native scene payload",
+        });
+      },
+    };
+  }, [handleNativeMessage, handleSceneLoaded]);
 
   return nativeCallbacks;
 }

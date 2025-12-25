@@ -47,25 +47,25 @@ export function useNativePickers({
   // Hook the native open picker
   useEffect(() => {
     if (!nativeBridge?.openSceneFromDocument) return undefined;
-    const originalShowPicker = (window as any).showOpenFilePicker;
-    (window as any).showOpenFilePicker = () => openWithNativePicker();
+    const originalShowPicker = window.showOpenFilePicker;
+    window.showOpenFilePicker = () => openWithNativePicker();
     return () => {
-      (window as any).showOpenFilePicker = originalShowPicker;
+      window.showOpenFilePicker = originalShowPicker;
     };
   }, [nativeBridge, openWithNativePicker]);
 
   // Hook the native save picker
   useEffect(() => {
     if (!nativeBridge || !api) return undefined;
-    const originalSavePicker = (window as any).showSaveFilePicker;
-    (window as any).showSaveFilePicker = async (opts?: { suggestedName?: string }) => {
+    const originalSavePicker = window.showSaveFilePicker;
+    window.showSaveFilePicker = async (opts?: { suggestedName?: string }) => {
       const base = stripExtension(opts?.suggestedName || currentFileName || "diagram");
       const handle = createNativeFileHandle(base);
       applyFileHandleToAppState(handle);
       return handle;
     };
     return () => {
-      (window as any).showSaveFilePicker = originalSavePicker;
+      window.showSaveFilePicker = originalSavePicker;
     };
   }, [api, applyFileHandleToAppState, createNativeFileHandle, currentFileName, nativeBridge]);
 
