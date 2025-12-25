@@ -183,7 +183,7 @@ body {
   color: var(--error);
 }
 
-/* Hide only the burger/menu controls; keep toolbar and property bar visible */
+/* Hide Excalidraw's built-in toolbars/sidebars; host UI provides these. */
 
 .custom-toolbar {
   position: fixed;
@@ -257,6 +257,28 @@ body {
 
 /* Hide Excalidraw's main menu trigger (we provide our own open/save/export UI). */
 .excalidraw .main-menu-trigger {
+  display: none !important;
+}
+
+/*
+  Excalidraw v0.18.0 does not currently expose supported APIs to hide the
+  built-in toolbar or the element properties panel. We therefore hide these
+  via stable, version-pinned class names.
+*/
+.excalidraw .App-top-bar,
+.excalidraw .App-menu,
+.excalidraw .App-menu_top,
+.excalidraw .App-menu_top__left,
+.excalidraw .App-menu_bottom,
+.excalidraw .App-toolbar-container,
+.excalidraw .App-toolbar,
+.excalidraw .App-toolbar--mobile,
+.excalidraw .App-mobile-menu,
+.excalidraw .App-bottom-bar,
+.excalidraw .layer-ui__wrapper__footer,
+.excalidraw .default-sidebar-trigger,
+.excalidraw .sidebar-trigger,
+.excalidraw .sidebar {
   display: none !important;
 }
 
