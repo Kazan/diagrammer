@@ -3,6 +3,7 @@ export const EMPTY_SCENE = {
   appState: {
     viewBackgroundColor: "#ecececff",
     theme: "light" as const,
+    objectsSnapModeEnabled: true,
   },
   files: {},
 };

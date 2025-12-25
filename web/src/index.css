@@ -549,7 +549,7 @@ body {
 }
 
 .style-icon--edge-sharp {
-  border-radius: 6px;
+  border-radius: 0px;
 }
 
 .style-icon--edge-round {

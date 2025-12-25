@@ -6,6 +6,16 @@ import {
   computeSceneSignatureFromScene,
 } from "../scene-utils";
 
+const ensureObjectsSnapModeEnabled = (scene: any) => {
+  if (scene && typeof scene === "object") {
+    scene.appState = {
+      ...(scene.appState ?? {}),
+      objectsSnapModeEnabled: scene.appState?.objectsSnapModeEnabled ?? true,
+    };
+  }
+  return scene;
+};
+
 export function useSceneHydration(options: {
   api: ExcalidrawImperativeAPI | null;
   setStatus: (status: { text: string; tone: "ok" | "warn" | "err" }) => void;
@@ -36,7 +46,7 @@ export function useSceneHydration(options: {
         const entries = rawFs ? JSON.parse(rawFs) : null;
         if (Array.isArray(entries) && entries.length) {
           const latest = entries.reduce((best: any, entry: any) => (best && best.updated > entry.updated ? best : entry));
-          if (latest?.scene) return JSON.parse(latest.scene);
+          if (latest?.scene) return ensureObjectsSnapModeEnabled(JSON.parse(latest.scene));
         }
       } catch (_err) {
         // ignore
@@ -44,14 +54,14 @@ export function useSceneHydration(options: {
       return null;
     }
     try {
-      return JSON.parse(saved);
+      return ensureObjectsSnapModeEnabled(JSON.parse(saved));
     } catch (err) {
       console.warn("Failed to parse saved scene", err);
       return null;
     }
   }, [LOCAL_FS_KEY, LOCAL_SCENE_KEY]);
 
-  const initialData = useMemo(() => startupScene ?? EMPTY_SCENE, [startupScene]);
+  const initialData = useMemo(() => ensureObjectsSnapModeEnabled(startupScene ?? EMPTY_SCENE), [startupScene]);
   const [pendingScene, setPendingScene] = useState(startupScene);
 
   useEffect(() => {
@@ -64,7 +74,8 @@ export function useSceneHydration(options: {
 
   useEffect(() => {
     if (!api || !pendingScene) return;
-    api.resetScene(pendingScene as any, { resetLoadingState: true, replaceFiles: true });
+    const hydrated = ensureObjectsSnapModeEnabled(structuredClone(pendingScene));
+    api.resetScene(hydrated as any, { resetLoadingState: true, replaceFiles: true });
     const elements = Array.isArray((pendingScene as any)?.elements)
       ? (pendingScene as any).elements.filter((el: any) => !el.isDeleted)
       : [];

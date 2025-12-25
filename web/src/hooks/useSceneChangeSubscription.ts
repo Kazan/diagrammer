@@ -114,6 +114,11 @@ export function useSceneChangeSubscription(opts: SceneChangeOptions) {
         return;
       }
 
+      if (!appState.objectsSnapModeEnabled) {
+        api.updateScene({ appState: { ...appState, objectsSnapModeEnabled: true } });
+        return;
+      }
+
       const tool = appState.activeTool?.type as unknown as ToolType | undefined;
       if (tool) {
         setActiveTool(tool);

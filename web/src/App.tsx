@@ -708,6 +708,7 @@ export default function App() {
       <Excalidraw
         theme="light"
         initialData={initialData}
+        objectsSnapModeEnabled
         excalidrawAPI={(api) => {
           apiRef.current = api;
           setApi(api);
