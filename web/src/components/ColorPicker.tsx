@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { Palette, Pipette } from "lucide-react";
+import { Pipette } from "lucide-react";
 
 export type ColorSwatch = {
   key: string;
@@ -169,7 +169,13 @@ export default function ColorPicker({
 }: ColorPickerProps) {
   const inputId = useId();
   const [inputValue, setInputValue] = useState(value ?? DEFAULT_COLOR);
-  const [alpha, setAlpha] = useState(1);
+  const [colorAlpha, setColorAlpha] = useState(() => {
+    const { alpha } = decomposeColor(value);
+    return value === "transparent" ? 1 : alpha;
+  });
+  const colorAlphaRef = useRef(colorAlpha);
+  const [isTransparent, setIsTransparent] = useState(value === "transparent");
+  const [isCustomColor, setIsCustomColor] = useState(false);
   const [baseHex, setBaseHex] = useState(() => decomposeColor(value).hex);
   const [shadeIndex, setShadeIndex] = useState<1 | 2 | 3 | 4 | 5>(initialShadeIndex);
   const colorInputRef = useRef<HTMLInputElement>(null);
@@ -181,7 +187,9 @@ export default function ColorPicker({
 
   const { hex: normalizedHex, alpha: derivedAlpha, display } = useMemo(() => decomposeColor(value), [value]);
   const shadeFactors = [-0.35, -0.18, 0, 0.18, 0.35] as const;
-  const shadeFactor = shadeFactors[shadeIndex - 1];
+  const showCentralShade = isTransparent || isCustomColor;
+  const effectiveShadeIndex = showCentralShade ? 3 : shadeIndex;
+  const shadeFactor = shadeFactors[effectiveShadeIndex - 1];
 
   const currentSwatch = useMemo(() => {
     const normalized = normalizeHex(baseHex);
@@ -189,8 +197,10 @@ export default function ColorPicker({
   }, [baseHex, paletteSwatches]);
 
   const isShadeDisabled = useMemo(() => {
+    if (isTransparent) return true;
+    if (isCustomColor) return true;
     return Boolean(currentSwatch?.disableShades);
-  }, [currentSwatch]);
+  }, [currentSwatch, isTransparent, isCustomColor]);
 
   const computeSwatchShades = useMemo(() => {
     return (hex: string, swatch?: ColorSwatch): string[] => {
@@ -217,44 +227,108 @@ export default function ColorPicker({
   const tintedBase = useMemo(() => {
     if (isShadeDisabled) return normalizeHex(baseHex);
     if (!shades.length) return adjustColor(baseHex, shadeFactor);
-    return shades[shadeIndex - 1];
-  }, [baseHex, isShadeDisabled, shadeFactor, shadeIndex, shades]);
+    return shades[effectiveShadeIndex - 1];
+  }, [baseHex, isShadeDisabled, shadeFactor, shades, effectiveShadeIndex]);
 
   const tintColor = useMemo(() => {
     return (hex: string, swatchOverride?: ColorSwatch) => {
       const swatch = swatchOverride ?? paletteSwatches.find((s) => normalizeHex(s.value) === normalizeHex(hex));
       if (swatch?.disableShades) return normalizeHex(hex);
       const shadesForSwatch = computeSwatchShades(hex, swatch);
-      if (shadesForSwatch.length === 5) return shadesForSwatch[shadeIndex - 1];
-      return adjustColor(normalizeHex(hex), shadeFactor);
+      if (shadesForSwatch.length === 5) return shadesForSwatch[effectiveShadeIndex - 1];
+      return adjustColor(normalizeHex(hex), shadeFactors[effectiveShadeIndex - 1]);
     };
-  }, [computeSwatchShades, paletteSwatches, shadeFactor, shadeIndex]);
+  }, [computeSwatchShades, paletteSwatches, effectiveShadeIndex]);
+
+  const findPaletteMatch = useMemo(() => {
+    return (targetColor: string, alphaValue: number): { swatch: ColorSwatch; shadeIndex: 1 | 2 | 3 | 4 | 5 } | null => {
+      const normalizedTarget = normalizeHex(targetColor);
+      for (const swatch of paletteSwatches) {
+        if (swatch.value === "transparent") continue;
+        const base = normalizeHex(swatch.value);
+        const shadeValues = swatch.disableShades ? [base] : computeSwatchShades(base, swatch);
+        const shadesToCheck = shadeValues.length ? shadeValues : [base];
+        for (let i = 0; i < shadesToCheck.length; i += 1) {
+          const shadeHex = shadesToCheck[i];
+          const combined = combineColor(shadeHex, alphaValue);
+          if (normalizeHex(combined) === normalizedTarget) {
+            const idx = ((i + 1) as 1 | 2 | 3 | 4 | 5) || 3;
+            return { swatch, shadeIndex: idx };
+          }
+        }
+      }
+      return null;
+    };
+  }, [computeSwatchShades, paletteSwatches]);
 
   const skipBaseSyncRef = useRef(false);
 
   useEffect(() => {
     setInputValue(display);
-    setAlpha(derivedAlpha);
+    const transparentSelected = value === "transparent";
+    setIsTransparent(transparentSelected);
+    if (transparentSelected) {
+      setIsCustomColor(false);
+    }
+    let match: { swatch: ColorSwatch; shadeIndex: 1 | 2 | 3 | 4 | 5 } | null = null;
+    if (!transparentSelected) {
+      match = findPaletteMatch(value ?? normalizedHex, derivedAlpha);
+      colorAlphaRef.current = derivedAlpha;
+      setColorAlpha(derivedAlpha);
+      if (match) {
+        setIsCustomColor(false);
+        setShadeIndex(match.shadeIndex);
+        setBaseHex(normalizeHex(match.swatch.value));
+      } else {
+        setIsCustomColor(true);
+        setShadeIndex(3);
+        setBaseHex(normalizedHex);
+      }
+    }
     if (skipBaseSyncRef.current) {
       skipBaseSyncRef.current = false;
-    } else {
+    } else if (transparentSelected || !match) {
       setBaseHex(normalizedHex);
     }
-  }, [display, derivedAlpha, normalizedHex]);
+  }, [display, derivedAlpha, normalizedHex, value, findPaletteMatch]);
 
   const applyInputValue = () => {
-    const parsed = parseColorInput(inputValue || normalizedHex);
+    const raw = (inputValue || normalizedHex).trim().toLowerCase();
+    if (raw === "transparent") {
+      setIsTransparent(true);
+      setInputValue("transparent");
+      skipBaseSyncRef.current = true;
+      onChange("transparent");
+      return;
+    }
+    const parsed = parseColorInput(raw || normalizedHex);
     if (parsed) {
       const nextHex = normalizeHex(parsed.value);
-      setAlpha(parsed.alpha);
-      setBaseHex(nextHex);
+      colorAlphaRef.current = parsed.alpha;
+      setColorAlpha(parsed.alpha);
+      setIsTransparent(false);
+      const match = findPaletteMatch(nextHex, parsed.alpha);
+      if (match) {
+        setIsCustomColor(false);
+        setShadeIndex(match.shadeIndex);
+        setBaseHex(normalizeHex(match.swatch.value));
+      } else {
+        setIsCustomColor(true);
+        setShadeIndex(3);
+        setBaseHex(nextHex);
+      }
       onChange(combineColor(nextHex, parsed.alpha));
     } else setInputValue(display);
   };
 
   const applyAlpha = (nextAlpha: number) => {
-    setAlpha(nextAlpha);
-    onChange(combineColor(baseHex, nextAlpha));
+    if (isTransparent) return;
+    const clamped = Math.max(0, Math.min(1, nextAlpha));
+    colorAlphaRef.current = clamped;
+    setColorAlpha(clamped);
+    const match = findPaletteMatch(baseHex, clamped);
+    setIsCustomColor(!match);
+    onChange(combineColor(baseHex, clamped));
   };
 
   const handleEyedropper = async () => {
@@ -263,8 +337,18 @@ export default function ColorPicker({
       const eyeDropper = new window.EyeDropper();
       const result = await eyeDropper.open();
       const picked = normalizeHex(result.sRGBHex.toLowerCase());
-      setBaseHex(picked);
-      onChange(combineColor(picked, alpha));
+      const match = findPaletteMatch(picked, colorAlphaRef.current);
+      setIsTransparent(false);
+      if (match) {
+        setIsCustomColor(false);
+        setShadeIndex(match.shadeIndex);
+        setBaseHex(normalizeHex(match.swatch.value));
+      } else {
+        setIsCustomColor(true);
+        setShadeIndex(3);
+        setBaseHex(picked);
+      }
+      onChange(combineColor(picked, colorAlphaRef.current));
     } catch (err) {
       console.warn("EyeDropper cancelled", err);
     }
@@ -274,6 +358,35 @@ export default function ColorPicker({
     colorInputRef.current?.click();
   };
 
+  const livePreview = useMemo(() => {
+    const raw = (inputValue || "").trim().toLowerCase();
+    if (raw === "transparent") {
+      return { hex: "transparent", alpha: 1 } as const;
+    }
+    const parsed = parseColorInput(raw);
+    if (parsed) {
+      return { hex: normalizeHex(parsed.value), alpha: parsed.alpha } as const;
+    }
+    return { hex: baseHex, alpha: isTransparent ? 0 : colorAlphaRef.current } as const;
+  }, [inputValue, baseHex, isTransparent]);
+
+  const previewColor = livePreview.hex === "transparent" ? "transparent" : combineColor(livePreview.hex, livePreview.alpha);
+  const previewStyle = livePreview.hex === "transparent"
+    ? {
+        backgroundColor: "#f2f2f2",
+        backgroundImage:
+          "linear-gradient(45deg, rgba(0,0,0,0.08) 25%, transparent 25%, transparent 75%, rgba(0,0,0,0.08) 75%, rgba(0,0,0,0.08)), linear-gradient(45deg, rgba(0,0,0,0.08) 25%, transparent 25%, transparent 75%, rgba(0,0,0,0.08) 75%, rgba(0,0,0,0.08))",
+        backgroundSize: "8px 8px",
+        backgroundPosition: "0 0, 4px 4px",
+        border: "1px solid rgba(255, 255, 255, 0.14)",
+        boxShadow: "0 0 0 1px rgba(0, 0, 0, 0.24)",
+      }
+    : {
+        background: previewColor,
+        border: "1px solid rgba(255, 255, 255, 0.14)",
+        boxShadow: "0 0 0 1px rgba(0, 0, 0, 0.24)",
+      };
+
   return (
     <div className="color-picker" role="group" aria-label={`${title} picker`}>
       <div className="color-picker__group">
@@ -282,9 +395,11 @@ export default function ColorPicker({
           {paletteSwatches.map((swatch) => {
             const normalizedSwatch = swatch.value === "transparent" ? DEFAULT_COLOR : normalizeHex(swatch.value);
             const displayColor = swatch.value === "transparent" ? swatch.value : tintColor(normalizedSwatch, swatch);
+            const combinedDisplay =
+              swatch.value === "transparent" ? "transparent" : combineColor(displayColor, colorAlphaRef.current);
             const isActive =
-              value === swatch.value ||
-              (swatch.value !== "transparent" && normalizeHex(value) === normalizeHex(displayColor) && decomposeColor(value).alpha === alpha);
+              (swatch.value === "transparent" && isTransparent) ||
+              (swatch.value !== "transparent" && !isTransparent && normalizeHex(value) === normalizeHex(combinedDisplay));
             return (
               <button
                 key={swatch.key}
@@ -293,11 +408,21 @@ export default function ColorPicker({
                 style={swatch.value === "transparent" ? undefined : { backgroundColor: displayColor, color: displayColor }}
                 onClick={() => {
                   const nextBase = normalizedSwatch;
-                  const nextAlpha = swatch.value === "transparent" ? 0 : alpha;
-                  const tintedColor = swatch.value === "transparent" ? combineColor(nextBase, 0) : combineColor(tintColor(nextBase, swatch), nextAlpha);
+                  if (swatch.value === "transparent") {
+                    setIsTransparent(true);
+                    setIsCustomColor(false);
+                    setInputValue("transparent");
+                    skipBaseSyncRef.current = true;
+                    onChange("transparent");
+                    return;
+                  }
+                  const effectiveAlpha = colorAlphaRef.current;
+                  const tintedColor = combineColor(tintColor(nextBase, swatch), effectiveAlpha);
                   setBaseHex(nextBase);
-                  setAlpha(nextAlpha);
-                  setInputValue(swatch.value === "transparent" ? "transparent" : tintedColor);
+                  setIsTransparent(false);
+                  setIsCustomColor(false);
+                  setColorAlpha(effectiveAlpha);
+                  setInputValue(tintedColor);
                   skipBaseSyncRef.current = true;
                   onChange(tintedColor);
                 }}
@@ -315,7 +440,7 @@ export default function ColorPicker({
         <div className="color-picker__title">Shades</div>
         <div className="color-picker__shades">
           {(isShadeDisabled ? shadePlaceholders : shades).map((shade, index) => {
-            const shadeValue = isShadeDisabled ? shade : combineColor(shade, alpha);
+            const shadeValue = isShadeDisabled ? shade : combineColor(shade, colorAlphaRef.current);
             const isActive = !isShadeDisabled && index + 1 === shadeIndex;
             const shadeStyle = isShadeDisabled
               ? { backgroundColor: "rgba(0, 0, 0, 0.06)", color: "rgba(0, 0, 0, 0.06)" }
@@ -335,9 +460,10 @@ export default function ColorPicker({
                   const swatch = currentSwatch;
                   const shadesForSwatch = swatch ? computeSwatchShades(baseHex, swatch) : undefined;
                   const nextTint = shadesForSwatch && shadesForSwatch.length === 5 ? shadesForSwatch[nextIndex - 1] : adjustColor(baseHex, nextFactor);
-                  const tinted = combineColor(nextTint, alpha);
+                  const tinted = combineColor(nextTint, colorAlphaRef.current);
                   setInputValue(tinted);
                   skipBaseSyncRef.current = true;
+                  setIsCustomColor(false);
                   onChange(tinted);
                 }}
                 aria-label={`Shade ${index + 1}${isShadeDisabled ? " disabled" : ""}`}
@@ -367,11 +493,27 @@ export default function ColorPicker({
             }}
             placeholder="#6741d9 or #6741d9aa"
           />
+          <span
+            className="color-picker__custom-preview"
+            aria-label="Selected color preview"
+            style={{
+              width: 26,
+              height: 26,
+              borderRadius: 7,
+              ...previewStyle,
+            }}
+            onClick={handleCustomPicker}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                handleCustomPicker();
+              }
+            }}
+          />
           <button type="button" className="selection-flyout__btn" onClick={handleEyedropper} aria-label="Pick color from canvas">
             <Pipette size={16} aria-hidden="true" />
-          </button>
-          <button type="button" className="selection-flyout__btn" onClick={handleCustomPicker} aria-label="Open custom color picker">
-            <Palette size={16} aria-hidden="true" />
           </button>
           <input
             ref={colorInputRef}
@@ -380,8 +522,18 @@ export default function ColorPicker({
             value={baseHex}
             onChange={(e) => {
               const nextHex = normalizeHex(e.target.value);
-              setBaseHex(nextHex);
-              const next = combineColor(nextHex, alpha);
+              const match = findPaletteMatch(nextHex, colorAlphaRef.current);
+              setIsTransparent(false);
+              if (match) {
+                setIsCustomColor(false);
+                setShadeIndex(match.shadeIndex);
+                setBaseHex(normalizeHex(match.swatch.value));
+              } else {
+                setIsCustomColor(true);
+                setShadeIndex(3);
+                setBaseHex(nextHex);
+              }
+              const next = combineColor(nextHex, colorAlphaRef.current);
               onChange(next);
               setInputValue(next);
             }}
@@ -398,11 +550,12 @@ export default function ColorPicker({
             min={0}
             max={100}
             step={1}
-            value={Math.round(alpha * 100)}
+            value={isTransparent ? 100 : Math.round(colorAlpha * 100)}
             onChange={(e) => applyAlpha(Number(e.target.value) / 100)}
             aria-label="Transparency"
+            disabled={isTransparent}
           />
-          <span className="color-picker__alpha-value">{Math.round(alpha * 100)}%</span>
+          <span className="color-picker__alpha-value">{isTransparent ? "100%" : Math.round(colorAlpha * 100)}%</span>
         </div>
       </div>
     </div>
