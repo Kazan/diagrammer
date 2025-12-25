@@ -27,6 +27,16 @@ const DEFAULT_STROKE = "#0f172a";
 const DEFAULT_FILL = "#b7f5c4";
 const LINE_LIKE_TYPES = new Set(["line", "arrow"]);
 
+const isClosedPolyline = (el: ExcalidrawElement) => {
+  if (el.type !== "line") return false;
+  const points = (el as any).points as ReadonlyArray<readonly [number, number]> | undefined;
+  if (!points || points.length < 3) return false;
+  const [firstX, firstY] = points[0];
+  const [lastX, lastY] = points[points.length - 1];
+  const epsilon = 0.5;
+  return Math.abs(firstX - lastX) <= epsilon && Math.abs(firstY - lastY) <= epsilon;
+};
+
 function getCommonValue<T>(elements: ExcalidrawElement[], pick: (el: ExcalidrawElement) => T): T | null {
   if (!elements.length) return null;
   const first = pick(elements[0]);
@@ -66,7 +76,7 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
 
   const [openKind, setOpenKind] = useState<PropertyKind | null>(null);
 
-  const hasFillCapable = elements.some((el) => !LINE_LIKE_TYPES.has(el.type) && el.type !== "text");
+  const hasFillCapable = elements.some((el) => (!LINE_LIKE_TYPES.has(el.type) && el.type !== "text") || isClosedPolyline(el));
   const hasStyleControls = elements.some((el) => el.type !== "text" && el.type !== "image");
 
   const items: PropertyButton[] = [];
