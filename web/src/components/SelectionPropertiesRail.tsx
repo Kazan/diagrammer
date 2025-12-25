@@ -52,6 +52,8 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
   const elements = selection?.elements ?? [];
   if (!elements.length) return null;
 
+  const hasImage = elements.some((el) => el.type === "image");
+
   const strokeColor = useMemo(
     () => getCommonValue(elements, (el) => (el as any).strokeColor) ?? DEFAULT_STROKE,
     [elements],
@@ -66,11 +68,13 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
   const hasFillCapable = elements.some((el) => !LINE_LIKE_TYPES.has(el.type) && el.type !== "text");
   const hasStyleControls = elements.some((el) => el.type !== "text");
 
-  const items: PropertyButton[] = [
-    { id: "stroke", label: "Stroke color", Icon: Palette, swatch: strokeColor },
-  ];
+  const items: PropertyButton[] = [];
 
-  if (hasFillCapable) {
+  if (!hasImage) {
+    items.push({ id: "stroke", label: "Stroke color", Icon: Palette, swatch: strokeColor });
+  }
+
+  if (hasFillCapable && !hasImage) {
     items.push({ id: "background", label: "Fill color", Icon: PaintBucket, swatch: backgroundColor });
   }
 
@@ -124,6 +128,11 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
   const deleteSelection = () => {
     applyToSelection((el) => ({ ...(el as any), isDeleted: true } as ExcalidrawElement));
   };
+
+  // Close flyouts that are not applicable (e.g., when images are selected).
+  if (hasImage && (openKind === "stroke" || openKind === "background") && openKind !== null) {
+    setOpenKind(null);
+  }
 
   const handleStrokeChange = (color: string) => {
     applyToSelection((el) => ({ ...el, strokeColor: color } as ExcalidrawElement));

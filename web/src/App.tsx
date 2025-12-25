@@ -22,6 +22,8 @@ import type { NativeFileHandle } from "./native-bridge";
 import { computeSceneSignature, stripExtension } from "./scene-utils";
 
 export default function App() {
+  const LOCAL_SCENE_KEY = "diagrammer.localScene";
+  const LOCAL_FS_KEY = "diagrammer.localFs";
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null);
   const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
@@ -61,6 +63,31 @@ export default function App() {
     | null
   >(null);
 
+  type LocalEntry = { name: string; scene: string; updated: number };
+
+  const loadLocalEntries = useCallback((): LocalEntry[] => {
+    try {
+      const raw = window.localStorage.getItem(LOCAL_FS_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter((e) => typeof e?.name === "string" && typeof e?.scene === "string" && typeof e?.updated === "number");
+    } catch (_err) {
+      return [];
+    }
+  }, [LOCAL_FS_KEY]);
+
+  const persistLocalEntries = useCallback(
+    (entries: LocalEntry[]) => {
+      try {
+        window.localStorage.setItem(LOCAL_FS_KEY, JSON.stringify(entries));
+      } catch (_err) {
+        // ignore
+      }
+    },
+    [LOCAL_FS_KEY]
+  );
+
   const {
     createNativeFileHandle,
     syncFileHandle,
@@ -87,11 +114,13 @@ export default function App() {
   });
 
   useEffect(() => {
-    // Ensure a clean slate even if the WebView kept localStorage (e.g., across reinstalls on some devices).
-    try {
-      window.localStorage.clear();
-    } catch (_err) {
-      // ignore if storage unavailable
+    // Preserve localStorage for browser fallback; clear only in native contexts.
+    if (window.NativeBridge) {
+      try {
+        window.localStorage.clear();
+      } catch (_err) {
+        // ignore if storage unavailable
+      }
     }
   }, []);
 
@@ -115,6 +144,45 @@ export default function App() {
     });
     return true;
   }, [nativeBridge, openWithNativePicker, setStatus]);
+
+  const handleOpenLocalFallback = useCallback(() => {
+    if (!api) {
+      setStatus({ text: "Canvas not ready", tone: "warn" });
+      return false;
+    }
+    try {
+      const entries = loadLocalEntries();
+      if (!entries.length) {
+        setStatus({ text: "No local scenes found", tone: "warn" });
+        return false;
+      }
+      const names = entries.map((e) => e.name).join(", ");
+      const choice = window.prompt(`Open local scene (available: ${names})`, entries[entries.length - 1]?.name ?? "");
+      if (!choice) return false;
+      const entry = entries.find((e) => e.name === choice.trim());
+      if (!entry) {
+        setStatus({ text: "Scene not found", tone: "warn" });
+        return false;
+      }
+      const parsed = JSON.parse(entry.scene);
+      api.resetScene(parsed as any, { resetLoadingState: true, replaceFiles: true });
+      const elements = api.getSceneElements().filter((el) => !el.isDeleted);
+      if (elements.length) {
+        api.scrollToContent(elements as any, { fitToViewport: true, animate: false });
+      }
+      prevSceneSigRef.current = computeSceneSignature(api.getSceneElements(), api.getAppState());
+      prevNonEmptySceneRef.current = elements.some((el) => !el.isDeleted);
+      suppressNextDirtyRef.current = true;
+      setIsDirty(false);
+      setCurrentFileName(choice.trim());
+      setStatus({ text: `Loaded ${choice.trim()} from local storage`, tone: "ok" });
+      return true;
+    } catch (err) {
+      console.warn("Local load failed", err);
+      setStatus({ text: "Local load failed", tone: "err" });
+      return false;
+    }
+  }, [api, loadLocalEntries, setCurrentFileName, setIsDirty, setStatus]);
 
   const performSave = useCallback(async () => {
     if (!api) return;
@@ -142,11 +210,27 @@ export default function App() {
         return;
       }
 
-      setStatus({ text: "Native save unavailable", tone: "warn" });
+      try {
+        const name = window.prompt("Save local scene as", currentFileName || "Untitled")?.trim();
+        if (!name) {
+          setStatus({ text: "Save cancelled", tone: "warn" });
+          return;
+        }
+        const entries = loadLocalEntries();
+        const nextEntries = entries.filter((e) => e.name !== name);
+        nextEntries.push({ name, scene: envelope.json, updated: Date.now() });
+        persistLocalEntries(nextEntries);
+        window.localStorage.setItem(LOCAL_SCENE_KEY, envelope.json);
+        setStatus({ text: `Saved ${name} locally`, tone: "ok" });
+        setIsDirty(false);
+        setCurrentFileName(name);
+      } catch (_err) {
+        setStatus({ text: "Save failed (storage)", tone: "err" });
+      }
     } catch (err) {
       setStatus({ text: `Save failed: ${String(err)}`, tone: "err" });
     }
-  }, [api, buildSceneEnvelope, currentFileName, hasCurrentFileRef, nativeBridge, setStatus]);
+  }, [LOCAL_SCENE_KEY, api, buildSceneEnvelope, currentFileName, hasCurrentFileRef, loadLocalEntries, nativeBridge, persistLocalEntries, setCurrentFileName, setIsDirty, setStatus]);
 
   const handleSaveNow = useCallback(() => {
     void performSave();
@@ -157,30 +241,54 @@ export default function App() {
       setStatus({ text: "Canvas not ready", tone: "warn" });
       return;
     }
-    if (!nativeBridge?.persistSceneToDocument && !nativeBridge?.saveSceneToDocument) {
-      setStatus({ text: "Native document picker unavailable", tone: "warn" });
-      return;
-    }
     try {
       const envelope = await buildSceneEnvelope({ suggestedName: currentFileName });
       const serialized = JSON.stringify(envelope);
-      if (nativeBridge.persistSceneToDocument) {
-        nativeBridge.persistSceneToDocument(serialized);
-      } else {
-        nativeBridge.saveSceneToDocument?.(envelope.json);
+      if (nativeBridge?.persistSceneToDocument || nativeBridge?.saveSceneToDocument) {
+        if (nativeBridge.persistSceneToDocument) {
+          nativeBridge.persistSceneToDocument(serialized);
+        } else {
+          nativeBridge.saveSceneToDocument?.(envelope.json);
+        }
+        hasCurrentFileRef.current = true;
+        return;
       }
-      hasCurrentFileRef.current = true;
+
+      const name = window.prompt("Save local scene as", currentFileName || "Untitled")?.trim();
+      if (!name) {
+        setStatus({ text: "Save cancelled", tone: "warn" });
+        return;
+      }
+      const entries = loadLocalEntries();
+      const nextEntries = entries.filter((e) => e.name !== name);
+      nextEntries.push({ name, scene: envelope.json, updated: Date.now() });
+      persistLocalEntries(nextEntries);
+      window.localStorage.setItem(LOCAL_SCENE_KEY, envelope.json);
+      setStatus({ text: `Saved ${name} locally`, tone: "ok" });
+      setIsDirty(false);
+      setCurrentFileName(name);
     } catch (err) {
       setStatus({ text: `Save failed: ${String(err)}`, tone: "err" });
     }
-  }, [api, buildSceneEnvelope, currentFileName, hasCurrentFileRef, nativeBridge, setStatus]);
+  }, [LOCAL_SCENE_KEY, api, buildSceneEnvelope, currentFileName, hasCurrentFileRef, loadLocalEntries, nativeBridge, persistLocalEntries, setCurrentFileName, setIsDirty, setStatus]);
 
   const handleOpenFromOverlay = useCallback(() => {
-    const opened = handleOpenWithNativePicker();
-    if (!opened) {
-      setStatus({ text: "Native picker unavailable", tone: "warn" });
+    // Prefer native picker when available; otherwise use local storage fallback.
+    if (nativePresent) {
+      const opened = handleOpenWithNativePicker();
+      if (!opened) {
+        const localOpened = handleOpenLocalFallback();
+        if (!localOpened) {
+          setStatus({ text: "Native picker unavailable", tone: "warn" });
+        }
+      }
+      return;
     }
-  }, [handleOpenWithNativePicker, setStatus]);
+    const localOpened = handleOpenLocalFallback();
+    if (!localOpened) {
+      setStatus({ text: "No local scenes found", tone: "warn" });
+    }
+  }, [handleOpenLocalFallback, handleOpenWithNativePicker, nativePresent, setStatus]);
 
   const handleSelectionChange = useCallback(
     ({ elements, viewportBounds }: { elements: ExcalidrawElement[]; viewportBounds: SelectionInfo["viewportBounds"] }) => {

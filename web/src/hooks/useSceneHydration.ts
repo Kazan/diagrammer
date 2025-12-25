@@ -25,16 +25,31 @@ export function useSceneHydration(options: {
     hydratedSceneRef,
   } = options;
 
+  const LOCAL_SCENE_KEY = "diagrammer.localScene";
+  const LOCAL_FS_KEY = "diagrammer.localFs";
+
   const startupScene = useMemo(() => {
-    const saved = window.NativeBridge?.loadScene?.();
-    if (!saved) return null;
+    const saved = window.NativeBridge?.loadScene?.() ?? window.localStorage.getItem(LOCAL_SCENE_KEY);
+    if (!saved) {
+      try {
+        const rawFs = window.localStorage.getItem(LOCAL_FS_KEY);
+        const entries = rawFs ? JSON.parse(rawFs) : null;
+        if (Array.isArray(entries) && entries.length) {
+          const latest = entries.reduce((best: any, entry: any) => (best && best.updated > entry.updated ? best : entry));
+          if (latest?.scene) return JSON.parse(latest.scene);
+        }
+      } catch (_err) {
+        // ignore
+      }
+      return null;
+    }
     try {
       return JSON.parse(saved);
     } catch (err) {
       console.warn("Failed to parse saved scene", err);
       return null;
     }
-  }, []);
+  }, [LOCAL_FS_KEY, LOCAL_SCENE_KEY]);
 
   const initialData = useMemo(() => startupScene ?? EMPTY_SCENE, [startupScene]);
   const [pendingScene, setPendingScene] = useState(startupScene);
