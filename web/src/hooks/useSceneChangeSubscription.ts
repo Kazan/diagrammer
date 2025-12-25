@@ -1,7 +1,17 @@
 import { useEffect } from "react";
+import type { MutableRefObject } from "react";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import type { ToolType } from "../components/CustomToolbar";
 import { EMPTY_SCENE_SIG, computeSceneSignature } from "../scene-utils";
+
+type AppStateSnapshot = {
+  scrollX: number;
+  scrollY: number;
+  zoom: { value: number };
+  offsetLeft: number;
+  offsetTop: number;
+};
 
 export type SceneChangeOptions = {
   api: ExcalidrawImperativeAPI | null;
@@ -10,17 +20,55 @@ export type SceneChangeOptions = {
   setIsDirty: (dirty: boolean) => void;
   setStatus: (status: { text: string; tone: "ok" | "warn" | "err" }) => void;
   clearFileAssociation: () => void;
-  suppressNextDirtyRef: React.MutableRefObject<boolean>;
-  prevSceneSigRef: React.MutableRefObject<string | null>;
-  prevNonEmptySceneRef: React.MutableRefObject<boolean>;
-  hydratedSceneRef: React.MutableRefObject<boolean>;
-  sceneLoadInProgressRef: React.MutableRefObject<boolean>;
-  expectedSceneSigRef: React.MutableRefObject<string | null>;
-  loadSkipRef: React.MutableRefObject<number>;
-  lastDialogRef: React.MutableRefObject<string | null>;
+  suppressNextDirtyRef: MutableRefObject<boolean>;
+  prevSceneSigRef: MutableRefObject<string | null>;
+  prevNonEmptySceneRef: MutableRefObject<boolean>;
+  hydratedSceneRef: MutableRefObject<boolean>;
+  sceneLoadInProgressRef: MutableRefObject<boolean>;
+  expectedSceneSigRef: MutableRefObject<string | null>;
+  loadSkipRef: MutableRefObject<number>;
+  lastDialogRef: MutableRefObject<string | null>;
   handleSaveToDocument: () => void;
   handleOpenWithNativePicker: () => boolean;
+    onSelectionChange?: (payload: {
+      elements: ExcalidrawElement[];
+      appState: AppStateSnapshot;
+      bounds: { minX: number; minY: number; maxX: number; maxY: number } | null;
+      viewportBounds: { left: number; top: number; width: number; height: number } | null;
+    }) => void;
 };
+
+function computeBounds(elements: ExcalidrawElement[]) {
+  const nonDeleted = elements.filter((el) => !el.isDeleted);
+  if (!nonDeleted.length) return null;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const el of nonDeleted) {
+    const x1 = el.x;
+    const y1 = el.y;
+    const x2 = el.x + el.width;
+    const y2 = el.y + el.height;
+    minX = Math.min(minX, x1);
+    minY = Math.min(minY, y1);
+    maxX = Math.max(maxX, x2);
+    maxY = Math.max(maxY, y2);
+  }
+  return { minX, minY, maxX, maxY };
+}
+
+function toViewportBounds(
+  bounds: { minX: number; minY: number; maxX: number; maxY: number },
+  appState: AppStateSnapshot,
+) {
+  const zoom = appState.zoom?.value ?? 1;
+  const left = (bounds.minX + appState.scrollX) * zoom + (appState.offsetLeft ?? 0);
+  const top = (bounds.minY + appState.scrollY) * zoom + (appState.offsetTop ?? 0);
+  const width = (bounds.maxX - bounds.minX) * zoom;
+  const height = (bounds.maxY - bounds.minY) * zoom;
+  return { left, top, width, height };
+}
 
 export function useSceneChangeSubscription(opts: SceneChangeOptions) {
   const {
@@ -40,10 +88,12 @@ export function useSceneChangeSubscription(opts: SceneChangeOptions) {
     lastDialogRef,
     handleSaveToDocument,
     handleOpenWithNativePicker,
+    onSelectionChange,
   } = opts;
 
   useEffect(() => {
     if (!api) return undefined;
+    let selectionRaf = 0;
     const unsubscribe = api.onChange((elements, appState) => {
       if (sceneLoadInProgressRef.current) {
         const sig = computeSceneSignature(elements, appState);
@@ -64,7 +114,12 @@ export function useSceneChangeSubscription(opts: SceneChangeOptions) {
         return;
       }
 
-      const tool = appState.activeTool?.type as ToolType | undefined;
+      if (!appState.objectsSnapModeEnabled) {
+        api.updateScene({ appState: { ...appState, objectsSnapModeEnabled: true } });
+        return;
+      }
+
+      const tool = appState.activeTool?.type as unknown as ToolType | undefined;
       if (tool) {
         setActiveTool(tool);
       }
@@ -134,8 +189,7 @@ export function useSceneChangeSubscription(opts: SceneChangeOptions) {
             (dialogName === "jsonImport" ||
               dialogName === "loadScene" ||
               dialogName === "load" ||
-              dialogName === "loadSceneFromFile" ||
-              true);
+              dialogName === "loadSceneFromFile");
 
           if (shouldHijackOpen && handleOpenWithNativePicker()) {
             console.log("[NativeBridge] intercepted open dialog", dialogName);
@@ -145,6 +199,21 @@ export function useSceneChangeSubscription(opts: SceneChangeOptions) {
           }
         }
       }
+
+        if (
+          onSelectionChange &&
+          hydratedSceneRef.current &&
+          !sceneLoadInProgressRef.current
+        ) {
+          const selectedIds = new Set(Object.keys(appState.selectedElementIds || {}));
+          const selected = elements.filter((el) => !el.isDeleted && selectedIds.has(el.id));
+          if (selectionRaf) window.cancelAnimationFrame(selectionRaf);
+          selectionRaf = window.requestAnimationFrame(() => {
+            const bounds = computeBounds(selected);
+            const viewportBounds = bounds ? toViewportBounds(bounds, appState as AppStateSnapshot) : null;
+            onSelectionChange({ elements: selected, appState: appState as AppStateSnapshot, bounds, viewportBounds });
+          });
+        }
     });
     return () => unsubscribe();
   }, [
@@ -164,5 +233,6 @@ export function useSceneChangeSubscription(opts: SceneChangeOptions) {
     setStatus,
     suppressNextDirtyRef,
     handleOpenWithNativePicker,
+    onSelectionChange,
   ]);
 }

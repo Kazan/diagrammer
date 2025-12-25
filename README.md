@@ -8,6 +8,10 @@ Offline-first Android app embedding Excalidraw in a hardened WebView. Assets are
 - `app/src/main/res/layout/activity_main.xml` — Fullscreen WebView container.
 - `app/src/main/res/values/themes.xml` — Immersive, no-action-bar theme for tablet.
 
+## Excalidraw integration (developer notes)
+- Copilot rules for working against `@excalidraw/excalidraw@0.18.0`: `.github/instructions/excalidraw-v0.18.0.instructions.md`
+- Human overview of how this repo uses Excalidraw (hydration, persistence, exports, native bridge): `research/excalidraw-integration.md`
+
 ## Build
 1. Ensure Android SDK 34+ is installed and a local JDK 17 is available.
 2. (Recommended) Regenerate Gradle wrapper: `gradle wrapper --gradle-version 8.5` (or newer). The wrapper JAR is not committed here.

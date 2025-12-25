@@ -45,22 +45,6 @@ export type NativeBridgeCallbacks = {
   onSceneLoaded?: (sceneJson: string, fileName?: string) => void;
 };
 
-export const isNativeBridgePresent = (bridge: NativeBridge | undefined | null): bridge is NativeBridge => {
-  return Boolean(
-    bridge &&
-      (bridge.persistScene ||
-        bridge.persistSceneToDocument ||
-        bridge.persistSceneToCurrentDocument ||
-        bridge.saveScene ||
-        bridge.saveSceneToDocument ||
-        bridge.saveSceneToCurrentDocument ||
-        bridge.openSceneFromDocument ||
-        bridge.loadScene ||
-        bridge.exportPng ||
-        bridge.exportSvg),
-  );
-};
-
 export type NativeFileHandle = {
   kind: "file";
   name: string;
