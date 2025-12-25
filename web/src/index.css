@@ -187,8 +187,8 @@ body {
 
 .custom-toolbar {
   position: fixed;
-  left: 24px;
-  top: 140px;
+  left: 16px;
+  top: 96px;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -198,7 +198,7 @@ body {
   padding: 12px;
   box-shadow: none;
   backdrop-filter: none;
-  z-index: 20;
+  z-index: 24;
   animation: float-in 260ms ease both;
 }
 
@@ -294,15 +294,15 @@ body {
 
 .selection-props-rail {
   position: fixed;
-  left: 160px;
-  top: 140px;
+  left: 200px;
+  top: 96px;
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 8px;
   border-radius: var(--radius);
   background: transparent;
-  z-index: 21;
+  z-index: 24;
   pointer-events: auto;
 }
 
