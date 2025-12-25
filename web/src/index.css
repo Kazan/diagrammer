@@ -41,6 +41,15 @@ body {
   color: var(--text);
 }
 
+:root {
+  --tool-rail-left: 16px;
+  --tool-rail-top: 96px;
+  --tool-rail-width: 124px;
+  --rails-gap: 16px;
+  --rails-divider-width: 2px;
+  --rails-divider-color: rgba(15, 23, 42, 0.22);
+}
+
 .chrome-overlay {
   position: fixed;
   top: 16px;
@@ -187,8 +196,9 @@ body {
 
 .custom-toolbar {
   position: fixed;
-  left: 16px;
-  top: 96px;
+  left: var(--tool-rail-left);
+  top: var(--tool-rail-top);
+  width: var(--tool-rail-width);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -233,6 +243,7 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(16, 22, 36, 0.08);
   color: #7f8ba8;
+  width: 100%;
   padding: 10px;
   border-radius: 8px;
   display: inline-flex;
@@ -306,8 +317,8 @@ body {
 
 .selection-props-rail {
   position: fixed;
-  left: 200px;
-  top: 96px;
+  left: calc(var(--tool-rail-left) + var(--tool-rail-width) + var(--rails-gap));
+  top: var(--tool-rail-top);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -316,10 +327,27 @@ body {
   background: transparent;
   z-index: 24;
   pointer-events: auto;
+  isolation: isolate;
+}
+
+/* Divider only renders when the selection rail exists, and matches its height. */
+.selection-props-rail::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(-1 * (var(--rails-gap) / 2));
+  width: var(--rails-divider-width);
+  transform: translateX(calc(-1 * var(--rails-divider-width) / 2));
+  background: var(--rails-divider-color);
+  border-radius: 999px;
+  z-index: 0;
+  pointer-events: none;
 }
 
 .selection-props-rail__button {
   position: relative;
+  z-index: 1;
   width: 44px;
   height: 44px;
   border: 1px solid rgba(255, 255, 255, 0.12);
