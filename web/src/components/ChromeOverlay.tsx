@@ -24,6 +24,7 @@ type Props = {
   onResetZoom: () => void;
   onZoomToContent: () => void;
   onUndo: () => void;
+  canUndo: boolean;
 };
 
 function StatusChip({
@@ -57,6 +58,7 @@ export function ChromeOverlay({
   onResetZoom,
   onZoomToContent,
   onUndo,
+  canUndo,
 }: Props) {
   return (
     <>
@@ -120,6 +122,7 @@ export function ChromeOverlay({
         onResetZoom={onResetZoom}
         onZoomToContent={onZoomToContent}
         onUndo={onUndo}
+        canUndo={canUndo}
       />
     </>
   );

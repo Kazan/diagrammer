@@ -52,6 +52,20 @@ export default function App() {
   const loadSkipRef = useRef(0);
   const suppressNextDirtyRef = useRef(false);
   const prevSceneSigRef = useRef<string | null>(null);
+  type SceneSnapshot = {
+    elements: ReturnType<ExcalidrawImperativeAPI["getSceneElementsIncludingDeleted"]>;
+    appState: ReturnType<ExcalidrawImperativeAPI["getAppState"]>;
+    files: ReturnType<ExcalidrawImperativeAPI["getFiles"]>;
+  };
+  const MAX_HISTORY_ENTRIES = 50;
+  const historyRef = useRef<SceneSnapshot[]>([]);
+  const historyIndexRef = useRef(-1);
+  const historySigRef = useRef<string | null>(null);
+  const historyApplyingRef = useRef(false);
+  const pendingHistoryRef = useRef<SceneSnapshot | null>(null);
+  const pendingHistorySigRef = useRef<string | null>(null);
+  const pointerInteractionRef = useRef(false);
+  const [canUndo, setCanUndo] = useState(false);
   const pendingSceneRef = useRef<
     | {
         sceneJson: string;
@@ -126,6 +140,82 @@ export default function App() {
 
   const { buildSceneEnvelope } = useSceneSerialization(api);
 
+  const cloneSnapshot = useCallback((): SceneSnapshot | null => {
+    if (!api) return null;
+    return {
+      elements: structuredClone(api.getSceneElementsIncludingDeleted()),
+      appState: structuredClone(api.getAppState()),
+      files: structuredClone(api.getFiles()),
+    };
+  }, [api]);
+
+  const commitSnapshot = useCallback((snapshot: SceneSnapshot, sig: string) => {
+    const capped = historyRef.current.slice(0, historyIndexRef.current + 1);
+    capped.push(snapshot);
+    const overflow = capped.length - MAX_HISTORY_ENTRIES;
+    if (overflow > 0) {
+      capped.splice(0, overflow);
+    }
+    historyRef.current = capped;
+    historyIndexRef.current = capped.length - 1;
+    historySigRef.current = sig;
+    setCanUndo(historyIndexRef.current > 0);
+  }, []);
+
+  const resetHistoryFromCurrentScene = useCallback(() => {
+    const snapshot = cloneSnapshot();
+    if (!snapshot) return;
+    historyRef.current = [snapshot];
+    historyIndexRef.current = 0;
+    historySigRef.current = computeSceneSignature(snapshot.elements, snapshot.appState);
+    pendingHistoryRef.current = null;
+    pendingHistorySigRef.current = null;
+    pointerInteractionRef.current = false;
+    setCanUndo(false);
+  }, [cloneSnapshot]);
+
+  useEffect(() => {
+    if (!api) return undefined;
+    resetHistoryFromCurrentScene();
+    const unsubscribe = api.onChange((elements, appState) => {
+      if (historyApplyingRef.current) return;
+      if (sceneLoadInProgressRef.current || loadSkipRef.current > 0) return;
+      const isInteracting = Boolean(
+        appState.draggingElement ||
+          appState.resizingElement ||
+          appState.multiElement ||
+          (appState as any).editingLinearElement ||
+          appState.editingElement,
+      );
+      const sig = computeSceneSignature(elements, appState);
+      if (historySigRef.current === sig) {
+        pendingHistoryRef.current = null;
+        pendingHistorySigRef.current = null;
+        return;
+      }
+      const snapshot = cloneSnapshot();
+      if (!snapshot) return;
+      if (isInteracting || pointerInteractionRef.current) {
+        pendingHistoryRef.current = snapshot;
+        pendingHistorySigRef.current = sig;
+        return;
+      }
+      const nextSnapshot = pendingHistoryRef.current ?? snapshot;
+      const nextSig = pendingHistorySigRef.current ?? sig;
+      commitSnapshot(nextSnapshot, nextSig);
+      pendingHistoryRef.current = null;
+      pendingHistorySigRef.current = null;
+    });
+    return () => unsubscribe();
+  }, [
+    api,
+    cloneSnapshot,
+    commitSnapshot,
+    resetHistoryFromCurrentScene,
+    sceneLoadInProgressRef,
+    loadSkipRef,
+  ]);
+
   const { openWithNativePicker } = useNativePickers({
     nativeBridge,
     currentFileName,
@@ -173,6 +263,7 @@ export default function App() {
       prevSceneSigRef.current = computeSceneSignature(api.getSceneElements(), api.getAppState());
       prevNonEmptySceneRef.current = elements.some((el) => !el.isDeleted);
       suppressNextDirtyRef.current = true;
+      resetHistoryFromCurrentScene();
       setIsDirty(false);
       setCurrentFileName(choice.trim());
       setStatus({ text: `Loaded ${choice.trim()} from local storage`, tone: "ok" });
@@ -182,7 +273,7 @@ export default function App() {
       setStatus({ text: "Local load failed", tone: "err" });
       return false;
     }
-  }, [api, loadLocalEntries, setCurrentFileName, setIsDirty, setStatus]);
+  }, [api, loadLocalEntries, resetHistoryFromCurrentScene, setCurrentFileName, setIsDirty, setStatus]);
 
   const performSave = useCallback(async () => {
     if (!api) return;
@@ -374,6 +465,7 @@ export default function App() {
     suppressNextDirtyRef.current = true;
     expectedSceneSigRef.current = prevSceneSigRef.current;
     loadSkipRef.current = 3;
+    resetHistoryFromCurrentScene();
     setIsDirty(false);
     setCurrentFileName(pending.displayName);
     setStatus({ text: `Loaded: ${pending.displayName}`, tone: "ok" });
@@ -384,6 +476,7 @@ export default function App() {
     loadSkipRef,
     prevNonEmptySceneRef,
     prevSceneSigRef,
+    resetHistoryFromCurrentScene,
     sceneLoadInProgressRef,
     setCurrentFileName,
     setIsDirty,
@@ -404,6 +497,26 @@ export default function App() {
     });
     return () => unsubscribe();
   }, [api]);
+
+  useEffect(() => {
+    if (!api) return undefined;
+    const unsubDown = api.onPointerDown?.(() => {
+      pointerInteractionRef.current = true;
+    });
+    const unsubUp = api.onPointerUp?.(() => {
+      pointerInteractionRef.current = false;
+      if (historyApplyingRef.current) return;
+      if (pendingHistoryRef.current && pendingHistorySigRef.current) {
+        commitSnapshot(pendingHistoryRef.current, pendingHistorySigRef.current);
+        pendingHistoryRef.current = null;
+        pendingHistorySigRef.current = null;
+      }
+    });
+    return () => {
+      unsubDown?.();
+      unsubUp?.();
+    };
+  }, [api, commitSnapshot]);
 
   // Autosave temporarily disabled to avoid spamming native save notifications
   // and interfering with explicit save/load actions. Re-enable with a debounced
@@ -456,8 +569,31 @@ export default function App() {
 
   const handleUndo = useCallback(() => {
     if (!api) return;
-    api.history?.undo?.();
-  }, [api]);
+    const targetIndex = historyIndexRef.current - 1;
+    const snapshot = historyRef.current[targetIndex];
+    if (!snapshot) {
+      setStatus({ text: "Nothing to undo", tone: "warn" });
+      return;
+    }
+    historyApplyingRef.current = true;
+    try {
+      api.updateScene({
+        elements: structuredClone(snapshot.elements),
+        appState: structuredClone(snapshot.appState),
+        files: structuredClone(snapshot.files),
+      });
+      historyIndexRef.current = targetIndex;
+      historySigRef.current = computeSceneSignature(snapshot.elements, snapshot.appState);
+      pendingHistoryRef.current = null;
+      pendingHistorySigRef.current = null;
+      pointerInteractionRef.current = false;
+      setCanUndo(historyIndexRef.current > 0);
+    } finally {
+      window.requestAnimationFrame(() => {
+        historyApplyingRef.current = false;
+      });
+    }
+  }, [api, setStatus]);
 
   const handleSelectTool = (tool: ToolType) => {
     if (tool === "image") {
@@ -610,6 +746,7 @@ export default function App() {
         onResetZoom={handleResetZoom}
         onZoomToContent={handleZoomToContent}
         onUndo={handleUndo}
+        canUndo={canUndo}
       />
     </div>
   );

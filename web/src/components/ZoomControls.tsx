@@ -8,9 +8,10 @@ export type ZoomControlsProps = {
   onResetZoom: () => void;
   onZoomToContent: () => void;
   onUndo: () => void;
+  canUndo: boolean;
 };
 
-export function ZoomControls({ zoom, onZoomIn, onZoomOut, onResetZoom, onZoomToContent, onUndo }: ZoomControlsProps) {
+export function ZoomControls({ zoom, onZoomIn, onZoomOut, onResetZoom, onZoomToContent, onUndo, canUndo }: ZoomControlsProps) {
   const percent = `${Math.round((zoom?.value ?? 1) * 100)}%`;
 
   const handleCenterClick = (event: MouseEvent<HTMLButtonElement>) => {
@@ -42,7 +43,13 @@ export function ZoomControls({ zoom, onZoomIn, onZoomOut, onResetZoom, onZoomToC
           <Plus size={16} aria-hidden="true" />
         </button>
       </div>
-      <button type="button" className="zoom-controls__btn zoom-controls__undo" onClick={onUndo} aria-label="Undo">
+      <button
+        type="button"
+        className={`zoom-controls__btn zoom-controls__undo${canUndo ? " zoom-controls__undo--active" : ""}`}
+        onClick={onUndo}
+        aria-label="Undo"
+        disabled={!canUndo}
+      >
         <Undo2 size={16} aria-hidden="true" />
       </button>
     </div>
