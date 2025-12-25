@@ -1,22 +1,41 @@
 import { Minus, Plus, Undo2 } from "lucide-react";
+import type { MouseEvent } from "react";
 
 export type ZoomControlsProps = {
   zoom: { value: number };
   onZoomIn: () => void;
   onZoomOut: () => void;
-  onCenter: () => void;
+  onResetZoom: () => void;
+  onZoomToContent: () => void;
   onUndo: () => void;
 };
 
-export function ZoomControls({ zoom, onZoomIn, onZoomOut, onCenter, onUndo }: ZoomControlsProps) {
+export function ZoomControls({ zoom, onZoomIn, onZoomOut, onResetZoom, onZoomToContent, onUndo }: ZoomControlsProps) {
   const percent = `${Math.round((zoom?.value ?? 1) * 100)}%`;
+
+  const handleCenterClick = (event: MouseEvent<HTMLButtonElement>) => {
+    if (event.detail > 1) return; // ignore the two click events that accompany a double-click
+    onResetZoom();
+  };
+
+  const handleCenterDoubleClick = (event: MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    onZoomToContent();
+  };
+
   return (
     <div className="zoom-controls" role="toolbar" aria-label="Zoom controls">
       <div className="zoom-controls__group" role="group" aria-label="Zoom in/out">
         <button type="button" className="zoom-controls__btn" onClick={onZoomOut} aria-label="Zoom out">
           <Minus size={16} aria-hidden="true" />
         </button>
-        <button type="button" className="zoom-controls__btn zoom-controls__btn--label" onClick={onCenter} aria-label="Zoom to fit">
+        <button
+          type="button"
+          className="zoom-controls__btn zoom-controls__btn--label"
+          onClick={handleCenterClick}
+          onDoubleClick={handleCenterDoubleClick}
+          aria-label="Reset zoom or zoom to scene"
+        >
           {percent}
         </button>
         <button type="button" className="zoom-controls__btn" onClick={onZoomIn} aria-label="Zoom in">

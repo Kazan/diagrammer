@@ -309,28 +309,42 @@ export default function App() {
   );
 
   const handleZoomIn = useCallback(() => {
-    if (!api) return;
-    const next = Math.min((api.getAppState().zoom?.value ?? 1) * 1.1, 4);
-    api.setAppState({ zoom: { value: next } });
+    const instance = apiRef.current;
+    if (!instance) return;
+    const next = Math.min((instance.getAppState().zoom?.value ?? 1) * 1.1, 4);
+    instance.updateScene({ appState: { ...instance.getAppState(), zoom: { value: next } } });
+    lastZoomRef.current = next;
     setZoom({ value: next });
-  }, [api]);
+  }, []);
 
   const handleZoomOut = useCallback(() => {
-    if (!api) return;
-    const next = Math.max((api.getAppState().zoom?.value ?? 1) / 1.1, 0.1);
-    api.setAppState({ zoom: { value: next } });
+    const instance = apiRef.current;
+    if (!instance) return;
+    const next = Math.max((instance.getAppState().zoom?.value ?? 1) / 1.1, 0.1);
+    instance.updateScene({ appState: { ...instance.getAppState(), zoom: { value: next } } });
+    lastZoomRef.current = next;
     setZoom({ value: next });
-  }, [api]);
+  }, []);
+
+  const handleResetZoom = useCallback(() => {
+    const instance = apiRef.current;
+    if (!instance) return;
+    const next = 1;
+    instance.updateScene({ appState: { ...instance.getAppState(), zoom: { value: next } } });
+    lastZoomRef.current = next;
+    setZoom({ value: next });
+  }, []);
 
   const handleZoomToContent = useCallback(() => {
-    if (!api) return;
-    const elements = api.getSceneElements().filter((el) => !el.isDeleted);
+    const instance = apiRef.current;
+    if (!instance) return;
+    const elements = instance.getSceneElements().filter((el) => !el.isDeleted);
     if (!elements.length) {
       setStatus({ text: "Nothing to focus", tone: "warn" });
       return;
     }
-    api.scrollToContent(elements as any, { fitToViewport: true, animate: true });
-  }, [api, setStatus]);
+    instance.scrollToContent(elements as any, { fitToViewport: true, animate: true });
+  }, [setStatus]);
 
   const handleUndo = useCallback(() => {
     if (!api) return;
@@ -485,6 +499,7 @@ export default function App() {
         zoom={zoom}
         onZoomIn={handleZoomIn}
         onZoomOut={handleZoomOut}
+        onResetZoom={handleResetZoom}
         onZoomToContent={handleZoomToContent}
         onUndo={handleUndo}
       />

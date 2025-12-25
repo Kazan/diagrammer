@@ -21,6 +21,7 @@ type Props = {
   zoom: { value: number };
   onZoomIn: () => void;
   onZoomOut: () => void;
+  onResetZoom: () => void;
   onZoomToContent: () => void;
   onUndo: () => void;
 };
@@ -53,6 +54,7 @@ export function ChromeOverlay({
   zoom,
   onZoomIn,
   onZoomOut,
+  onResetZoom,
   onZoomToContent,
   onUndo,
 }: Props) {
@@ -115,7 +117,8 @@ export function ChromeOverlay({
         zoom={zoom}
         onZoomIn={onZoomIn}
         onZoomOut={onZoomOut}
-        onCenter={onZoomToContent}
+        onResetZoom={onResetZoom}
+        onZoomToContent={onZoomToContent}
         onUndo={onUndo}
       />
     </>
