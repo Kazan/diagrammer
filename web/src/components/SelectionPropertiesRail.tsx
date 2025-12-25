@@ -6,6 +6,7 @@ import { Palette, PaintBucket, SlidersHorizontal, Copy, Trash2 } from "lucide-re
 import type { SelectionInfo } from "./SelectionFlyout";
 import ColorPicker from "./ColorPicker";
 import type { PaletteId } from "./ColorPicker";
+import { SelectionStyleFlyout } from "./SelectionStyleFlyout";
 
 export type PropertyKind = "stroke" | "background" | "style";
 
@@ -66,7 +67,7 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
   const [openKind, setOpenKind] = useState<PropertyKind | null>(null);
 
   const hasFillCapable = elements.some((el) => !LINE_LIKE_TYPES.has(el.type) && el.type !== "text");
-  const hasStyleControls = elements.some((el) => el.type !== "text");
+  const hasStyleControls = elements.some((el) => el.type !== "text" && el.type !== "image");
 
   const items: PropertyButton[] = [];
 
@@ -130,7 +131,7 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
   };
 
   // Close flyouts that are not applicable (e.g., when images are selected).
-  if (hasImage && (openKind === "stroke" || openKind === "background") && openKind !== null) {
+  if (hasImage && (openKind === "stroke" || openKind === "background" || openKind === "style") && openKind !== null) {
     setOpenKind(null);
   }
 
@@ -199,6 +200,12 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
       {openKind === "background" ? (
         <div className="selection-props-rail__flyout" role="dialog" aria-label="Fill color" style={{ top: flyoutTop }}>
           <ColorPicker value={backgroundColor} onChange={handleBackgroundChange} title="Fill color" initialShadeIndex={5} paletteId={"default" satisfies PaletteId} />
+        </div>
+      ) : null}
+
+      {openKind === "style" ? (
+        <div className="selection-props-rail__flyout" role="dialog" aria-label="Style" style={{ top: flyoutTop }}>
+          <SelectionStyleFlyout elements={elements} onUpdate={applyToSelection} />
         </div>
       ) : null}
     </div>

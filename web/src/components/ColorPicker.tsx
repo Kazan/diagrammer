@@ -388,7 +388,7 @@ export default function ColorPicker({
       };
 
   return (
-    <div className="color-picker" role="group" aria-label={`${title} picker`}>
+    <div className="color-picker props-flyout" role="group" aria-label={`${title} picker`}>
       <div className="color-picker__group">
         <div className="color-picker__title">{title}</div>
         <div className="color-picker__swatches">
