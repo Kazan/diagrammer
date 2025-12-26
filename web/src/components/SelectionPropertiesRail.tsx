@@ -343,11 +343,13 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
     label,
     onClick,
     testId,
+    iconStyle,
   }: {
-    Icon: React.ComponentType<{ size?: number | string }>;
+    Icon: React.ComponentType<{ size?: number | string; style?: React.CSSProperties }>;
     label: string;
     onClick: () => void;
     testId: string;
+    iconStyle?: React.CSSProperties;
   }) => {
     const pointerActivatedRef = useRef(false);
 
@@ -381,7 +383,8 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
         }}
         aria-label={label}
       >
-        <Icon size={18} aria-hidden="true" />
+        <Icon size={18} aria-hidden="true" style={iconStyle}
+ />
       </button>
     );
   };
@@ -462,21 +465,39 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
               </div>
             </div>
 
-            {isMultiSelect ? (
-              <div className="arrange-section">
-                <div className="arrange-section__title">Align</div>
-                <div className="arrange-grid arrange-grid--row" role="group" aria-label="Horizontal align">
-                  <ArrangeTile Icon={AlignLeft} label="Align left" testId="arrange-align-left" onClick={() => alignSelection("left")} />
-                  <ArrangeTile Icon={AlignCenterHorizontal} label="Align center" testId="arrange-align-center-x" onClick={() => alignSelection("centerX")} />
-                  <ArrangeTile Icon={AlignRight} label="Align right" testId="arrange-align-right" onClick={() => alignSelection("right")} />
+              {isMultiSelect ? (
+                <div className="arrange-section">
+                  <div className="arrange-section__title">Align</div>
+                  <div className="arrange-grid arrange-grid--row" role="group" aria-label="Horizontal align">
+                    <ArrangeTile Icon={AlignStartVertical} label="Align left" testId="arrange-align-left" onClick={() => alignSelection("left")} />
+                    <ArrangeTile Icon={AlignCenterVertical} label="Align center (Y axis)" testId="arrange-align-center-x" onClick={() => alignSelection("centerX")} />
+                    <ArrangeTile Icon={AlignEndVertical} label="Align right" testId="arrange-align-right" onClick={() => alignSelection("right")} />
+                  </div>
+                  <div className="arrange-grid arrange-grid--row" role="group" aria-label="Vertical align">
+                    <ArrangeTile
+                      Icon={AlignStartVertical}
+                      label="Align top"
+                      testId="arrange-align-top"
+                      onClick={() => alignSelection("top")}
+                      iconStyle={{ transform: "rotate(90deg)" }}
+                    />
+                    <ArrangeTile
+                      Icon={AlignCenterVertical}
+                      label="Align middle (X axis)"
+                      testId="arrange-align-center-y"
+                      onClick={() => alignSelection("centerY")}
+                      iconStyle={{ transform: "rotate(90deg)" }}
+                    />
+                    <ArrangeTile
+                      Icon={AlignEndVertical}
+                      label="Align bottom"
+                      testId="arrange-align-bottom"
+                      onClick={() => alignSelection("bottom")}
+                      iconStyle={{ transform: "rotate(90deg)" }}
+                    />
+                  </div>
                 </div>
-                <div className="arrange-grid arrange-grid--row" role="group" aria-label="Vertical align">
-                  <ArrangeTile Icon={AlignStartVertical} label="Align top" testId="arrange-align-top" onClick={() => alignSelection("top")} />
-                  <ArrangeTile Icon={AlignCenterVertical} label="Align middle" testId="arrange-align-center-y" onClick={() => alignSelection("centerY")} />
-                  <ArrangeTile Icon={AlignEndVertical} label="Align bottom" testId="arrange-align-bottom" onClick={() => alignSelection("bottom")} />
-                </div>
-              </div>
-            ) : null}
+              ) : null}
 
             {isMultiSelect ? (
               <div className="arrange-section">
