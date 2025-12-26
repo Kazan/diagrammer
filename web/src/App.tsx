@@ -571,6 +571,15 @@ export default function App() {
     if (!api) return;
     api.setActiveTool({ type: "selection" });
 
+    // Default new linear elements (lines/arrows) to sharp edges instead of rounded.
+    const appState = api.getAppState();
+    if (appState.currentItemRoundness !== "sharp") {
+      api.updateScene({
+        appState: { ...appState, currentItemRoundness: "sharp" },
+        captureUpdate: CaptureUpdateAction.NEVER,
+      });
+    }
+
     const unsubscribe = api.onChange((_elements, appState) => {
       const nextZoom = appState?.zoom?.value ?? 1;
       if (Math.abs(nextZoom - lastZoomRef.current) > 0.0001) {
