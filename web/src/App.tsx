@@ -1,21 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ChangeEvent } from "react";
 import {
   CaptureUpdateAction,
   Excalidraw,
   MainMenu,
-  MIME_TYPES,
   THEME,
   WelcomeScreen,
-  convertToExcalidrawElements,
 } from "@excalidraw/excalidraw";
-import type {
-  BinaryFileData,
-  DataURL,
-  ExcalidrawImperativeAPI,
-  NormalizedZoomValue,
-} from "@excalidraw/excalidraw/types";
-import type { ExcalidrawElement, FileId } from "@excalidraw/excalidraw/element/types";
+import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import "@excalidraw/excalidraw/index.css";
 import { ChromeOverlay } from "./components/ChromeOverlay";
 import { type ToolType } from "./components/CustomToolbar";
@@ -30,7 +22,11 @@ import { useSceneChangeSubscription } from "./hooks/useSceneChangeSubscription";
 import { useSceneSerialization } from "./hooks/useSceneSerialization";
 import { useExportActions } from "./hooks/useExportActions";
 import { useSceneHydration } from "./hooks/useSceneHydration";
+import { useSceneHistory } from "./hooks/useSceneHistory";
+import { useZoomControls } from "./hooks/useZoomControls";
+import { useImageInsertion } from "./hooks/useImageInsertion";
 import type { NativeFileHandle } from "./native-bridge";
+import { loadLocalSceneEntries, persistLocalSceneEntries, type LocalSceneEntry } from "./local-scenes";
 
 import {
   applyRestoredScene,
@@ -45,7 +41,6 @@ export default function App() {
   const LOCAL_FS_KEY = "diagrammer.localFs";
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null);
   const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null);
-  const imageInputRef = useRef<HTMLInputElement | null>(null);
   const { nativeBridge, nativePresent } = useNativeBridge({});
   const initialStoredName = useMemo(
     () => stripExtension(window.NativeBridge?.getCurrentFileName?.() ?? ""),
@@ -58,8 +53,6 @@ export default function App() {
   const [currentFileName, setCurrentFileName] = useState(initialStoredName || "Unsaved");
   const [isDirty, setIsDirty] = useState(false);
   const [selectionInfo, setSelectionInfo] = useState<SelectionInfo | null>(null);
-  const [zoom, setZoom] = useState<{ value: number }>({ value: 1 });
-  const lastZoomRef = useRef(1);
   const HIDE_DEFAULT_PROPS_FLYOUT = false;
   const openFileResolveRef = useRef<((handles: NativeFileHandle[]) => void) | null>(null);
   const openFileRejectRef = useRef<((reason: any) => void) | null>(null);
@@ -70,20 +63,6 @@ export default function App() {
   const loadSkipRef = useRef(0);
   const suppressNextDirtyRef = useRef(false);
   const prevSceneSigRef = useRef<string | null>(null);
-  type SceneSnapshot = {
-    elements: ReturnType<ExcalidrawImperativeAPI["getSceneElementsIncludingDeleted"]>;
-    appState: ReturnType<ExcalidrawImperativeAPI["getAppState"]>;
-    files: ReturnType<ExcalidrawImperativeAPI["getFiles"]>;
-  };
-  const MAX_HISTORY_ENTRIES = 50;
-  const historyRef = useRef<SceneSnapshot[]>([]);
-  const historyIndexRef = useRef(-1);
-  const historySigRef = useRef<string | null>(null);
-  const historyApplyingRef = useRef(false);
-  const pendingHistoryRef = useRef<SceneSnapshot | null>(null);
-  const pendingHistorySigRef = useRef<string | null>(null);
-  const pointerInteractionRef = useRef(false);
-  const [canUndo, setCanUndo] = useState(false);
   const pendingSceneRef = useRef<
     | {
         sceneJson: string;
@@ -95,29 +74,11 @@ export default function App() {
     | null
   >(null);
 
-  type LocalEntry = { name: string; scene: string; updated: number };
-
-  const loadLocalEntries = useCallback((): LocalEntry[] => {
-    try {
-      const raw = window.localStorage.getItem(LOCAL_FS_KEY);
-      if (!raw) return [];
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) return [];
-      return parsed.filter((e) => typeof e?.name === "string" && typeof e?.scene === "string" && typeof e?.updated === "number");
-    } catch (_err) {
-      return [];
-    }
-  }, [LOCAL_FS_KEY]);
+  const loadLocalEntries = useCallback((): LocalSceneEntry[] => loadLocalSceneEntries(LOCAL_FS_KEY), [LOCAL_FS_KEY]);
 
   const persistLocalEntries = useCallback(
-    (entries: LocalEntry[]) => {
-      try {
-        window.localStorage.setItem(LOCAL_FS_KEY, JSON.stringify(entries));
-      } catch (_err) {
-        // ignore
-      }
-    },
-    [LOCAL_FS_KEY]
+    (entries: LocalSceneEntry[]) => persistLocalSceneEntries(LOCAL_FS_KEY, entries),
+    [LOCAL_FS_KEY],
   );
 
   const {
@@ -143,6 +104,26 @@ export default function App() {
     prevSceneSigRef,
     prevNonEmptySceneRef,
     hydratedSceneRef,
+  });
+
+  const { canUndo, handleUndo, resetHistoryFromCurrentScene } = useSceneHistory({
+    api,
+    sceneLoadInProgressRef,
+    loadSkipRef,
+    setStatus,
+  });
+
+  const { zoom, handleZoomIn, handleZoomOut, handleResetZoom, handleZoomToContent } = useZoomControls({
+    api,
+    apiRef,
+    setStatus,
+  });
+
+  const { imageInputRef, handleImageInputChange, startImageInsertion } = useImageInsertion({
+    api,
+    apiRef,
+    setActiveTool,
+    setStatus,
   });
 
   useEffect(() => {
@@ -185,92 +166,6 @@ export default function App() {
     }),
     [],
   );
-
-  const toNormalizedZoomValue = useCallback((value: number): NormalizedZoomValue => {
-    return value as NormalizedZoomValue;
-  }, []);
-
-  const toImageMimeType = useCallback((value: string): BinaryFileData["mimeType"] => {
-    if (value && value.startsWith("image/")) {
-      return value as BinaryFileData["mimeType"];
-    }
-    return MIME_TYPES.png;
-  }, []);
-
-  const cloneSnapshot = useCallback((): SceneSnapshot | null => {
-    if (!api) return null;
-    return {
-      elements: structuredClone(api.getSceneElementsIncludingDeleted()),
-      appState: structuredClone(api.getAppState()),
-      files: structuredClone(api.getFiles()),
-    };
-  }, [api]);
-
-  const commitSnapshot = useCallback((snapshot: SceneSnapshot, sig: string) => {
-    const capped = historyRef.current.slice(0, historyIndexRef.current + 1);
-    capped.push(snapshot);
-    const overflow = capped.length - MAX_HISTORY_ENTRIES;
-    if (overflow > 0) {
-      capped.splice(0, overflow);
-    }
-    historyRef.current = capped;
-    historyIndexRef.current = capped.length - 1;
-    historySigRef.current = sig;
-    setCanUndo(historyIndexRef.current > 0);
-  }, []);
-
-  const resetHistoryFromCurrentScene = useCallback(() => {
-    const snapshot = cloneSnapshot();
-    if (!snapshot) return;
-    historyRef.current = [snapshot];
-    historyIndexRef.current = 0;
-    historySigRef.current = computeSceneSignature(snapshot.elements, snapshot.appState);
-    pendingHistoryRef.current = null;
-    pendingHistorySigRef.current = null;
-    pointerInteractionRef.current = false;
-    setCanUndo(false);
-  }, [cloneSnapshot]);
-
-  useEffect(() => {
-    if (!api) return undefined;
-    resetHistoryFromCurrentScene();
-    const unsubscribe = api.onChange((elements, appState) => {
-      if (historyApplyingRef.current) return;
-      if (sceneLoadInProgressRef.current || loadSkipRef.current > 0) return;
-      const isInteracting = Boolean(
-        appState.selectedElementsAreBeingDragged ||
-          appState.multiElement ||
-          appState.editingLinearElement ||
-          appState.editingTextElement,
-      );
-      const sig = computeSceneSignature(elements, appState);
-      if (historySigRef.current === sig) {
-        pendingHistoryRef.current = null;
-        pendingHistorySigRef.current = null;
-        return;
-      }
-      const snapshot = cloneSnapshot();
-      if (!snapshot) return;
-      if (isInteracting || pointerInteractionRef.current) {
-        pendingHistoryRef.current = snapshot;
-        pendingHistorySigRef.current = sig;
-        return;
-      }
-      const nextSnapshot = pendingHistoryRef.current ?? snapshot;
-      const nextSig = pendingHistorySigRef.current ?? sig;
-      commitSnapshot(nextSnapshot, nextSig);
-      pendingHistoryRef.current = null;
-      pendingHistorySigRef.current = null;
-    });
-    return () => unsubscribe();
-  }, [
-    api,
-    cloneSnapshot,
-    commitSnapshot,
-    resetHistoryFromCurrentScene,
-    sceneLoadInProgressRef,
-    loadSkipRef,
-  ]);
 
   const { openWithNativePicker } = useNativePickers({
     nativeBridge,
@@ -579,36 +474,7 @@ export default function App() {
         captureUpdate: CaptureUpdateAction.NEVER,
       });
     }
-
-    const unsubscribe = api.onChange((_elements, appState) => {
-      const nextZoom = appState?.zoom?.value ?? 1;
-      if (Math.abs(nextZoom - lastZoomRef.current) > 0.0001) {
-        lastZoomRef.current = nextZoom;
-        setZoom({ value: nextZoom });
-      }
-    });
-    return () => unsubscribe();
   }, [api]);
-
-  useEffect(() => {
-    if (!api) return undefined;
-    const unsubDown = api.onPointerDown?.(() => {
-      pointerInteractionRef.current = true;
-    });
-    const unsubUp = api.onPointerUp?.(() => {
-      pointerInteractionRef.current = false;
-      if (historyApplyingRef.current) return;
-      if (pendingHistoryRef.current && pendingHistorySigRef.current) {
-        commitSnapshot(pendingHistoryRef.current, pendingHistorySigRef.current);
-        pendingHistoryRef.current = null;
-        pendingHistorySigRef.current = null;
-      }
-    });
-    return () => {
-      unsubDown?.();
-      unsubUp?.();
-    };
-  }, [api, commitSnapshot]);
 
   // Autosave temporarily disabled to avoid spamming native save notifications
   // and interfering with explicit save/load actions. Re-enable with a debounced
@@ -621,198 +487,15 @@ export default function App() {
     setExporting,
   );
 
-  const handleZoomIn = useCallback(() => {
-    const instance = apiRef.current;
-    if (!instance) return;
-    const next = Math.min((instance.getAppState().zoom?.value ?? 1) * 1.1, 4);
-    instance.updateScene({
-      appState: { ...instance.getAppState(), zoom: { value: toNormalizedZoomValue(next) } },
-      captureUpdate: CaptureUpdateAction.NEVER,
-    });
-    lastZoomRef.current = next;
-    setZoom({ value: next });
-  }, [toNormalizedZoomValue]);
-
-  const handleZoomOut = useCallback(() => {
-    const instance = apiRef.current;
-    if (!instance) return;
-    const next = Math.max((instance.getAppState().zoom?.value ?? 1) / 1.1, 0.1);
-    instance.updateScene({
-      appState: { ...instance.getAppState(), zoom: { value: toNormalizedZoomValue(next) } },
-      captureUpdate: CaptureUpdateAction.NEVER,
-    });
-    lastZoomRef.current = next;
-    setZoom({ value: next });
-  }, [toNormalizedZoomValue]);
-
-  const handleResetZoom = useCallback(() => {
-    const instance = apiRef.current;
-    if (!instance) return;
-    const next = 1;
-    instance.updateScene({
-      appState: { ...instance.getAppState(), zoom: { value: toNormalizedZoomValue(next) } },
-      captureUpdate: CaptureUpdateAction.NEVER,
-    });
-    lastZoomRef.current = next;
-    setZoom({ value: next });
-  }, [toNormalizedZoomValue]);
-
-  const handleZoomToContent = useCallback(() => {
-    const instance = apiRef.current;
-    if (!instance) return;
-    const elements = instance.getSceneElements();
-    if (!elements.length) {
-      setStatus({ text: "Nothing to focus", tone: "warn" });
-      return;
-    }
-    instance.scrollToContent(elements, { fitToViewport: true, animate: true });
-  }, [setStatus]);
-
-  const handleUndo = useCallback(() => {
-    if (!api) return;
-    const targetIndex = historyIndexRef.current - 1;
-    const snapshot = historyRef.current[targetIndex];
-    if (!snapshot) {
-      setStatus({ text: "Nothing to undo", tone: "warn" });
-      return;
-    }
-    historyApplyingRef.current = true;
-    try {
-      const files = structuredClone(snapshot.files);
-      api.updateScene({
-        elements: structuredClone(snapshot.elements),
-        appState: structuredClone(snapshot.appState),
-        captureUpdate: CaptureUpdateAction.NEVER,
-      });
-      api.addFiles(Object.values(files));
-      historyIndexRef.current = targetIndex;
-      historySigRef.current = computeSceneSignature(snapshot.elements, snapshot.appState);
-      pendingHistoryRef.current = null;
-      pendingHistorySigRef.current = null;
-      pointerInteractionRef.current = false;
-      setCanUndo(historyIndexRef.current > 0);
-    } finally {
-      window.requestAnimationFrame(() => {
-        historyApplyingRef.current = false;
-      });
-    }
-  }, [api, setStatus]);
-
   const handleSelectTool = (tool: ToolType) => {
     if (tool === "image") {
       setActiveTool("image");
-      if (imageInputRef.current) {
-        imageInputRef.current.value = "";
-        imageInputRef.current.click();
-      }
+      startImageInsertion();
       return;
     }
     setActiveTool(tool);
     apiRef.current?.setActiveTool({ type: tool });
   };
-
-  const handleImageFile = useCallback(
-    async (file: File) => {
-      if (!api) return;
-      const toDataUrl = (input: File) =>
-        new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(String(reader.result));
-          reader.onerror = () => reject(new Error("Unable to read image"));
-          reader.readAsDataURL(input);
-        });
-
-      const loadImageDimensions = (dataUrl: string) =>
-        new Promise<{ width: number; height: number }>((resolve, reject) => {
-          const img = new Image();
-          img.onload = () => resolve({ width: img.naturalWidth || img.width, height: img.naturalHeight || img.height });
-          img.onerror = () => reject(new Error("Unable to load image"));
-          img.src = dataUrl;
-        });
-
-      try {
-        const dataURL = (await toDataUrl(file)) as DataURL;
-        const { width, height } = await loadImageDimensions(dataURL);
-        const fileId = (`image-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`) as FileId;
-        const now = Date.now();
-        api.addFiles([
-          {
-            id: fileId,
-            dataURL,
-            mimeType: toImageMimeType(file.type),
-            created: now,
-            lastRetrieved: now,
-          },
-        ]);
-
-        if (import.meta.env.DEV) {
-          requestAnimationFrame(() => {
-            const files = api.getFiles();
-            if (!files[fileId]) {
-              console.warn("[ImageInsert] addFiles() missing fileId", { fileId, knownFileIds: Object.keys(files) });
-            }
-            const hasElement = api
-              .getSceneElementsIncludingDeleted()
-              .some(
-                (el) =>
-                  el.type === "image" &&
-                  "fileId" in el &&
-                  typeof el.fileId === "string" &&
-                  el.fileId === fileId,
-              );
-            if (!hasElement) {
-              console.warn("[ImageInsert] Missing image element with fileId", { fileId });
-            }
-          });
-        }
-
-        const appState = api.getAppState();
-        const zoom = appState.zoom?.value ?? 1;
-        const offsetLeft = appState.offsetLeft ?? 0;
-        const offsetTop = appState.offsetTop ?? 0;
-        const scrollX = appState.scrollX ?? 0;
-        const scrollY = appState.scrollY ?? 0;
-        const centerX = (window.innerWidth / 2 - offsetLeft) / zoom - scrollX;
-        const centerY = (window.innerHeight / 2 - offsetTop) / zoom - scrollY;
-        const [imageElement] = convertToExcalidrawElements([
-          {
-            type: "image",
-            fileId,
-            x: centerX - width / 2,
-            y: centerY - height / 2,
-            width,
-            height,
-            angle: 0,
-          },
-        ]);
-
-        api.updateScene({
-          elements: [...api.getSceneElements(), imageElement as ExcalidrawElement],
-          appState: {
-            selectedElementIds: { [imageElement.id]: true },
-            selectedGroupIds: {},
-          },
-          captureUpdate: CaptureUpdateAction.IMMEDIATELY,
-        });
-
-        setActiveTool("selection");
-        apiRef.current?.setActiveTool({ type: "selection" });
-        setStatus({ text: `Inserted image${file.name ? `: ${file.name}` : ""}`, tone: "ok" });
-      } catch (err) {
-        setStatus({ text: `Image insert failed: ${String((err as Error)?.message ?? err)}`, tone: "err" });
-      }
-    },
-    [api, setStatus, toImageMimeType]
-  );
-
-  const handleImageInputChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0];
-      if (!file) return;
-      void handleImageFile(file);
-    },
-    [handleImageFile]
-  );
 
   return (
     <div className={`app-shell${HIDE_DEFAULT_PROPS_FLYOUT ? " hide-default-props" : ""}`}>
