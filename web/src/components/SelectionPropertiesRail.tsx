@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import { CaptureUpdateAction, convertToExcalidrawElements } from "@excalidraw/excalidraw";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
-import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
+import type { ExcalidrawElement, ExcalidrawTextElement } from "@excalidraw/excalidraw/element/types";
 import { moveAllLeft, moveAllRight, moveOneLeft, moveOneRight } from "../excalidraw-zindex";
 import {
   AlignCenterVertical,
@@ -20,6 +20,7 @@ import {
   SlidersHorizontal,
   Trash2,
   Type as TypeIcon,
+  ALargeSmall,
 } from "lucide-react";
 import type { SelectionInfo } from "./SelectionFlyout";
 import ColorPicker from "./ColorPicker";
@@ -30,7 +31,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Toolbar, ToolbarButton, ToolbarSeparator, ToolbarGroup, ToolbarSwatch } from "@/components/ui/toolbar";
 import { cn } from "@/lib/utils";
 
-export type PropertyKind = "stroke" | "background" | "style" | "text" | "arrange";
+export type PropertyKind = "stroke" | "background" | "style" | "text" | "textColor" | "arrange";
 
 type Props = {
   selection: SelectionInfo | null;
@@ -78,11 +79,69 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
     [elements]
   );
 
+  // Determine selection composition for color control visibility
+  const selectionComposition = useMemo(() => {
+    const hasDirectText = elements.some((el) => el.type === "text");
+    const hasContainersWithText = elements.some(
+      (el) => el.type !== "text" && el.boundElements?.some((b) => b.type === "text")
+    );
+    const hasNonTextElements = elements.some((el) => el.type !== "text");
+    // "textOnly" means all selected elements are text (no shapes)
+    const isTextOnly = hasDirectText && !hasNonTextElements;
+    return { hasDirectText, hasContainersWithText, hasNonTextElements, isTextOnly };
+  }, [elements]);
+
+  // Get bound text element IDs for containers
+  const boundTextIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const el of elements) {
+      if (el.boundElements) {
+        for (const bound of el.boundElements) {
+          if (bound.type === "text") {
+            ids.add(bound.id);
+          }
+        }
+      }
+    }
+    return ids;
+  }, [elements]);
+
+  // Get all text elements (direct or bound) for color reading
+  const allTextElements = useMemo(() => {
+    if (!api) return [];
+    const sceneElements = api.getSceneElements();
+    const textEls: ExcalidrawTextElement[] = [];
+
+    for (const el of elements) {
+      if (el.type === "text") {
+        textEls.push(el as ExcalidrawTextElement);
+      }
+    }
+
+    // Also get bound text elements
+    for (const id of boundTextIds) {
+      const textEl = sceneElements.find((el) => el.id === id);
+      if (textEl?.type === "text") {
+        textEls.push(textEl as ExcalidrawTextElement);
+      }
+    }
+
+    return textEls;
+  }, [api, elements, boundTextIds]);
+
   const strokeColor = useMemo(
     () =>
       getCommonValue<string | null>(elements, (el) => el.strokeColor ?? null) ?? DEFAULT_STROKE,
     [elements],
   );
+
+  // Text color: get from text elements (direct or bound)
+  const textColor = useMemo(() => {
+    if (!allTextElements.length) return DEFAULT_STROKE;
+    const colors = allTextElements.map((el) => el.strokeColor ?? DEFAULT_STROKE);
+    const first = colors[0];
+    return colors.every((c) => c === first) ? first : DEFAULT_STROKE;
+  }, [allTextElements]);
 
   const backgroundColor = useMemo(
     () =>
@@ -118,7 +177,7 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
   // Close flyouts that are not applicable (e.g., when images are selected).
   const hasImage = elements.some((el) => el.type === "image");
   useEffect(() => {
-    if (hasImage && (openKind === "stroke" || openKind === "background" || openKind === "style" || openKind === "text")) {
+    if (hasImage && (openKind === "stroke" || openKind === "background" || openKind === "style" || openKind === "text" || openKind === "textColor")) {
       setOpenKind(null);
     }
   }, [hasImage, openKind]);
@@ -139,6 +198,15 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
   const hasTextControls = elements.some((el) =>
     el.type === "text" || el.boundElements?.some((b) => b.type === "text")
   );
+
+  // Stroke color button visibility:
+  // - Hide when selection is text-only (use text color button instead)
+  // - Show for containers (even those with bound text)
+  const showStrokeColorButton = !selectionComposition.isTextOnly;
+
+  // Text color button visibility:
+  // - Show when there's any text (direct or bound)
+  const showTextColorButton = selectionComposition.hasDirectText || selectionComposition.hasContainersWithText;
 
   const applyToSelection = (mutate: (el: ExcalidrawElement) => ExcalidrawElement) => {
     if (!api || !elements.length) return;
@@ -334,6 +402,39 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
     applyToSelection((el) => ({ ...el, backgroundColor: color }));
   };
 
+  // Text color handler: only affects text elements (direct or bound)
+  const handleTextColorChange = (color: string) => {
+    if (!api) return;
+    const sceneElements = api.getSceneElements();
+
+    // Collect all text element IDs to update:
+    // 1. Directly selected text elements
+    // 2. Bound text elements of selected containers
+    const textIdsToUpdate = new Set<string>();
+
+    for (const el of elements) {
+      if (el.type === "text") {
+        textIdsToUpdate.add(el.id);
+      }
+      if (el.boundElements) {
+        for (const bound of el.boundElements) {
+          if (bound.type === "text") {
+            textIdsToUpdate.add(bound.id);
+          }
+        }
+      }
+    }
+
+    const nextElements = sceneElements.map((el) => {
+      if (textIdsToUpdate.has(el.id)) {
+        return { ...el, strokeColor: color };
+      }
+      return el;
+    });
+
+    api.updateScene({ elements: nextElements });
+  };
+
   const ArrangeTile = ({
     Icon,
     label,
@@ -401,7 +502,8 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
     >
       {/* Property buttons with popovers */}
       <ToolbarGroup>
-        {!hasImage && (
+        {/* Stroke color - hidden for text-only selection */}
+        {showStrokeColorButton && !hasImage && (
           <Popover open={openKind === "stroke"} onOpenChange={(open) => setOpenKind(open ? "stroke" : null)}>
             <PopoverTrigger asChild>
               <ToolbarButton aria-label="Stroke color" className="relative">
@@ -487,6 +589,32 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
                 allSceneElements={api?.getSceneElements() ?? []}
                 api={api}
                 selectedIds={selectedIds}
+              />
+            </PopoverContent>
+          </Popover>
+        )}
+
+        {/* Text color - shown when any text (direct or bound) is in selection */}
+        {showTextColorButton && !hasImage && (
+          <Popover open={openKind === "textColor"} onOpenChange={(open) => setOpenKind(open ? "textColor" : null)}>
+            <PopoverTrigger asChild>
+              <ToolbarButton aria-label="Text color" className="relative">
+                <ToolbarSwatch color={textColor} />
+                <ALargeSmall size={18} aria-hidden="true" />
+              </ToolbarButton>
+            </PopoverTrigger>
+            <PopoverContent
+              side="right"
+              align="start"
+              sideOffset={12}
+              className="w-auto min-w-[280px] p-3 rounded-2xl shadow-[0_24px_48px_rgba(0,0,0,0.18)] border-slate-900/8"
+            >
+              <ColorPicker
+                value={textColor}
+                onChange={handleTextColorChange}
+                title="Text color"
+                initialShadeIndex={3}
+                paletteId={"default" satisfies PaletteId}
               />
             </PopoverContent>
           </Popover>
