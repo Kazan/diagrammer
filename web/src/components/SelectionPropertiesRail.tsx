@@ -27,8 +27,15 @@ import ColorPicker from "./ColorPicker";
 import type { PaletteId } from "./ColorPicker";
 import { SelectionStyleFlyout } from "./SelectionStyleFlyout";
 import { TextStyleFlyout } from "./TextStyleFlyout";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Toolbar, ToolbarButton, ToolbarSeparator, ToolbarGroup, ToolbarSwatch } from "@/components/ui/toolbar";
+import {
+  ToolRail,
+  RailSection,
+  RailSeparator,
+  RailButton,
+  RailPopoverButton,
+  RailSwatch,
+  railButtonVariants,
+} from "@/components/ui/tool-rail";
 import { cn } from "@/lib/utils";
 
 export type PropertyKind = "stroke" | "background" | "style" | "text" | "textColor" | "arrange";
@@ -86,7 +93,6 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
       (el) => el.type !== "text" && el.boundElements?.some((b) => b.type === "text")
     );
     const hasNonTextElements = elements.some((el) => el.type !== "text");
-    // "textOnly" means all selected elements are text (no shapes)
     const isTextOnly = hasDirectText && !hasNonTextElements;
     return { hasDirectText, hasContainersWithText, hasNonTextElements, isTextOnly };
   }, [elements]);
@@ -118,7 +124,6 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
       }
     }
 
-    // Also get bound text elements
     for (const id of boundTextIds) {
       const textEl = sceneElements.find((el) => el.id === id);
       if (textEl?.type === "text") {
@@ -130,12 +135,10 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
   }, [api, elements, boundTextIds]);
 
   const strokeColor = useMemo(
-    () =>
-      getCommonValue<string | null>(elements, (el) => el.strokeColor ?? null) ?? DEFAULT_STROKE,
+    () => getCommonValue<string | null>(elements, (el) => el.strokeColor ?? null) ?? DEFAULT_STROKE,
     [elements],
   );
 
-  // Text color: get from text elements (direct or bound)
   const textColor = useMemo(() => {
     if (!allTextElements.length) return DEFAULT_STROKE;
     const colors = allTextElements.map((el) => el.strokeColor ?? DEFAULT_STROKE);
@@ -144,11 +147,7 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
   }, [allTextElements]);
 
   const backgroundColor = useMemo(
-    () =>
-      getCommonValue<string | null>(
-        elements,
-        (el) => el.backgroundColor ?? null,
-      ) ?? DEFAULT_FILL,
+    () => getCommonValue<string | null>(elements, (el) => el.backgroundColor ?? null) ?? DEFAULT_FILL,
     [elements],
   );
 
@@ -164,17 +163,10 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
       maxX = Math.max(maxX, el.x + el.width);
       maxY = Math.max(maxY, el.y + el.height);
     }
-    return {
-      minX,
-      minY,
-      maxX,
-      maxY,
-      width: maxX - minX,
-      height: maxY - minY,
-    };
+    return { minX, minY, maxX, maxY, width: maxX - minX, height: maxY - minY };
   }, [elements]);
 
-  // Close flyouts that are not applicable (e.g., when images are selected).
+  // Close flyouts that are not applicable
   const hasImage = elements.some((el) => el.type === "image");
   useEffect(() => {
     if (hasImage && (openKind === "stroke" || openKind === "background" || openKind === "style" || openKind === "text" || openKind === "textColor")) {
@@ -194,20 +186,13 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
   const isMultiSelect = elements.length > 1;
   const hasFillCapable = elements.some((el) => (!LINE_LIKE_TYPES.has(el.type) && el.type !== "text") || isClosedPolyline(el));
   const hasStyleControls = elements.some((el) => el.type !== "text" && el.type !== "image");
-  // Text controls: show for text elements or shapes that can contain text (have bound text)
   const hasTextControls = elements.some((el) =>
     el.type === "text" || el.boundElements?.some((b) => b.type === "text")
   );
-
-  // Stroke color button visibility:
-  // - Hide when selection is text-only (use text color button instead)
-  // - Show for containers (even those with bound text)
   const showStrokeColorButton = !selectionComposition.isTextOnly;
-
-  // Text color button visibility:
-  // - Show when there's any text (direct or bound)
   const showTextColorButton = selectionComposition.hasDirectText || selectionComposition.hasContainersWithText;
 
+  // Handlers
   const applyToSelection = (mutate: (el: ExcalidrawElement) => ExcalidrawElement) => {
     if (!api || !elements.length) return;
     const nextElements = api.getSceneElements().map((el) => (selectedIds.has(el.id) ? mutate({ ...el }) : el));
@@ -215,52 +200,21 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
   };
 
   const moveSelection = (action: LayerAction) => {
-    console.log("z-index action request", {
-      action,
-      hasApi: Boolean(api),
-      selectionCount: selectedIds.size,
-    });
-
-    if (!api) {
-      return;
-    }
-
-    if (!selectedIds.size) {
-      console.warn("z-index action skipped: no selection", { action });
-      return;
-    }
-
+    if (!api || !selectedIds.size) return;
     const scene = api.getSceneElements();
     const appState = api.getAppState();
-    console.log("z-index action start", { action, selectedCount: selectedIds.size });
 
     const reordered = (() => {
       switch (action) {
-        case "forward":
-          return moveOneRight(scene, appState) as ExcalidrawElement[];
-        case "backward":
-          return moveOneLeft(scene, appState) as ExcalidrawElement[];
-        case "toFront":
-          return moveAllRight(scene, appState) as ExcalidrawElement[];
-        case "toBack":
-          return moveAllLeft(scene, appState) as ExcalidrawElement[];
-        default:
-          return scene;
+        case "forward": return moveOneRight(scene, appState) as ExcalidrawElement[];
+        case "backward": return moveOneLeft(scene, appState) as ExcalidrawElement[];
+        case "toFront": return moveAllRight(scene, appState) as ExcalidrawElement[];
+        case "toBack": return moveAllLeft(scene, appState) as ExcalidrawElement[];
+        default: return scene;
       }
     })();
 
-    console.log("z-index action result", {
-      action,
-      length: reordered.length,
-      firstIds: reordered.slice(0, 5).map((el) => el.id),
-    });
-
     api.updateScene({ elements: reordered, captureUpdate: CaptureUpdateAction.IMMEDIATELY });
-
-    console.log("z-index action applied", {
-      action,
-      selectedIds: Array.from(selectedIds),
-    });
   };
 
   const alignSelection = (action: AlignAction) => {
@@ -268,15 +222,19 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
     const { minX, minY, maxX, maxY, width, height } = selectionBounds;
     const now = Date.now();
     const randomNonce = () => Math.floor(Math.random() * 1_000_000_000);
+
     const nextElements = api.getSceneElements().map((el) => {
       if (!selectedIds.has(el.id)) return { ...el };
-      if (action === "left") return { ...el, x: minX, version: el.version + 1, versionNonce: randomNonce(), updated: now };
-      if (action === "right") return { ...el, x: maxX - el.width, version: el.version + 1, versionNonce: randomNonce(), updated: now };
-      if (action === "centerX") return { ...el, x: minX + (width - el.width) / 2, version: el.version + 1, versionNonce: randomNonce(), updated: now };
-      if (action === "top") return { ...el, y: minY, version: el.version + 1, versionNonce: randomNonce(), updated: now };
-      if (action === "bottom") return { ...el, y: maxY - el.height, version: el.version + 1, versionNonce: randomNonce(), updated: now };
-      if (action === "centerY") return { ...el, y: minY + (height - el.height) / 2, version: el.version + 1, versionNonce: randomNonce(), updated: now };
-      return { ...el, version: el.version + 1, versionNonce: randomNonce(), updated: now };
+      const base = { version: el.version + 1, versionNonce: randomNonce(), updated: now };
+      switch (action) {
+        case "left": return { ...el, x: minX, ...base };
+        case "right": return { ...el, x: maxX - el.width, ...base };
+        case "centerX": return { ...el, x: minX + (width - el.width) / 2, ...base };
+        case "top": return { ...el, y: minY, ...base };
+        case "bottom": return { ...el, y: maxY - el.height, ...base };
+        case "centerY": return { ...el, y: minY + (height - el.height) / 2, ...base };
+        default: return { ...el, ...base };
+      }
     });
 
     api.updateScene({ elements: nextElements, captureUpdate: CaptureUpdateAction.IMMEDIATELY });
@@ -287,15 +245,10 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
     const groupId = `group-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
     const now = Date.now();
     const randomNonce = () => Math.floor(Math.random() * 1_000_000_000);
+
     const nextElements = api.getSceneElements().map((el) => {
       if (!selectedIds.has(el.id)) return { ...el };
-      return {
-        ...el,
-        groupIds: [...el.groupIds, groupId],
-        version: el.version + 1,
-        versionNonce: randomNonce(),
-        updated: now,
-      };
+      return { ...el, groupIds: [...el.groupIds, groupId], version: el.version + 1, versionNonce: randomNonce(), updated: now };
     });
 
     const nextSelectedElementIds = elements.reduce<Record<string, true>>((acc, el) => {
@@ -305,11 +258,7 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
 
     api.updateScene({
       elements: nextElements,
-      appState: {
-        ...api.getAppState(),
-        selectedGroupIds: { [groupId]: true },
-        selectedElementIds: nextSelectedElementIds,
-      },
+      appState: { ...api.getAppState(), selectedGroupIds: { [groupId]: true }, selectedElementIds: nextSelectedElementIds },
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
     });
   };
@@ -319,7 +268,6 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
     const sourceElements = elements.filter((el) => el.type !== "selection");
     if (!sourceElements.length) return;
     const scene = api.getSceneElements();
-    const appState = api.getAppState();
 
     const canUseSkeletonDuplication = sourceElements.every((el) => {
       if (el.type === "frame" || el.type === "magicframe") return false;
@@ -331,11 +279,7 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
       ? convertToExcalidrawElements(
           sourceElements as unknown as NonNullable<Parameters<typeof convertToExcalidrawElements>[0]>,
           { regenerateIds: true },
-        ).map((el, index) => ({
-          ...el,
-          x: el.x + 16 + index * 4,
-          y: el.y + 16 + index * 4,
-        }))
+        ).map((el, index) => ({ ...el, x: el.x + 16 + index * 4, y: el.y + 16 + index * 4 }))
       : (() => {
           const randomId = () => Math.random().toString(36).slice(2, 10);
           const randomNonce = () => Math.floor(Math.random() * 1_000_000_000);
@@ -355,86 +299,55 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
       acc[clone.id] = true;
       return acc;
     }, {});
+
     api.updateScene({
       elements: [...scene, ...clones],
-      appState: {
-        selectedElementIds: nextSelectedElementIds,
-        selectedGroupIds: {},
-      },
+      appState: { selectedElementIds: nextSelectedElementIds, selectedGroupIds: {} },
     });
   };
 
-  const deleteSelection = () => {
-    applyToSelection((el) => ({ ...el, isDeleted: true }));
-  };
+  const deleteSelection = () => applyToSelection((el) => ({ ...el, isDeleted: true }));
 
   const handleStrokeChange = (color: string) => {
     if (!api) return;
     const sceneElements = api.getSceneElements();
-
-    // Collect IDs of bound text elements from selected containers
-    const boundTextIds = new Set<string>();
+    const textIds = new Set<string>();
     for (const el of elements) {
       if (el.boundElements) {
         for (const bound of el.boundElements) {
-          if (bound.type === "text") {
-            boundTextIds.add(bound.id);
-          }
+          if (bound.type === "text") textIds.add(bound.id);
         }
       }
     }
-
-    // Apply stroke color to selected elements AND their bound text
     const nextElements = sceneElements.map((el) => {
-      if (selectedIds.has(el.id)) {
-        return { ...el, strokeColor: color };
-      }
-      if (boundTextIds.has(el.id)) {
-        return { ...el, strokeColor: color };
-      }
+      if (selectedIds.has(el.id) || textIds.has(el.id)) return { ...el, strokeColor: color };
       return el;
     });
-
     api.updateScene({ elements: nextElements });
   };
 
-  const handleBackgroundChange = (color: string) => {
-    applyToSelection((el) => ({ ...el, backgroundColor: color }));
-  };
+  const handleBackgroundChange = (color: string) => applyToSelection((el) => ({ ...el, backgroundColor: color }));
 
-  // Text color handler: only affects text elements (direct or bound)
   const handleTextColorChange = (color: string) => {
     if (!api) return;
     const sceneElements = api.getSceneElements();
-
-    // Collect all text element IDs to update:
-    // 1. Directly selected text elements
-    // 2. Bound text elements of selected containers
     const textIdsToUpdate = new Set<string>();
-
     for (const el of elements) {
-      if (el.type === "text") {
-        textIdsToUpdate.add(el.id);
-      }
+      if (el.type === "text") textIdsToUpdate.add(el.id);
       if (el.boundElements) {
         for (const bound of el.boundElements) {
-          if (bound.type === "text") {
-            textIdsToUpdate.add(bound.id);
-          }
+          if (bound.type === "text") textIdsToUpdate.add(bound.id);
         }
       }
     }
-
     const nextElements = sceneElements.map((el) => {
-      if (textIdsToUpdate.has(el.id)) {
-        return { ...el, strokeColor: color };
-      }
+      if (textIdsToUpdate.has(el.id)) return { ...el, strokeColor: color };
       return el;
     });
-
     api.updateScene({ elements: nextElements });
   };
 
+  // Flyout button for arrange panel
   const ArrangeTile = ({
     Icon,
     label,
@@ -450,73 +363,81 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
   }) => {
     const pointerActivatedRef = useRef(false);
 
-    const activate = (source: "click" | "pointerup") => {
-      console.log("[arrange] click", { label, source });
-      onClick();
-    };
-
     return (
-      <ToolbarButton
+      <RailButton
         variant="flyout"
         data-testid={testId}
-        onPointerDownCapture={(event) => {
-          pointerActivatedRef.current = false;
-          event.stopPropagation();
-        }}
-        onPointerUp={(event) => {
-          if (event.button !== 0) return;
+        onPointerDownCapture={(e) => { pointerActivatedRef.current = false; e.stopPropagation(); }}
+        onPointerUp={(e) => {
+          if (e.button !== 0) return;
           pointerActivatedRef.current = true;
-          event.stopPropagation();
-          activate("pointerup");
+          e.stopPropagation();
+          onClick();
         }}
-        onClick={(event) => {
-          if (pointerActivatedRef.current) {
-            pointerActivatedRef.current = false;
-            return;
-          }
-          event.stopPropagation();
-          activate("click");
+        onClick={(e) => {
+          if (pointerActivatedRef.current) { pointerActivatedRef.current = false; return; }
+          e.stopPropagation();
+          onClick();
         }}
         aria-label={label}
       >
         <Icon size={18} aria-hidden="true" style={iconStyle} />
-      </ToolbarButton>
+      </RailButton>
     );
   };
 
-  return (
-    <Toolbar
-      aria-label="Selection properties"
-      className={cn(
-        "fixed",
-        "left-[calc(var(--tool-rail-left)+var(--tool-rail-width)+var(--rails-gap))]",
-        "top-[var(--tool-rail-top)]",
-        "p-3 isolate",
-        "animate-[float-in_260ms_ease_both]",
-        // Divider line
-        "before:content-[''] before:absolute before:top-0 before:bottom-0",
-        "before:left-[calc(-1*(var(--rails-gap)/2))]",
-        "before:w-[var(--rails-divider-width)] before:bg-[var(--rails-divider-color)]",
-        "before:-translate-x-1/2 before:rounded-full before:z-0 before:pointer-events-none"
+  // Arrange flyout content
+  const arrangeFlyoutContent = (
+    <div className="flex flex-col gap-3 text-slate-900">
+      <div className="flex flex-col gap-2">
+        <div className="text-[13px] font-bold text-slate-900">Layers</div>
+        <div className="grid grid-cols-4 gap-2" role="group" aria-label="Layer order">
+          <ArrangeTile Icon={SendToBack} label="Send to back" testId="arrange-layer-back" onClick={() => moveSelection("toBack")} />
+          <ArrangeTile Icon={ArrowDown} label="Move backward" testId="arrange-layer-backward" onClick={() => moveSelection("backward")} />
+          <ArrangeTile Icon={ArrowUp} label="Move forward" testId="arrange-layer-forward" onClick={() => moveSelection("forward")} />
+          <ArrangeTile Icon={BringToFront} label="Bring to front" testId="arrange-layer-front" onClick={() => moveSelection("toFront")} />
+        </div>
+      </div>
+
+      {isMultiSelect && (
+        <div className="flex flex-col gap-2">
+          <div className="text-[13px] font-bold text-slate-900">Align</div>
+          <div className="grid grid-cols-3 gap-2" role="group" aria-label="Horizontal align">
+            <ArrangeTile Icon={AlignStartVertical} label="Align left" testId="arrange-align-left" onClick={() => alignSelection("left")} />
+            <ArrangeTile Icon={AlignCenterVertical} label="Align center (Y axis)" testId="arrange-align-center-x" onClick={() => alignSelection("centerX")} />
+            <ArrangeTile Icon={AlignEndVertical} label="Align right" testId="arrange-align-right" onClick={() => alignSelection("right")} />
+          </div>
+          <div className="grid grid-cols-3 gap-2" role="group" aria-label="Vertical align">
+            <ArrangeTile Icon={AlignStartVertical} label="Align top" testId="arrange-align-top" onClick={() => alignSelection("top")} iconStyle={{ transform: "rotate(90deg)" }} />
+            <ArrangeTile Icon={AlignCenterVertical} label="Align middle (X axis)" testId="arrange-align-center-y" onClick={() => alignSelection("centerY")} iconStyle={{ transform: "rotate(90deg)" }} />
+            <ArrangeTile Icon={AlignEndVertical} label="Align bottom" testId="arrange-align-bottom" onClick={() => alignSelection("bottom")} iconStyle={{ transform: "rotate(90deg)" }} />
+          </div>
+        </div>
       )}
-    >
+
+      {isMultiSelect && (
+        <div className="flex flex-col gap-2">
+          <div className="text-[13px] font-bold text-slate-900">Actions</div>
+          <div className="grid grid-cols-1 gap-2" role="group" aria-label="Grouping">
+            <ArrangeTile Icon={GroupIcon} label="Group selection" testId="arrange-group" onClick={handleGroupSelection} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <ToolRail position="right" showDivider aria-label="Selection properties">
       {/* Property buttons with popovers */}
-      <ToolbarGroup>
-        {/* Stroke color - hidden for text-only selection */}
+      <RailSection columns={1}>
+        {/* Stroke color */}
         {showStrokeColorButton && !hasImage && (
-          <Popover open={openKind === "stroke"} onOpenChange={(open) => setOpenKind(open ? "stroke" : null)}>
-            <PopoverTrigger asChild>
-              <ToolbarButton aria-label="Stroke color" className="relative">
-                <ToolbarSwatch color={strokeColor} />
-                <Palette size={18} aria-hidden="true" />
-              </ToolbarButton>
-            </PopoverTrigger>
-            <PopoverContent
-              side="right"
-              align="start"
-              sideOffset={12}
-              className="w-auto min-w-[280px] p-3 rounded-2xl shadow-[0_24px_48px_rgba(0,0,0,0.18)] border-slate-900/8"
-            >
+          <RailPopoverButton
+            open={openKind === "stroke"}
+            onOpenChange={(open) => setOpenKind(open ? "stroke" : null)}
+            aria-label="Stroke color"
+            className="relative"
+            content={
               <ColorPicker
                 value={strokeColor}
                 onChange={handleStrokeChange}
@@ -524,24 +445,21 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
                 initialShadeIndex={3}
                 paletteId={"default" satisfies PaletteId}
               />
-            </PopoverContent>
-          </Popover>
+            }
+          >
+            <RailSwatch color={strokeColor} />
+            <Palette size={18} aria-hidden="true" />
+          </RailPopoverButton>
         )}
 
+        {/* Fill color */}
         {hasFillCapable && !hasImage && (
-          <Popover open={openKind === "background"} onOpenChange={(open) => setOpenKind(open ? "background" : null)}>
-            <PopoverTrigger asChild>
-              <ToolbarButton aria-label="Fill color" className="relative">
-                <ToolbarSwatch color={backgroundColor} />
-                <PaintBucket size={18} aria-hidden="true" />
-              </ToolbarButton>
-            </PopoverTrigger>
-            <PopoverContent
-              side="right"
-              align="start"
-              sideOffset={12}
-              className="w-auto min-w-[280px] p-3 rounded-2xl shadow-[0_24px_48px_rgba(0,0,0,0.18)] border-slate-900/8"
-            >
+          <RailPopoverButton
+            open={openKind === "background"}
+            onOpenChange={(open) => setOpenKind(open ? "background" : null)}
+            aria-label="Fill color"
+            className="relative"
+            content={
               <ColorPicker
                 value={backgroundColor}
                 onChange={handleBackgroundChange}
@@ -549,66 +467,52 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
                 initialShadeIndex={5}
                 paletteId={"default" satisfies PaletteId}
               />
-            </PopoverContent>
-          </Popover>
+            }
+          >
+            <RailSwatch color={backgroundColor} />
+            <PaintBucket size={18} aria-hidden="true" />
+          </RailPopoverButton>
         )}
 
+        {/* Style controls */}
         {hasStyleControls && (
-          <Popover open={openKind === "style"} onOpenChange={(open) => setOpenKind(open ? "style" : null)}>
-            <PopoverTrigger asChild>
-              <ToolbarButton aria-label="Stroke and fill style">
-                <SlidersHorizontal size={18} aria-hidden="true" />
-              </ToolbarButton>
-            </PopoverTrigger>
-            <PopoverContent
-              side="right"
-              align="start"
-              sideOffset={12}
-              className="w-auto min-w-[280px] p-3 rounded-2xl shadow-[0_24px_48px_rgba(0,0,0,0.18)] border-slate-900/8"
-            >
-              <SelectionStyleFlyout elements={elements} onUpdate={applyToSelection} />
-            </PopoverContent>
-          </Popover>
+          <RailPopoverButton
+            open={openKind === "style"}
+            onOpenChange={(open) => setOpenKind(open ? "style" : null)}
+            aria-label="Stroke and fill style"
+            content={<SelectionStyleFlyout elements={elements} onUpdate={applyToSelection} />}
+          >
+            <SlidersHorizontal size={18} aria-hidden="true" />
+          </RailPopoverButton>
         )}
 
+        {/* Text style */}
         {hasTextControls && (
-          <Popover open={openKind === "text"} onOpenChange={(open) => setOpenKind(open ? "text" : null)}>
-            <PopoverTrigger asChild>
-              <ToolbarButton aria-label="Text style">
-                <TypeIcon size={18} aria-hidden="true" />
-              </ToolbarButton>
-            </PopoverTrigger>
-            <PopoverContent
-              side="right"
-              align="start"
-              sideOffset={12}
-              className="w-auto min-w-[260px] p-3 rounded-2xl shadow-[0_24px_48px_rgba(0,0,0,0.18)] border-slate-900/8"
-            >
+          <RailPopoverButton
+            open={openKind === "text"}
+            onOpenChange={(open) => setOpenKind(open ? "text" : null)}
+            aria-label="Text style"
+            contentClassName="min-w-[260px]"
+            content={
               <TextStyleFlyout
                 elements={elements}
                 allSceneElements={api?.getSceneElements() ?? []}
                 api={api}
                 selectedIds={selectedIds}
               />
-            </PopoverContent>
-          </Popover>
+            }
+          >
+            <TypeIcon size={18} aria-hidden="true" />
+          </RailPopoverButton>
         )}
 
-        {/* Text color - shown when any text (direct or bound) is in selection */}
+        {/* Text color */}
         {showTextColorButton && !hasImage && (
-          <Popover open={openKind === "textColor"} onOpenChange={(open) => setOpenKind(open ? "textColor" : null)}>
-            <PopoverTrigger asChild>
-              <ToolbarButton aria-label="Text color" className="relative">
-                <ToolbarSwatch color={textColor} />
-                <ALargeSmall size={18} aria-hidden="true" />
-              </ToolbarButton>
-            </PopoverTrigger>
-            <PopoverContent
-              side="right"
-              align="start"
-              sideOffset={12}
-              className="w-auto min-w-[280px] p-3 rounded-2xl shadow-[0_24px_48px_rgba(0,0,0,0.18)] border-slate-900/8"
-            >
+          <RailPopoverButton
+            open={openKind === "textColor"}
+            onOpenChange={(open) => setOpenKind(open ? "textColor" : null)}
+            aria-label="Text color"
+            content={
               <ColorPicker
                 value={textColor}
                 onChange={handleTextColorChange}
@@ -616,92 +520,37 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
                 initialShadeIndex={3}
                 paletteId={"default" satisfies PaletteId}
               />
-            </PopoverContent>
-          </Popover>
+            }
+          >
+            <ALargeSmall size={18} aria-hidden="true" />
+          </RailPopoverButton>
         )}
+      </RailSection>
 
-      </ToolbarGroup>
-
-      <ToolbarSeparator />
+      <RailSeparator />
 
       {/* Action buttons */}
-      <ToolbarGroup orientation="vertical" className="gap-1.5">
-        <Popover open={openKind === "arrange"} onOpenChange={(open) => setOpenKind(open ? "arrange" : null)}>
-          <PopoverTrigger asChild>
-            <ToolbarButton aria-label="Layers and alignment">
-              <LayersIcon size={18} aria-hidden="true" />
-            </ToolbarButton>
-          </PopoverTrigger>
-          <PopoverContent
-            side="right"
-            align="start"
-            sideOffset={12}
-            className="w-auto min-w-[232px] p-3 rounded-2xl shadow-[0_24px_48px_rgba(0,0,0,0.18)] border-slate-900/8"
-            data-testid="arrange-flyout"
+      <RailSection columns={1}>
+        {isMultiSelect && (
+          <RailPopoverButton
+            open={openKind === "arrange"}
+            onOpenChange={(open) => setOpenKind(open ? "arrange" : null)}
+            aria-label="Layers and alignment"
+            contentClassName="min-w-[232px]"
+            content={arrangeFlyoutContent}
           >
-            <div className="flex flex-col gap-3 text-slate-900">
-              <div className="flex flex-col gap-2">
-                <div className="text-[13px] font-bold text-slate-900">Layers</div>
-                <div className="grid grid-cols-4 gap-2" role="group" aria-label="Layer order">
-                  <ArrangeTile Icon={SendToBack} label="Send to back" testId="arrange-layer-back" onClick={() => moveSelection("toBack")} />
-                  <ArrangeTile Icon={ArrowDown} label="Move backward" testId="arrange-layer-backward" onClick={() => moveSelection("backward")} />
-                  <ArrangeTile Icon={ArrowUp} label="Move forward" testId="arrange-layer-forward" onClick={() => moveSelection("forward")} />
-                  <ArrangeTile Icon={BringToFront} label="Bring to front" testId="arrange-layer-front" onClick={() => moveSelection("toFront")} />
-                </div>
-              </div>
+            <LayersIcon size={18} aria-hidden="true" />
+          </RailPopoverButton>
+        )}
 
-              {isMultiSelect && (
-                <div className="flex flex-col gap-2">
-                  <div className="text-[13px] font-bold text-slate-900">Align</div>
-                  <div className="grid grid-cols-3 gap-2" role="group" aria-label="Horizontal align">
-                    <ArrangeTile Icon={AlignStartVertical} label="Align left" testId="arrange-align-left" onClick={() => alignSelection("left")} />
-                    <ArrangeTile Icon={AlignCenterVertical} label="Align center (Y axis)" testId="arrange-align-center-x" onClick={() => alignSelection("centerX")} />
-                    <ArrangeTile Icon={AlignEndVertical} label="Align right" testId="arrange-align-right" onClick={() => alignSelection("right")} />
-                  </div>
-                  <div className="grid grid-cols-3 gap-2" role="group" aria-label="Vertical align">
-                    <ArrangeTile
-                      Icon={AlignStartVertical}
-                      label="Align top"
-                      testId="arrange-align-top"
-                      onClick={() => alignSelection("top")}
-                      iconStyle={{ transform: "rotate(90deg)" }}
-                    />
-                    <ArrangeTile
-                      Icon={AlignCenterVertical}
-                      label="Align middle (X axis)"
-                      testId="arrange-align-center-y"
-                      onClick={() => alignSelection("centerY")}
-                      iconStyle={{ transform: "rotate(90deg)" }}
-                    />
-                    <ArrangeTile
-                      Icon={AlignEndVertical}
-                      label="Align bottom"
-                      testId="arrange-align-bottom"
-                      onClick={() => alignSelection("bottom")}
-                      iconStyle={{ transform: "rotate(90deg)" }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {isMultiSelect && (
-                <div className="flex flex-col gap-2">
-                  <div className="text-[13px] font-bold text-slate-900">Actions</div>
-                  <div className="grid grid-cols-1 gap-2" role="group" aria-label="Grouping">
-                    <ArrangeTile Icon={GroupIcon} label="Group selection" testId="arrange-group" onClick={handleGroupSelection} />
-                  </div>
-                </div>
-              )}
-            </div>
-          </PopoverContent>
-        </Popover>
-        <ToolbarButton onClick={duplicateSelection} aria-label="Duplicate selection">
+        <RailButton onClick={duplicateSelection} aria-label="Duplicate selection">
           <Copy size={18} aria-hidden="true" />
-        </ToolbarButton>
-        <ToolbarButton onClick={deleteSelection} aria-label="Delete selection">
+        </RailButton>
+
+        <RailButton onClick={deleteSelection} aria-label="Delete selection">
           <Trash2 size={18} aria-hidden="true" />
-        </ToolbarButton>
-      </ToolbarGroup>
-    </Toolbar>
+        </RailButton>
+      </RailSection>
+    </ToolRail>
   );
 }

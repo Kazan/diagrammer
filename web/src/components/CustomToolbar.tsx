@@ -14,9 +14,13 @@ import {
   Type as TypeIcon,
   Image as ImageIcon,
 } from "lucide-react";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Toolbar, ToolbarButton, ToolbarSeparator, ToolbarGroup, toolbarButtonVariants } from "@/components/ui/toolbar";
-import { cn } from "@/lib/utils";
+import {
+  ToolRail,
+  RailSection,
+  RailSeparator,
+  RailToggleGroup,
+  RailToggleItem,
+} from "@/components/ui/tool-rail";
 
 export type ToolType =
   | "selection"
@@ -38,9 +42,15 @@ type Props = {
   onSelect: (tool: ToolType) => void;
 };
 
+type ToolDef = {
+  id: ToolType;
+  label: string;
+  Icon: React.ComponentType<{ size?: number | string }>;
+};
+
 type ToolSection = {
   id: string;
-  tools: { id: ToolType; label: string; Icon: React.ComponentType<{ size?: number | string }> }[];
+  tools: ToolDef[];
 };
 
 const TOOL_SECTIONS: ToolSection[] = [
@@ -71,47 +81,19 @@ const TOOL_SECTIONS: ToolSection[] = [
 
 export function CustomToolbar({ activeTool, onSelect }: Props) {
   return (
-    <Toolbar
-      aria-label="Drawing tools"
-      className={cn(
-        "fixed left-[var(--tool-rail-left)] top-[var(--tool-rail-top)]",
-        "w-[var(--tool-rail-width)] p-3",
-        "animate-[float-in_260ms_ease_both]"
-      )}
-    >
-      <ToggleGroup
-        type="single"
-        value={activeTool}
-        onValueChange={(value) => value && onSelect(value as ToolType)}
-        className="flex flex-col gap-1.5 w-full"
-      >
+    <ToolRail position="left" aria-label="Drawing tools">
+      <RailToggleGroup value={activeTool} onValueChange={onSelect}>
         {TOOL_SECTIONS.map((section, index) => (
-          <ToolbarGroup key={section.id} aria-label={section.id} orientation="horizontal" className="grid grid-cols-2 gap-1.5">
+          <RailSection key={section.id} columns={2} label={section.id}>
             {section.tools.map((tool) => (
-              <ToggleGroupItem
-                key={tool.id}
-                value={tool.id}
-                aria-label={tool.label}
-                className={cn(
-                  toolbarButtonVariants({ variant: "default", size: "default" }),
-                  "data-[state=on]:bg-[hsla(156,64%,48%,0.15)] data-[state=on]:border-[hsl(156,64%,48%)] data-[state=on]:text-[hsl(156,64%,48%)]",
-                  // Override toggle-group's first/last rounded corners
-                  "!rounded-lg"
-                )}
-                style={{
-                  willChange: "transform",
-                  backfaceVisibility: "hidden",
-                }}
-              >
+              <RailToggleItem key={tool.id} value={tool.id} aria-label={tool.label}>
                 <tool.Icon aria-hidden="true" />
-              </ToggleGroupItem>
+              </RailToggleItem>
             ))}
-            {index < TOOL_SECTIONS.length - 1 && (
-              <ToolbarSeparator className="col-span-2 my-1.5" />
-            )}
-          </ToolbarGroup>
+            {index < TOOL_SECTIONS.length - 1 && <RailSeparator colSpan={2} />}
+          </RailSection>
         ))}
-      </ToggleGroup>
-    </Toolbar>
+      </RailToggleGroup>
+    </ToolRail>
   );
 }
