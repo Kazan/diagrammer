@@ -5,11 +5,8 @@ import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import { moveAllLeft, moveAllRight, moveOneLeft, moveOneRight } from "../excalidraw-zindex";
 import {
-  AlignCenterHorizontal,
   AlignCenterVertical,
   AlignEndVertical,
-  AlignLeft,
-  AlignRight,
   AlignStartVertical,
   ArrowDown,
   ArrowUp,
@@ -27,6 +24,10 @@ import type { SelectionInfo } from "./SelectionFlyout";
 import ColorPicker from "./ColorPicker";
 import type { PaletteId } from "./ColorPicker";
 import { SelectionStyleFlyout } from "./SelectionStyleFlyout";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Toolbar, ToolbarButton, ToolbarSeparator, ToolbarGroup, ToolbarSwatch } from "@/components/ui/toolbar";
+import { ButtonGroup } from "@/components/ui/button-group";
+import { cn } from "@/lib/utils";
 
 export type PropertyKind = "stroke" | "background" | "style" | "arrange";
 
@@ -34,13 +35,6 @@ type Props = {
   selection: SelectionInfo | null;
   api: ExcalidrawImperativeAPI | null;
   onRequestOpen?: (kind: PropertyKind) => void;
-};
-
-type PropertyButton = {
-  id: PropertyKind;
-  label: string;
-  Icon: React.ComponentType<{ size?: number | string }>;
-  swatch?: string | null;
 };
 
 const DEFAULT_STROKE = "#0f172a";
@@ -72,32 +66,23 @@ function getCommonValue<T>(
   return first;
 }
 
-function resolveSwatchStyle(color: string | null): React.CSSProperties {
-  if (!color || color === "transparent") {
-    return {
-      backgroundImage:
-        "linear-gradient(135deg, rgba(15,23,42,0.08) 25%, transparent 25%, transparent 50%, rgba(15,23,42,0.08) 50%, rgba(15,23,42,0.08) 75%, transparent 75%, transparent)",
-      backgroundColor: "#f8fafc",
-      backgroundSize: "8px 8px",
-      border: "1px solid rgba(15,23,42,0.12)",
-    };
-  }
-  return { backgroundColor: color, border: "1px solid rgba(15,23,42,0.12)" };
-}
-
 export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props) {
   const elements = selection?.elements ?? [];
-  if (!elements.length) return null;
 
-  const isMultiSelect = elements.length > 1;
-  const hasImage = elements.some((el) => el.type === "image");
-  const selectedIds = useMemo(() => new Set(elements.map((el) => el.id)), [elements]);
+  // All hooks must be called unconditionally, before any early return
+  const [openKind, setOpenKind] = useState<PropertyKind | null>(null);
+
+  const selectedIds = useMemo(
+    () => new Set(elements.map((el) => el.id)),
+    [elements]
+  );
 
   const strokeColor = useMemo(
     () =>
       getCommonValue<string | null>(elements, (el) => el.strokeColor ?? null) ?? DEFAULT_STROKE,
     [elements],
   );
+
   const backgroundColor = useMemo(
     () =>
       getCommonValue<string | null>(
@@ -106,11 +91,6 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
       ) ?? DEFAULT_FILL,
     [elements],
   );
-
-  const [openKind, setOpenKind] = useState<PropertyKind | null>(null);
-
-  const hasFillCapable = elements.some((el) => (!LINE_LIKE_TYPES.has(el.type) && el.type !== "text") || isClosedPolyline(el));
-  const hasStyleControls = elements.some((el) => el.type !== "text" && el.type !== "image");
 
   const selectionBounds = useMemo(() => {
     if (!elements.length) return null;
@@ -134,21 +114,26 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
     };
   }, [elements]);
 
-  const items: PropertyButton[] = [];
+  // Close flyouts that are not applicable (e.g., when images are selected).
+  const hasImage = elements.some((el) => el.type === "image");
+  useEffect(() => {
+    if (hasImage && (openKind === "stroke" || openKind === "background" || openKind === "style")) {
+      setOpenKind(null);
+    }
+  }, [hasImage, openKind]);
 
-  if (!hasImage) {
-    items.push({ id: "stroke", label: "Stroke color", Icon: Palette, swatch: strokeColor });
-  }
+  useEffect(() => {
+    if (openKind !== "arrange") return;
+    console.log("[arrange] flyout mount", { selectionCount: elements.length });
+    return () => console.log("[arrange] flyout unmount");
+  }, [openKind, elements.length]);
 
-  if (hasFillCapable && !hasImage) {
-    items.push({ id: "background", label: "Fill color", Icon: PaintBucket, swatch: backgroundColor });
-  }
+  // Early return AFTER all hooks have been called
+  if (!elements.length) return null;
 
-  if (hasStyleControls) {
-    items.push({ id: "style", label: "Stroke and fill style", Icon: SlidersHorizontal });
-  }
-
-  items.push({ id: "arrange", label: "Layers and alignment", Icon: LayersIcon });
+  const isMultiSelect = elements.length > 1;
+  const hasFillCapable = elements.some((el) => (!LINE_LIKE_TYPES.has(el.type) && el.type !== "text") || isClosedPolyline(el));
+  const hasStyleControls = elements.some((el) => el.type !== "text" && el.type !== "image");
 
   const applyToSelection = (mutate: (el: ExcalidrawElement) => ExcalidrawElement) => {
     if (!api || !elements.length) return;
@@ -310,11 +295,6 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
     applyToSelection((el) => ({ ...el, isDeleted: true }));
   };
 
-  // Close flyouts that are not applicable (e.g., when images are selected).
-  if (hasImage && (openKind === "stroke" || openKind === "background" || openKind === "style") && openKind !== null) {
-    setOpenKind(null);
-  }
-
   const handleStrokeChange = (color: string) => {
     applyToSelection((el) => ({ ...el, strokeColor: color }));
   };
@@ -322,21 +302,6 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
   const handleBackgroundChange = (color: string) => {
     applyToSelection((el) => ({ ...el, backgroundColor: color }));
   };
-
-  const flyoutTop = (() => {
-    if (!openKind) return 0;
-    const idx = items.findIndex((item) => item.id === openKind);
-    if (idx === -1) return 0;
-    const BUTTON = 44;
-    const GAP = 8;
-    return 4 + idx * (BUTTON + GAP);
-  })();
-
-  useEffect(() => {
-    if (openKind !== "arrange") return;
-    console.log("[arrange] flyout mount", { selectionCount: elements.length });
-    return () => console.log("[arrange] flyout unmount");
-  }, [openKind, elements.length]);
 
   const ArrangeTile = ({
     Icon,
@@ -359,9 +324,8 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
     };
 
     return (
-      <button
-        type="button"
-        className="arrange-tile"
+      <ToolbarButton
+        variant="flyout"
         data-testid={testId}
         onPointerDownCapture={(event) => {
           pointerActivatedRef.current = false;
@@ -383,97 +347,130 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
         }}
         aria-label={label}
       >
-        <Icon size={18} aria-hidden="true" style={iconStyle}
- />
-      </button>
+        <Icon size={18} aria-hidden="true" style={iconStyle} />
+      </ToolbarButton>
     );
   };
 
   return (
-    <div className="selection-props-rail" role="toolbar" aria-label="Selection properties">
-      {items.map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          className="selection-props-rail__button"
-          aria-label={item.label}
-          onClick={() => {
-            setOpenKind((prev) => (prev === item.id ? null : item.id));
-            onRequestOpen?.(item.id);
-          }}
-        >
-          {item.swatch ? (
-            <span className="selection-props-rail__swatch" style={resolveSwatchStyle(item.swatch)} aria-hidden="true" />
-          ) : null}
-          <item.Icon size={18} aria-hidden="true" />
-        </button>
-      ))}
+    <Toolbar
+      aria-label="Selection properties"
+      className={cn(
+        "fixed",
+        "left-[calc(var(--tool-rail-left)+var(--tool-rail-width)+var(--rails-gap))]",
+        "top-[var(--tool-rail-top)]",
+        "p-3 isolate",
+        "animate-[float-in_260ms_ease_both]",
+        // Divider line
+        "before:content-[''] before:absolute before:top-0 before:bottom-0",
+        "before:left-[calc(-1*(var(--rails-gap)/2))]",
+        "before:w-[var(--rails-divider-width)] before:bg-[var(--rails-divider-color)]",
+        "before:-translate-x-1/2 before:rounded-full before:z-0 before:pointer-events-none"
+      )}
+    >
+      {/* Property buttons with popovers */}
+      <ToolbarGroup>
+        {!hasImage && (
+          <Popover open={openKind === "stroke"} onOpenChange={(open) => setOpenKind(open ? "stroke" : null)}>
+            <PopoverTrigger asChild>
+              <ToolbarButton aria-label="Stroke color" className="relative">
+                <ToolbarSwatch color={strokeColor} />
+                <Palette size={18} aria-hidden="true" />
+              </ToolbarButton>
+            </PopoverTrigger>
+            <PopoverContent
+              side="right"
+              align="start"
+              sideOffset={12}
+              className="w-auto min-w-[280px] p-3 rounded-2xl shadow-[0_24px_48px_rgba(0,0,0,0.18)] border-slate-900/8"
+            >
+              <ColorPicker
+                value={strokeColor}
+                onChange={handleStrokeChange}
+                title="Stroke color"
+                initialShadeIndex={3}
+                paletteId={"default" satisfies PaletteId}
+              />
+            </PopoverContent>
+          </Popover>
+        )}
 
-      <div className="selection-props-rail__actions" role="group" aria-label="Selection actions">
-        <button
-          type="button"
-          className="selection-props-rail__button"
-          onClick={duplicateSelection}
-          aria-label="Duplicate selection"
-        >
-          <Copy size={18} aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          className="selection-props-rail__button"
-          onClick={deleteSelection}
-          aria-label="Delete selection"
-        >
-          <Trash2 size={18} aria-hidden="true" />
-        </button>
-      </div>
+        {hasFillCapable && !hasImage && (
+          <Popover open={openKind === "background"} onOpenChange={(open) => setOpenKind(open ? "background" : null)}>
+            <PopoverTrigger asChild>
+              <ToolbarButton aria-label="Fill color" className="relative">
+                <ToolbarSwatch color={backgroundColor} />
+                <PaintBucket size={18} aria-hidden="true" />
+              </ToolbarButton>
+            </PopoverTrigger>
+            <PopoverContent
+              side="right"
+              align="start"
+              sideOffset={12}
+              className="w-auto min-w-[280px] p-3 rounded-2xl shadow-[0_24px_48px_rgba(0,0,0,0.18)] border-slate-900/8"
+            >
+              <ColorPicker
+                value={backgroundColor}
+                onChange={handleBackgroundChange}
+                title="Fill color"
+                initialShadeIndex={5}
+                paletteId={"default" satisfies PaletteId}
+              />
+            </PopoverContent>
+          </Popover>
+        )}
 
-      {openKind === "stroke" ? (
-        <div className="selection-props-rail__flyout" role="dialog" aria-label="Stroke color" style={{ top: flyoutTop }}>
-          <ColorPicker value={strokeColor} onChange={handleStrokeChange} title="Stroke color" initialShadeIndex={3} paletteId={"default" satisfies PaletteId} />
-        </div>
-      ) : null}
+        {hasStyleControls && (
+          <Popover open={openKind === "style"} onOpenChange={(open) => setOpenKind(open ? "style" : null)}>
+            <PopoverTrigger asChild>
+              <ToolbarButton aria-label="Stroke and fill style">
+                <SlidersHorizontal size={18} aria-hidden="true" />
+              </ToolbarButton>
+            </PopoverTrigger>
+            <PopoverContent
+              side="right"
+              align="start"
+              sideOffset={12}
+              className="w-auto min-w-[280px] p-3 rounded-2xl shadow-[0_24px_48px_rgba(0,0,0,0.18)] border-slate-900/8"
+            >
+              <SelectionStyleFlyout elements={elements} onUpdate={applyToSelection} />
+            </PopoverContent>
+          </Popover>
+        )}
 
-      {openKind === "background" ? (
-        <div className="selection-props-rail__flyout" role="dialog" aria-label="Fill color" style={{ top: flyoutTop }}>
-          <ColorPicker value={backgroundColor} onChange={handleBackgroundChange} title="Fill color" initialShadeIndex={5} paletteId={"default" satisfies PaletteId} />
-        </div>
-      ) : null}
-
-      {openKind === "style" ? (
-        <div className="selection-props-rail__flyout" role="dialog" aria-label="Style" style={{ top: flyoutTop }}>
-          <SelectionStyleFlyout elements={elements} onUpdate={applyToSelection} />
-        </div>
-      ) : null}
-
-      {openKind === "arrange" ? (
-        <div
-          className="selection-props-rail__flyout"
-          role="dialog"
-          aria-label="Arrange"
-          style={{ top: flyoutTop }}
-          data-testid="arrange-flyout"
-        >
-          <div className="arrange-flyout">
-            <div className="arrange-section">
-              <div className="arrange-section__title">Layers</div>
-              <div className="arrange-grid arrange-grid--four" role="group" aria-label="Layer order">
-                <ArrangeTile Icon={SendToBack} label="Send to back" testId="arrange-layer-back" onClick={() => moveSelection("toBack")} />
-                <ArrangeTile Icon={ArrowDown} label="Move backward" testId="arrange-layer-backward" onClick={() => moveSelection("backward")} />
-                <ArrangeTile Icon={ArrowUp} label="Move forward" testId="arrange-layer-forward" onClick={() => moveSelection("forward")} />
-                <ArrangeTile Icon={BringToFront} label="Bring to front" testId="arrange-layer-front" onClick={() => moveSelection("toFront")} />
+        <Popover open={openKind === "arrange"} onOpenChange={(open) => setOpenKind(open ? "arrange" : null)}>
+          <PopoverTrigger asChild>
+            <ToolbarButton aria-label="Layers and alignment">
+              <LayersIcon size={18} aria-hidden="true" />
+            </ToolbarButton>
+          </PopoverTrigger>
+          <PopoverContent
+            side="right"
+            align="start"
+            sideOffset={12}
+            className="w-auto min-w-[232px] p-3 rounded-2xl shadow-[0_24px_48px_rgba(0,0,0,0.18)] border-slate-900/8"
+            data-testid="arrange-flyout"
+          >
+            <div className="flex flex-col gap-3 text-slate-900">
+              <div className="flex flex-col gap-2">
+                <div className="text-[13px] font-bold text-slate-900">Layers</div>
+                <div className="grid grid-cols-4 gap-2" role="group" aria-label="Layer order">
+                  <ArrangeTile Icon={SendToBack} label="Send to back" testId="arrange-layer-back" onClick={() => moveSelection("toBack")} />
+                  <ArrangeTile Icon={ArrowDown} label="Move backward" testId="arrange-layer-backward" onClick={() => moveSelection("backward")} />
+                  <ArrangeTile Icon={ArrowUp} label="Move forward" testId="arrange-layer-forward" onClick={() => moveSelection("forward")} />
+                  <ArrangeTile Icon={BringToFront} label="Bring to front" testId="arrange-layer-front" onClick={() => moveSelection("toFront")} />
+                </div>
               </div>
-            </div>
 
-              {isMultiSelect ? (
-                <div className="arrange-section">
-                  <div className="arrange-section__title">Align</div>
-                  <div className="arrange-grid arrange-grid--row" role="group" aria-label="Horizontal align">
+              {isMultiSelect && (
+                <div className="flex flex-col gap-2">
+                  <div className="text-[13px] font-bold text-slate-900">Align</div>
+                  <div className="grid grid-cols-3 gap-2" role="group" aria-label="Horizontal align">
                     <ArrangeTile Icon={AlignStartVertical} label="Align left" testId="arrange-align-left" onClick={() => alignSelection("left")} />
                     <ArrangeTile Icon={AlignCenterVertical} label="Align center (Y axis)" testId="arrange-align-center-x" onClick={() => alignSelection("centerX")} />
                     <ArrangeTile Icon={AlignEndVertical} label="Align right" testId="arrange-align-right" onClick={() => alignSelection("right")} />
                   </div>
-                  <div className="arrange-grid arrange-grid--row" role="group" aria-label="Vertical align">
+                  <div className="grid grid-cols-3 gap-2" role="group" aria-label="Vertical align">
                     <ArrangeTile
                       Icon={AlignStartVertical}
                       label="Align top"
@@ -497,19 +494,32 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
                     />
                   </div>
                 </div>
-              ) : null}
+              )}
 
-            {isMultiSelect ? (
-              <div className="arrange-section">
-                <div className="arrange-section__title">Actions</div>
-                <div className="arrange-grid arrange-grid--single" role="group" aria-label="Grouping">
-                  <ArrangeTile Icon={GroupIcon} label="Group selection" testId="arrange-group" onClick={handleGroupSelection} />
+              {isMultiSelect && (
+                <div className="flex flex-col gap-2">
+                  <div className="text-[13px] font-bold text-slate-900">Actions</div>
+                  <div className="grid grid-cols-1 gap-2" role="group" aria-label="Grouping">
+                    <ArrangeTile Icon={GroupIcon} label="Group selection" testId="arrange-group" onClick={handleGroupSelection} />
+                  </div>
                 </div>
-              </div>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
-    </div>
+              )}
+            </div>
+          </PopoverContent>
+        </Popover>
+      </ToolbarGroup>
+
+      <ToolbarSeparator />
+
+      {/* Action buttons */}
+      <ButtonGroup orientation="vertical" className="gap-1.5">
+        <ToolbarButton onClick={duplicateSelection} aria-label="Duplicate selection">
+          <Copy size={18} aria-hidden="true" />
+        </ToolbarButton>
+        <ToolbarButton onClick={deleteSelection} aria-label="Delete selection">
+          <Trash2 size={18} aria-hidden="true" />
+        </ToolbarButton>
+      </ButtonGroup>
+    </Toolbar>
   );
 }

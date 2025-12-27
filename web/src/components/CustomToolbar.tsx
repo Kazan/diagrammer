@@ -14,6 +14,9 @@ import {
   Type as TypeIcon,
   Image as ImageIcon,
 } from "lucide-react";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Toolbar, ToolbarButton, ToolbarSeparator, ToolbarGroup, toolbarButtonVariants } from "@/components/ui/toolbar";
+import { cn } from "@/lib/utils";
 
 export type ToolType =
   | "selection"
@@ -68,30 +71,41 @@ const TOOL_SECTIONS: ToolSection[] = [
 
 export function CustomToolbar({ activeTool, onSelect }: Props) {
   return (
-    <div className="custom-toolbar" role="toolbar" aria-label="Drawing tools">
-      {TOOL_SECTIONS.map((section, index) => (
-        <div key={section.id} className="custom-toolbar__section" role="group" aria-label={section.id}>
-          <div className="custom-toolbar__buttons">
-            {section.tools.map((tool) => {
-              const isActive = activeTool === tool.id;
-              const Icon = tool.Icon;
-              return (
-                <button
-                  key={tool.id}
-                  type="button"
-                  className={`custom-tool ${isActive ? "is-active" : ""}`}
-                  aria-pressed={isActive}
-                  aria-label={tool.label}
-                  onClick={() => onSelect(tool.id)}
-                >
-                  <Icon size={18} aria-hidden="true" />
-                </button>
-              );
-            })}
-          </div>
-          {index < TOOL_SECTIONS.length - 1 ? <div className="custom-toolbar__divider" aria-hidden="true" /> : null}
-        </div>
-      ))}
-    </div>
+    <Toolbar
+      aria-label="Drawing tools"
+      className={cn(
+        "fixed left-[var(--tool-rail-left)] top-[var(--tool-rail-top)]",
+        "w-[var(--tool-rail-width)] p-3",
+        "animate-[float-in_260ms_ease_both]"
+      )}
+    >
+      <ToggleGroup
+        type="single"
+        value={activeTool}
+        onValueChange={(value) => value && onSelect(value as ToolType)}
+        className="flex flex-col gap-1.5 w-full"
+      >
+        {TOOL_SECTIONS.map((section, index) => (
+          <ToolbarGroup key={section.id} aria-label={section.id} orientation="horizontal" className="grid grid-cols-2 gap-1.5">
+            {section.tools.map((tool) => (
+              <ToggleGroupItem
+                key={tool.id}
+                value={tool.id}
+                aria-label={tool.label}
+                className={cn(
+                  toolbarButtonVariants({ variant: "default", size: "default" }),
+                  "data-[state=on]:bg-[var(--toolbar-btn-active-bg)] data-[state=on]:border-[var(--toolbar-btn-active-border)] data-[state=on]:text-[var(--toolbar-btn-active-text)]"
+                )}
+              >
+                <tool.Icon aria-hidden="true" />
+              </ToggleGroupItem>
+            ))}
+            {index < TOOL_SECTIONS.length - 1 && (
+              <ToolbarSeparator className="col-span-2 my-1.5" />
+            )}
+          </ToolbarGroup>
+        ))}
+      </ToggleGroup>
+    </Toolbar>
   );
 }

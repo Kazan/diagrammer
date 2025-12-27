@@ -507,30 +507,32 @@ export default function App() {
         onChange={handleImageInputChange}
         aria-label="Insert image"
       />
-      <Excalidraw
-        theme={THEME.LIGHT}
-        initialData={initialData}
-        objectsSnapModeEnabled
-        UIOptions={excalidrawUIOptions}
-        handleKeyboardGlobally={false}
-        excalidrawAPI={(api) => {
-          apiRef.current = api;
-          setApi(api);
-        }}
-      >
-        {/* Override Excalidraw's fallback MainMenu to avoid rendering built-in load/save/export items. */}
-        <MainMenu />
-        {/* Render a stripped-down welcome screen so the default menu items stay hidden */}
-        <WelcomeScreen>
-          <WelcomeScreen.Center>
-            <WelcomeScreen.Center.Logo />
-            <WelcomeScreen.Center.Heading>
-              Start drawing whenever you like
-            </WelcomeScreen.Center.Heading>
-            {/* No menu items rendered here on purpose */}
-          </WelcomeScreen.Center>
-        </WelcomeScreen>
-      </Excalidraw>
+      <div className="excalidraw-container">
+        <Excalidraw
+          theme={THEME.LIGHT}
+          initialData={initialData}
+          objectsSnapModeEnabled
+          UIOptions={excalidrawUIOptions}
+          handleKeyboardGlobally={false}
+          excalidrawAPI={(api) => {
+            apiRef.current = api;
+            setApi(api);
+          }}
+        >
+          {/* Override Excalidraw's fallback MainMenu to avoid rendering built-in load/save/export items. */}
+          <MainMenu />
+          {/* Render a stripped-down welcome screen so the default menu items stay hidden */}
+          <WelcomeScreen>
+            <WelcomeScreen.Center>
+              <WelcomeScreen.Center.Logo />
+              <WelcomeScreen.Center.Heading>
+                Start drawing whenever you like
+              </WelcomeScreen.Center.Heading>
+              {/* No menu items rendered here on purpose */}
+            </WelcomeScreen.Center>
+          </WelcomeScreen>
+        </Excalidraw>
+      </div>
       <SelectionPropertiesRail selection={selectionInfo} api={api} />
       <ChromeOverlay
         fileName={currentFileName}
