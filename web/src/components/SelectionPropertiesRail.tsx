@@ -301,7 +301,33 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
   };
 
   const handleStrokeChange = (color: string) => {
-    applyToSelection((el) => ({ ...el, strokeColor: color }));
+    if (!api) return;
+    const sceneElements = api.getSceneElements();
+
+    // Collect IDs of bound text elements from selected containers
+    const boundTextIds = new Set<string>();
+    for (const el of elements) {
+      if (el.boundElements) {
+        for (const bound of el.boundElements) {
+          if (bound.type === "text") {
+            boundTextIds.add(bound.id);
+          }
+        }
+      }
+    }
+
+    // Apply stroke color to selected elements AND their bound text
+    const nextElements = sceneElements.map((el) => {
+      if (selectedIds.has(el.id)) {
+        return { ...el, strokeColor: color };
+      }
+      if (boundTextIds.has(el.id)) {
+        return { ...el, strokeColor: color };
+      }
+      return el;
+    });
+
+    api.updateScene({ elements: nextElements });
   };
 
   const handleBackgroundChange = (color: string) => {
