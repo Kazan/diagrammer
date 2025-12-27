@@ -6,7 +6,12 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const toolbarVariants = cva(
-  "flex gap-1.5 p-2 rounded-[var(--radius)] z-[2147483646]",
+  [
+    "flex gap-1.5 p-2 rounded-[var(--radius)] z-[2147483646]",
+    // Opaque panel background
+    "bg-[#0d1221]/95 backdrop-blur-lg border border-white/8",
+    "shadow-[0_12px_40px_rgba(0,0,0,0.28)]",
+  ].join(" "),
   {
     variants: {
       orientation: {
@@ -88,13 +93,18 @@ export interface ToolbarProps
   extends React.HTMLAttributes<HTMLDivElement>,
     VariantProps<typeof toolbarVariants> {}
 
-function Toolbar({ className, orientation, ...props }: ToolbarProps) {
+function Toolbar({ className, orientation, style, ...props }: ToolbarProps) {
   return (
     <div
       role="toolbar"
       data-slot="toolbar"
       data-orientation={orientation}
       className={cn(toolbarVariants({ orientation }), className)}
+      style={{
+        willChange: "transform",
+        backfaceVisibility: "hidden",
+        ...style,
+      }}
       {...props}
     />
   );
