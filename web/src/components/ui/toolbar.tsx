@@ -32,15 +32,15 @@ const toolbarButtonVariants = cva(
     variants: {
       variant: {
         default: [
-          // Solid opaque background for visibility over canvas
-          "bg-[#0d1221] border-[rgba(255,255,255,0.12)] text-[#7f8ba8]",
-          "shadow-[0_6px_14px_rgba(0,0,0,0.16)]",
-          "hover:bg-[#151d30] hover:border-[rgba(255,255,255,0.20)] hover:text-[#a9b5d1]",
-          "hover:shadow-[0_10px_18px_rgba(0,0,0,0.18)] hover:-translate-y-px",
+          // Light opaque background with dark icon and border
+          "bg-[#f0f2f5] border-[#5c6578] text-[#5c6578]",
+          "shadow-[0_6px_14px_rgba(0,0,0,0.12)]",
+          "hover:bg-[#e4e7ec] hover:border-[#3d4555] hover:text-[#3d4555]",
+          "hover:shadow-[0_10px_18px_rgba(0,0,0,0.14)] hover:-translate-y-px",
         ].join(" "),
         ghost: [
-          "border-transparent bg-transparent text-[#7f8ba8]",
-          "hover:bg-slate-900/10 hover:text-[#a9b5d1]",
+          "border-transparent bg-transparent text-[#5c6578]",
+          "hover:bg-slate-200/60 hover:text-[#3d4555]",
         ].join(" "),
         flyout: [
           "border-slate-900/12 bg-[#f8fafc] text-[#0f172a]",
