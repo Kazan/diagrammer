@@ -54,6 +54,8 @@ export function useZoomControls(options: {
   const handleResetZoom = useCallback(() => {
     const instance = apiRef.current;
     if (!instance) return;
+
+    // Reset zoom to 100%
     const next = 1;
     instance.updateScene({
       appState: { ...instance.getAppState(), zoom: { value: toNormalizedZoomValue(next) } },
@@ -61,6 +63,22 @@ export function useZoomControls(options: {
     });
     lastZoomRef.current = next;
     setZoom({ value: next });
+
+    // Center on selected elements, or the whole scene if nothing selected
+    const appState = instance.getAppState();
+    const selectedIds = Object.keys(appState.selectedElementIds || {});
+    const allElements = instance.getSceneElements();
+
+    if (selectedIds.length > 0) {
+      // Center on selected elements
+      const selectedElements = allElements.filter(el => selectedIds.includes(el.id));
+      if (selectedElements.length > 0) {
+        instance.scrollToContent(selectedElements, { fitToContent: true, animate: true });
+      }
+    } else if (allElements.length > 0) {
+      // Center on whole scene
+      instance.scrollToContent(allElements, { fitToContent: true, animate: true });
+    }
   }, [apiRef, toNormalizedZoomValue]);
 
   const handleZoomToContent = useCallback(() => {
