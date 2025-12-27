@@ -64,8 +64,9 @@ const toolbarButtonVariants = cva(
         variant: "default",
         pressed: true,
         className: [
-          "bg-[hsla(156,64%,48%,0.15)] border-[hsl(156,64%,48%)] text-[hsl(156,64%,48%)]",
-          "[&_svg]:text-[hsl(156,64%,48%)]",
+          "bg-[#3d4555] border-[#3d4555] text-[#e4e7ec]",
+          "[&_svg]:text-[#e4e7ec]",
+          "hover:bg-[#4a5568] hover:border-[#4a5568] hover:text-[#f0f2f5]",
         ].join(" "),
       },
       {

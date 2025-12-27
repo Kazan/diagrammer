@@ -107,7 +107,7 @@ function FontListItem({
       className={cn(
         "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors",
         "hover:bg-slate-100",
-        isActive && "bg-[hsla(156,64%,48%,0.12)] border border-[hsl(156,64%,48%)]",
+        isActive && "bg-[#3d4555] border border-[#3d4555] text-white [&_svg]:text-slate-300",
         !isActive && "border border-transparent"
       )}
       onPointerDownCapture={(e) => {
@@ -130,9 +130,9 @@ function FontListItem({
       }}
       aria-pressed={isActive}
     >
-      <font.icon size={16} className="text-slate-500 flex-shrink-0" aria-hidden="true" />
+      <font.icon size={16} className={cn("flex-shrink-0", isActive ? "text-slate-300" : "text-slate-500")} aria-hidden="true" />
       <span
-        className="text-slate-900 text-[15px]"
+        className={cn("text-[15px]", isActive ? "text-white" : "text-slate-900")}
         style={{ fontFamily: font.fontFamily }}
       >
         {font.name}

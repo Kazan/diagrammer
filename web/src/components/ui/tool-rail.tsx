@@ -26,8 +26,9 @@ const railButtonStyles = {
     "hover:shadow-[0_10px_18px_rgba(0,0,0,0.14)] hover:-translate-y-px",
   ].join(" "),
   pressed: [
-    "bg-[hsla(156,64%,48%,0.15)] border-[hsl(156,64%,48%)] text-[hsl(156,64%,48%)]",
-    "[&_svg]:text-[hsl(156,64%,48%)]",
+    "bg-[#3d4555] border-[#3d4555] text-[#e4e7ec]",
+    "[&_svg]:text-[#e4e7ec]",
+    "hover:bg-[#4a5568] hover:border-[#4a5568] hover:text-[#f0f2f5]",
   ].join(" "),
   flyout: [
     "border-slate-900/12 bg-[#f8fafc] text-[#0f172a]",
@@ -276,11 +277,11 @@ const RailToggleItem = React.forwardRef<HTMLButtonElement, RailToggleItemProps>(
           size === "sm" && "size-9",
           size === "lg" && "size-12",
           (!size || size === "default") && "size-11",
-          // Active state via data attribute - using Tailwind's data attribute syntax
-          "data-[state=on]:bg-[hsla(156,64%,48%,0.15)]",
-          "data-[state=on]:border-[hsl(156,64%,48%)]",
-          "data-[state=on]:text-[hsl(156,64%,48%)]",
-          "data-[state=on]:[&_svg]:text-[hsl(156,64%,48%)]",
+          // Active state via data attribute - inverted: dark background, light icon
+          "data-[state=on]:bg-[#3d4555]",
+          "data-[state=on]:border-[#3d4555]",
+          "data-[state=on]:text-[#e4e7ec]",
+          "data-[state=on]:[&_svg]:text-[#e4e7ec]",
           className
         )}
         style={{
