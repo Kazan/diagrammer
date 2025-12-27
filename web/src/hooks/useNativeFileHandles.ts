@@ -22,6 +22,14 @@ export function useNativeFileHandles({
   const currentFileHandleRef = useRef<NativeFileHandle | null>(null);
   const hasCurrentFileRef = useRef(initialFileName !== "Unsaved");
 
+  type WriteParams =
+    | { type: "write"; data?: unknown; position?: number }
+    | { type: "truncate"; size?: number };
+
+  const isWriteParams = (chunk: unknown): chunk is WriteParams => {
+    return Boolean(chunk && typeof chunk === "object" && "type" in (chunk as Record<string, unknown>));
+  };
+
   const createNativeFileHandle = useCallback(
     (rawName: string, fileContent = ""): NativeFileHandle => {
       const baseName = stripExtension(rawName);
@@ -38,26 +46,30 @@ export function useNativeFileHandles({
             throw new Error("WritableStream unavailable");
           }
 
-          const normalizeToString = async (value: any): Promise<string> => {
+          const normalizeToString = async (value: unknown): Promise<string> => {
             if (typeof value === "string") return value;
             if (value instanceof Blob) return await value.text();
             if (value instanceof ArrayBuffer) return new TextDecoder().decode(value);
             if (ArrayBuffer.isView(value)) return new TextDecoder().decode(value as ArrayBufferView);
-            if (typeof value?.text === "function") return await value.text();
-            if (typeof value?.data !== "undefined") return normalizeToString(value.data);
+            if (value && typeof value === "object") {
+              const maybeText = (value as { text?: unknown }).text;
+              if (typeof maybeText === "function") {
+                return await (maybeText as () => Promise<string>).call(value);
+              }
+              const maybeData = (value as { data?: unknown }).data;
+              if (typeof maybeData !== "undefined") return normalizeToString(maybeData);
+            }
             return JSON.stringify(value);
           };
 
           currentContent = "";
 
-          const writable = new WritableStream<any>({
-            async write(chunk: any) {
-              const isWriteParams = chunk && typeof chunk === "object" && "type" in chunk;
-              if (isWriteParams) {
-                const kind = (chunk as any).type;
-                if (kind === "write") {
-                  const data = (chunk as any).data;
-                  const position = (chunk as any).position;
+          const writable = new WritableStream<unknown>({
+            async write(chunk: unknown) {
+              if (isWriteParams(chunk)) {
+                if (chunk.type === "write") {
+                  const data = chunk.data;
+                  const position = chunk.position;
                   const text = await normalizeToString(data);
                   if (typeof position === "number" && position >= 0) {
                     const prefix = currentContent.slice(0, position);
@@ -68,9 +80,9 @@ export function useNativeFileHandles({
                   }
                   return;
                 }
-                if (kind === "truncate") {
-                  const size = (chunk as any).size ?? 0;
-                  currentContent = currentContent.slice(0, size);
+                if (chunk.type === "truncate") {
+                  const size = chunk.size ?? 0;
+                  currentContent = currentContent.slice(0, Math.max(0, size));
                   return;
                 }
               }

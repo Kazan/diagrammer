@@ -1,16 +1,45 @@
-@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&display=swap");
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@layer base {
+  :root {
+    /* shadcn theming - dark mode optimized for app */
+    --radius: 0.625rem;
+    --background: 222 47% 5%;
+    --foreground: 217 33% 93%;
+    --card: 222 47% 7%;
+    --card-foreground: 217 33% 93%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 156 64% 48%;
+    --primary-foreground: 222 47% 5%;
+    --secondary: 217 19% 35%;
+    --secondary-foreground: 217 33% 93%;
+    --muted: 222 20% 20%;
+    --muted-foreground: 217 19% 60%;
+    --accent: 156 64% 48%;
+    --accent-foreground: 222 47% 5%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 100% / 12%;
+    --input: 0 0% 100% / 12%;
+    --ring: 156 64% 48%;
+  }
+}
 
 :root {
+  /* Legacy CSS variables - keep for existing styles */
   --bg: #060a18;
   --bg-2: #0c1226;
   --panel: rgba(13, 18, 33, 0.68);
   --panel-border: rgba(255, 255, 255, 0.02);
   --text: #e7ecf5;
-  --muted: #9aa7bd;
-  --accent: #3fcf8e;
+  --legacy-muted: #9aa7bd;
+  --legacy-accent: #3fcf8e;
   --warn: #f59e0b;
   --error: #ef4444;
-  --radius: 14px;
   --shadow: 0 12px 40px rgba(0, 0, 0, 0.28);
   --blur: blur(14px);
 }
@@ -35,10 +64,53 @@ body {
 }
 
 .app-shell {
+  position: relative;
   height: 100vh;
   width: 100vw;
   background: transparent;
   color: var(--text);
+  /* Create stacking context to contain Excalidraw */
+  isolation: isolate;
+}
+
+/*
+  Container for Excalidraw that constrains all canvas rendering
+  to a lower stacking context so popovers appear above.
+  Note: Do NOT use `contain: strict` as it breaks portal positioning.
+*/
+.excalidraw-container {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+:root {
+  /* Layout variables */
+  --tool-rail-left: 16px;
+  --tool-rail-top: 96px;
+  --tool-rail-width: 124px;
+  --rails-gap: 16px;
+  --rails-divider-width: 2px;
+  --rails-divider-color: rgba(15, 23, 42, 0.22);
+
+  /* Z-index scale - toolbars and flyouts on top of everything */
+  --z-canvas: 1;
+  --z-chrome: 30;
+  --z-toolbar: 9999;
+  --z-popover: 10000;
+
+  /* Toolbar button styling tokens */
+  --toolbar-btn-border: rgba(255, 255, 255, 0.12);
+  --toolbar-btn-bg: rgba(15, 23, 42, 0.08);
+  --toolbar-btn-text: #7f8ba8;
+  --toolbar-btn-shadow: 0 6px 14px rgba(0, 0, 0, 0.16);
+  --toolbar-btn-hover-bg: rgba(15, 23, 42, 0.14);
+  --toolbar-btn-hover-border: rgba(255, 255, 255, 0.20);
+  --toolbar-btn-hover-text: #a9b5d1;
+  --toolbar-btn-hover-shadow: 0 10px 18px rgba(0, 0, 0, 0.18);
+  --toolbar-btn-active-bg: hsla(156, 64%, 48%, 0.15);
+  --toolbar-btn-active-border: hsl(156, 64%, 48%);
+  --toolbar-btn-active-text: hsl(156, 64%, 48%);
 }
 
 .chrome-overlay {
@@ -183,12 +255,13 @@ body {
   color: var(--error);
 }
 
-/* Hide only the burger/menu controls; keep toolbar and property bar visible */
+/* Hide Excalidraw's built-in toolbars/sidebars; host UI provides these. */
 
 .custom-toolbar {
   position: fixed;
-  left: 16px;
-  top: 96px;
+  left: var(--tool-rail-left);
+  top: var(--tool-rail-top);
+  width: var(--tool-rail-width);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -233,6 +306,7 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(16, 22, 36, 0.08);
   color: #7f8ba8;
+  width: 100%;
   padding: 10px;
   border-radius: 8px;
   display: inline-flex;
@@ -254,19 +328,56 @@ body {
   stroke-width: 1.7px;
 }
 
+/* Hide Excalidraw's main menu trigger (we provide our own open/save/export UI). */
+.excalidraw .main-menu-trigger {
+  display: none !important;
+}
 
-.excalidraw [aria-label="Main menu"],
-.excalidraw [aria-label="Canvas menu"],
-.excalidraw [data-testid="main-menu-button"],
-.excalidraw [data-testid="canvas-menu"],
-.excalidraw [data-testid="main-menu-trigger"],
-.excalidraw [aria-label="Menu"],
-.excalidraw button[aria-label*="menu" i],
-.excalidraw .dropdown-menu,
-.excalidraw .dropdown-menu-trigger,
+/*
+  Constrain Excalidraw's internal z-index to prevent canvas elements
+  from appearing above our custom toolbars and popovers.
+  Force GPU compositing containment on Excalidraw.
+*/
+.excalidraw {
+  position: relative !important;
+  z-index: 1 !important;
+  isolation: isolate !important;
+}
+
+.excalidraw .layer-ui__wrapper,
+.excalidraw .excalidraw__canvas,
+.excalidraw canvas,
+.excalidraw .interactive.excalidraw__canvas {
+  z-index: auto !important;
+}
+
+/*
+  Force Radix popover portal to be on top of everything including GPU layers.
+  Only set z-index, do NOT override transform as Radix uses it for positioning.
+*/
+[data-radix-popper-content-wrapper] {
+  z-index: 2147483647 !important;
+}
+
+/*
+  Excalidraw v0.18.0 does not currently expose supported APIs to hide the
+  built-in toolbar or the element properties panel. We therefore hide these
+  via stable, version-pinned class names.
+*/
+.excalidraw .App-top-bar,
 .excalidraw .App-menu,
-.excalidraw .layer-ui__wrapper__menu,
-.excalidraw .App-top-bar__menus {
+.excalidraw .App-menu_top,
+.excalidraw .App-menu_top__left,
+.excalidraw .App-menu_bottom,
+.excalidraw .App-toolbar-container,
+.excalidraw .App-toolbar,
+.excalidraw .App-toolbar--mobile,
+.excalidraw .App-mobile-menu,
+.excalidraw .App-bottom-bar,
+.excalidraw .layer-ui__wrapper__footer,
+.excalidraw .default-sidebar-trigger,
+.excalidraw .sidebar-trigger,
+.excalidraw .sidebar {
   display: none !important;
 }
 
@@ -294,8 +405,8 @@ body {
 
 .selection-props-rail {
   position: fixed;
-  left: 200px;
-  top: 96px;
+  left: calc(var(--tool-rail-left) + var(--tool-rail-width) + var(--rails-gap));
+  top: var(--tool-rail-top);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -304,10 +415,27 @@ body {
   background: transparent;
   z-index: 24;
   pointer-events: auto;
+  isolation: isolate;
+}
+
+/* Divider only renders when the selection rail exists, and matches its height. */
+.selection-props-rail::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(-1 * (var(--rails-gap) / 2));
+  width: var(--rails-divider-width);
+  transform: translateX(calc(-1 * var(--rails-divider-width) / 2));
+  background: var(--rails-divider-color);
+  border-radius: 999px;
+  z-index: 0;
+  pointer-events: none;
 }
 
 .selection-props-rail__button {
   position: relative;
+  z-index: 1;
   width: 44px;
   height: 44px;
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -368,6 +496,76 @@ body {
   gap: 8px;
 }
 
+.arrange-flyout {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 232px;
+  color: #0f172a;
+}
+
+.arrange-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.arrange-section__title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.arrange-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(44px, 44px));
+  gap: 8px;
+}
+
+.arrange-grid--four {
+  grid-template-columns: repeat(4, 44px);
+}
+
+.arrange-grid--row {
+  grid-template-columns: repeat(3, 44px);
+}
+
+.arrange-grid--single {
+  grid-template-columns: repeat(1, 44px);
+}
+
+.arrange-tile {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: #f8fafc;
+  color: #0f172a;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 6px 14px rgba(0, 0, 0, 0.08);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+.arrange-tile:hover {
+  background: #eef2f7;
+  border-color: rgba(15, 23, 42, 0.2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 10px 18px rgba(0, 0, 0, 0.12);
+  transform: translateY(-1px);
+}
+
+.arrange-tile:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.arrange-tile svg {
+  width: 18px;
+  height: 18px;
+  color: #1f2a44;
+}
 
 .props-flyout {
   display: flex;
@@ -946,6 +1144,90 @@ body {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
   }
 }
 

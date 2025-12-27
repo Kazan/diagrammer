@@ -14,6 +14,13 @@ import {
   Type as TypeIcon,
   Image as ImageIcon,
 } from "lucide-react";
+import {
+  ToolRail,
+  RailSection,
+  RailSeparator,
+  RailToggleGroup,
+  RailToggleItem,
+} from "@/components/ui/tool-rail";
 
 export type ToolType =
   | "selection"
@@ -35,9 +42,15 @@ type Props = {
   onSelect: (tool: ToolType) => void;
 };
 
+type ToolDef = {
+  id: ToolType;
+  label: string;
+  Icon: React.ComponentType<{ size?: number | string }>;
+};
+
 type ToolSection = {
   id: string;
-  tools: { id: ToolType; label: string; Icon: React.ComponentType<{ size?: number | string }> }[];
+  tools: ToolDef[];
 };
 
 const TOOL_SECTIONS: ToolSection[] = [
@@ -68,30 +81,19 @@ const TOOL_SECTIONS: ToolSection[] = [
 
 export function CustomToolbar({ activeTool, onSelect }: Props) {
   return (
-    <div className="custom-toolbar" role="toolbar" aria-label="Drawing tools">
-      {TOOL_SECTIONS.map((section, index) => (
-        <div key={section.id} className="custom-toolbar__section" role="group" aria-label={section.id}>
-          <div className="custom-toolbar__buttons">
-            {section.tools.map((tool) => {
-              const isActive = activeTool === tool.id;
-              const Icon = tool.Icon;
-              return (
-                <button
-                  key={tool.id}
-                  type="button"
-                  className={`custom-tool ${isActive ? "is-active" : ""}`}
-                  aria-pressed={isActive}
-                  aria-label={tool.label}
-                  onClick={() => onSelect(tool.id)}
-                >
-                  <Icon size={18} aria-hidden="true" />
-                </button>
-              );
-            })}
-          </div>
-          {index < TOOL_SECTIONS.length - 1 ? <div className="custom-toolbar__divider" aria-hidden="true" /> : null}
-        </div>
-      ))}
-    </div>
+    <ToolRail position="left" aria-label="Drawing tools">
+      <RailToggleGroup value={activeTool} onValueChange={onSelect}>
+        {TOOL_SECTIONS.map((section, index) => (
+          <RailSection key={section.id} columns={2} label={section.id}>
+            {section.tools.map((tool) => (
+              <RailToggleItem key={tool.id} value={tool.id} aria-label={tool.label}>
+                <tool.Icon aria-hidden="true" />
+              </RailToggleItem>
+            ))}
+            {index < TOOL_SECTIONS.length - 1 && <RailSeparator colSpan={2} />}
+          </RailSection>
+        ))}
+      </RailToggleGroup>
+    </ToolRail>
   );
 }

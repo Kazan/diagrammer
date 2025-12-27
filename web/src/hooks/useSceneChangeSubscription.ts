@@ -27,7 +27,6 @@ export type SceneChangeOptions = {
   sceneLoadInProgressRef: MutableRefObject<boolean>;
   expectedSceneSigRef: MutableRefObject<string | null>;
   loadSkipRef: MutableRefObject<number>;
-  lastDialogRef: MutableRefObject<string | null>;
   handleSaveToDocument: () => void;
   handleOpenWithNativePicker: () => boolean;
     onSelectionChange?: (payload: {
@@ -85,7 +84,6 @@ export function useSceneChangeSubscription(opts: SceneChangeOptions) {
     sceneLoadInProgressRef,
     expectedSceneSigRef,
     loadSkipRef,
-    lastDialogRef,
     handleSaveToDocument,
     handleOpenWithNativePicker,
     onSelectionChange,
@@ -111,11 +109,6 @@ export function useSceneChangeSubscription(opts: SceneChangeOptions) {
         suppressNextDirtyRef.current = false;
         expectedSceneSigRef.current = null;
         setIsDirty(false);
-        return;
-      }
-
-      if (!appState.objectsSnapModeEnabled) {
-        api.updateScene({ appState: { ...appState, objectsSnapModeEnabled: true } });
         return;
       }
 
@@ -163,42 +156,7 @@ export function useSceneChangeSubscription(opts: SceneChangeOptions) {
         }
       }
 
-      // Excalidraw openDialog name is loosely typed; coerce to string for comparison.
-      const dialogName = ((appState.openDialog as any)?.name as string | null) ?? null;
-      const previousDialog = lastDialogRef.current;
-      if (dialogName !== previousDialog) {
-        lastDialogRef.current = dialogName;
-        if (!dialogName) {
-          // Reset when dialog closes so future opens are intercepted.
-          return;
-        }
-        if (dialogName === "jsonExport") {
-          handleSaveToDocument();
-          api.updateScene({ appState: { ...appState, openDialog: null } });
-        } else {
-          const skipDialogs = new Set([
-            "imageExport",
-            "help",
-            "ttd",
-            "commandPalette",
-            "elementLinkSelector",
-          ]);
-
-          const shouldHijackOpen =
-            !skipDialogs.has(dialogName) &&
-            (dialogName === "jsonImport" ||
-              dialogName === "loadScene" ||
-              dialogName === "load" ||
-              dialogName === "loadSceneFromFile");
-
-          if (shouldHijackOpen && handleOpenWithNativePicker()) {
-            console.log("[NativeBridge] intercepted open dialog", dialogName);
-            api.updateScene({ appState: { ...appState, openDialog: null } });
-          } else {
-            console.log("[NativeBridge] dialog opened", dialogName);
-          }
-        }
-      }
+      // Open/save is handled via showOpenFilePicker/showSaveFilePicker hooks.
 
         if (
           onSelectionChange &&
@@ -219,9 +177,7 @@ export function useSceneChangeSubscription(opts: SceneChangeOptions) {
   }, [
     api,
     clearFileAssociation,
-    handleSaveToDocument,
     hydratedSceneRef,
-    lastDialogRef,
     prevNonEmptySceneRef,
     prevSceneSigRef,
     sceneLoadInProgressRef,
@@ -232,7 +188,6 @@ export function useSceneChangeSubscription(opts: SceneChangeOptions) {
     setIsDirty,
     setStatus,
     suppressNextDirtyRef,
-    handleOpenWithNativePicker,
     onSelectionChange,
   ]);
 }

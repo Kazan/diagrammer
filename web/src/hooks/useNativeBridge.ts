@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { NativeBridge, NativeBridgeCallbacks, NativeBridgeEvent } from "../native-bridge";
+import { isNativeBridgeEvent, type NativeBridge, type NativeBridgeCallbacks, type NativeBridgeEvent } from "../native-bridge";
 
 type Handlers = {
   onNativeMessage?: (payload?: NativeBridgeEvent) => void;
@@ -15,8 +15,33 @@ export function useNativeBridge(handlers: Handlers) {
   const callbacks = useMemo<NativeBridgeCallbacks>(() => {
     if (!handlers.onNativeMessage && !handlers.onSceneLoaded) return emptyCallbacks;
     return {
-      onNativeMessage: handlers.onNativeMessage,
-      onSceneLoaded: handlers.onSceneLoaded,
+      onNativeMessage: (payload: unknown) => {
+        if (!handlers.onNativeMessage) return;
+        if (isNativeBridgeEvent(payload)) {
+          handlers.onNativeMessage(payload);
+          return;
+        }
+        console.warn("[NativeBridge] Invalid event payload", payload);
+        handlers.onNativeMessage({
+          event: "onNativeMessage",
+          success: false,
+          message: "Invalid native event payload",
+        });
+      },
+      onSceneLoaded: (sceneJson: unknown, fileName?: unknown) => {
+        if (!handlers.onSceneLoaded) return;
+        if (typeof sceneJson === "string") {
+          handlers.onSceneLoaded(sceneJson, typeof fileName === "string" ? fileName : undefined);
+          return;
+        }
+        console.warn("[NativeBridge] Invalid scene payload", { sceneJson, fileName });
+        // Signal failure via native-message channel so open flows can be rejected.
+        handlers.onNativeMessage?.({
+          event: "onNativeMessage",
+          success: false,
+          message: "Invalid native scene payload",
+        });
+      },
     };
   }, [handlers.onNativeMessage, handlers.onSceneLoaded]);
 

@@ -1,20 +1,10 @@
 import { useEffect, useMemo, useState, type MutableRefObject } from "react";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import { buildDefaultLocalAppStateOverrides, restoreSceneForApp } from "../excalidraw-restore";
 import {
   EMPTY_SCENE,
   computeSceneSignature,
-  computeSceneSignatureFromScene,
 } from "../scene-utils";
-
-const ensureObjectsSnapModeEnabled = (scene: any) => {
-  if (scene && typeof scene === "object") {
-    scene.appState = {
-      ...(scene.appState ?? {}),
-      objectsSnapModeEnabled: scene.appState?.objectsSnapModeEnabled ?? true,
-    };
-  }
-  return scene;
-};
 
 export function useSceneHydration(options: {
   api: ExcalidrawImperativeAPI | null;
@@ -38,7 +28,7 @@ export function useSceneHydration(options: {
   const LOCAL_SCENE_KEY = "diagrammer.localScene";
   const LOCAL_FS_KEY = "diagrammer.localFs";
 
-  const startupScene = useMemo(() => {
+  const startupRawScene = useMemo(() => {
     const saved = window.NativeBridge?.loadScene?.() ?? window.localStorage.getItem(LOCAL_SCENE_KEY);
     if (!saved) {
       try {
@@ -46,7 +36,7 @@ export function useSceneHydration(options: {
         const entries = rawFs ? JSON.parse(rawFs) : null;
         if (Array.isArray(entries) && entries.length) {
           const latest = entries.reduce((best: any, entry: any) => (best && best.updated > entry.updated ? best : entry));
-          if (latest?.scene) return ensureObjectsSnapModeEnabled(JSON.parse(latest.scene));
+          if (latest?.scene) return JSON.parse(latest.scene);
         }
       } catch (_err) {
         // ignore
@@ -54,15 +44,28 @@ export function useSceneHydration(options: {
       return null;
     }
     try {
-      return ensureObjectsSnapModeEnabled(JSON.parse(saved));
+      return JSON.parse(saved);
     } catch (err) {
       console.warn("Failed to parse saved scene", err);
       return null;
     }
   }, [LOCAL_FS_KEY, LOCAL_SCENE_KEY]);
 
-  const initialData = useMemo(() => ensureObjectsSnapModeEnabled(startupScene ?? EMPTY_SCENE), [startupScene]);
-  const [pendingScene, setPendingScene] = useState(startupScene);
+  const initialData = useMemo(() => {
+    const localOverrides = buildDefaultLocalAppStateOverrides({
+      viewBackgroundColor: "#ffffff",
+      objectsSnapModeEnabled: true,
+      zoomValue: 1,
+    });
+    const restored = restoreSceneForApp(startupRawScene, localOverrides);
+    const hasVisibleElements = restored.elements.some((el) => !el.isDeleted);
+    return {
+      ...restored,
+      scrollToContent: hasVisibleElements,
+    };
+  }, [startupRawScene]);
+
+  const [didAnnounceRestore, setDidAnnounceRestore] = useState(false);
 
   useEffect(() => {
     if (!api) return;
@@ -73,35 +76,13 @@ export function useSceneHydration(options: {
   }, [api, hydratedSceneRef, prevNonEmptySceneRef, prevSceneSigRef]);
 
   useEffect(() => {
-    if (!api || !pendingScene) return;
-    const hydrated = ensureObjectsSnapModeEnabled(structuredClone(pendingScene));
-    api.resetScene(hydrated as any, { resetLoadingState: true, replaceFiles: true });
-    const elements = Array.isArray((pendingScene as any)?.elements)
-      ? (pendingScene as any).elements.filter((el: any) => !el.isDeleted)
-      : [];
-    if (elements.length) {
-      api.scrollToContent(elements as any, { fitToViewport: true, animate: false });
-    }
-    setPendingScene(null);
-    hydratedSceneRef.current = true;
-    prevNonEmptySceneRef.current = Array.isArray((pendingScene as any)?.elements)
-      ? (pendingScene as any).elements.some((el: any) => !el.isDeleted)
-      : false;
+    if (!api || didAnnounceRestore) return;
+    if (!startupRawScene) return;
+    setDidAnnounceRestore(true);
     setIsDirty(false);
     suppressNextDirtyRef.current = true;
-    prevSceneSigRef.current = computeSceneSignatureFromScene(pendingScene);
     setStatus({ text: "Restored previous drawing", tone: "ok" });
-  }, [
-    api,
-    pendingScene,
-    computeSceneSignatureFromScene,
-    hydratedSceneRef,
-    prevNonEmptySceneRef,
-    prevSceneSigRef,
-    setIsDirty,
-    setStatus,
-    suppressNextDirtyRef,
-  ]);
+  }, [api, didAnnounceRestore, setIsDirty, setStatus, startupRawScene, suppressNextDirtyRef]);
 
   return { initialData } as const;
 }

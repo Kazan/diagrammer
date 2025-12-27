@@ -5,14 +5,11 @@ import { buildSceneSaveEnvelope, type SceneSaveEnvelope } from "../scene-utils";
 
 export function useSceneSerialization(api: ExcalidrawImperativeAPI | null) {
   const serializeScenePayload = useCallback(
-    (opts?: { includeDeleted?: boolean }) => {
+    () => {
       if (!api) {
         throw new Error("Canvas not ready");
       }
-      const includeDeleted = opts?.includeDeleted ?? true;
-      const elements = includeDeleted
-        ? api.getSceneElementsIncludingDeleted()
-        : api.getSceneElements();
+      const elements = api.getSceneElements();
       const appState = api.getAppState();
       const files = api.getFiles();
       return serializeAsJSON(elements, appState, files, "local");
@@ -21,8 +18,8 @@ export function useSceneSerialization(api: ExcalidrawImperativeAPI | null) {
   );
 
   const buildSceneEnvelope = useCallback(
-    async (opts?: { includeDeleted?: boolean; suggestedName?: string }): Promise<SceneSaveEnvelope> => {
-      const json = serializeScenePayload(opts);
+    async (opts?: { suggestedName?: string }): Promise<SceneSaveEnvelope> => {
+      const json = serializeScenePayload();
       return buildSceneSaveEnvelope(json, opts?.suggestedName);
     },
     [serializeScenePayload]
