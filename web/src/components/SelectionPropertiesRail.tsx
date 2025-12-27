@@ -15,8 +15,8 @@ import {
   Group as GroupIcon,
   Layers as LayersIcon,
   PaintBucket,
-  Palette,
   SendToBack,
+  Signature,
   SlidersHorizontal,
   Trash2,
   Type as TypeIcon,
@@ -448,7 +448,7 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
             }
           >
             <RailSwatch color={strokeColor} />
-            <Palette size={18} aria-hidden="true" />
+            <Signature size={18} aria-hidden="true" />
           </RailPopoverButton>
         )}
 
