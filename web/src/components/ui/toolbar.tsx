@@ -90,18 +90,17 @@ export interface ToolbarProps
   extends React.HTMLAttributes<HTMLDivElement>,
     VariantProps<typeof toolbarVariants> {}
 
-function Toolbar({ className, orientation, style, ...props }: ToolbarProps) {
+function Toolbar({ className, orientation, ...props }: ToolbarProps) {
   return (
     <div
       role="toolbar"
       data-slot="toolbar"
       data-orientation={orientation}
-      className={cn(toolbarVariants({ orientation }), className)}
-      style={{
-        willChange: "transform",
-        backfaceVisibility: "hidden",
-        ...style,
-      }}
+      className={cn(
+        toolbarVariants({ orientation }),
+        "will-change-transform backface-hidden",
+        className
+      )}
       {...props}
     />
   );
@@ -114,7 +113,7 @@ export interface ToolbarButtonProps
 }
 
 const ToolbarButton = React.forwardRef<HTMLButtonElement, ToolbarButtonProps>(
-  ({ className, variant, size, pressed = false, asChild = false, style, ...props }, ref) => {
+  ({ className, variant, size, pressed = false, asChild = false, ...props }, ref) => {
     const Comp = asChild ? Slot : "button";
     return (
       <Comp
@@ -124,12 +123,11 @@ const ToolbarButton = React.forwardRef<HTMLButtonElement, ToolbarButtonProps>(
         data-variant={variant}
         data-size={size}
         aria-pressed={pressed ?? undefined}
-        className={cn(toolbarButtonVariants({ variant, size, pressed }), className)}
-        style={{
-          willChange: "transform",
-          backfaceVisibility: "hidden",
-          ...style,
-        }}
+        className={cn(
+          toolbarButtonVariants({ variant, size, pressed }),
+          "will-change-transform backface-hidden",
+          className
+        )}
         {...props}
       />
     );

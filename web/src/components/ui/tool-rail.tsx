@@ -81,7 +81,7 @@ export interface ToolRailProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 const ToolRail = React.forwardRef<HTMLDivElement, ToolRailProps>(
-  ({ className, position = "custom", showDivider = false, style, ...props }, ref) => {
+  ({ className, position = "custom", showDivider = false, ...props }, ref) => {
     return (
       <div
         ref={ref}
@@ -91,6 +91,7 @@ const ToolRail = React.forwardRef<HTMLDivElement, ToolRailProps>(
         className={cn(
           "flex flex-col gap-1.5 p-3 rounded-[var(--radius)] z-[2147483646]",
           "animate-[float-in_260ms_ease_both]",
+          "will-change-transform backface-hidden",
           position === "left" && "fixed left-[var(--tool-rail-left)] top-[var(--tool-rail-top)] w-[var(--tool-rail-width)]",
           position === "right" && [
             "fixed",
@@ -106,11 +107,6 @@ const ToolRail = React.forwardRef<HTMLDivElement, ToolRailProps>(
           ],
           className
         )}
-        style={{
-          willChange: "transform",
-          backfaceVisibility: "hidden",
-          ...style,
-        }}
         {...props}
       />
     );
