@@ -26,7 +26,6 @@ import type { PaletteId } from "./ColorPicker";
 import { SelectionStyleFlyout } from "./SelectionStyleFlyout";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Toolbar, ToolbarButton, ToolbarSeparator, ToolbarGroup, ToolbarSwatch } from "@/components/ui/toolbar";
-import { ButtonGroup } from "@/components/ui/button-group";
 import { cn } from "@/lib/utils";
 
 export type PropertyKind = "stroke" | "background" | "style" | "arrange";
@@ -438,6 +437,12 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
           </Popover>
         )}
 
+      </ToolbarGroup>
+
+      <ToolbarSeparator />
+
+      {/* Action buttons */}
+      <ToolbarGroup orientation="vertical" className="gap-1.5">
         <Popover open={openKind === "arrange"} onOpenChange={(open) => setOpenKind(open ? "arrange" : null)}>
           <PopoverTrigger asChild>
             <ToolbarButton aria-label="Layers and alignment">
@@ -507,19 +512,13 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
             </div>
           </PopoverContent>
         </Popover>
-      </ToolbarGroup>
-
-      <ToolbarSeparator />
-
-      {/* Action buttons */}
-      <ButtonGroup orientation="vertical" className="gap-1.5">
         <ToolbarButton onClick={duplicateSelection} aria-label="Duplicate selection">
           <Copy size={18} aria-hidden="true" />
         </ToolbarButton>
         <ToolbarButton onClick={deleteSelection} aria-label="Delete selection">
           <Trash2 size={18} aria-hidden="true" />
         </ToolbarButton>
-      </ButtonGroup>
+      </ToolbarGroup>
     </Toolbar>
   );
 }

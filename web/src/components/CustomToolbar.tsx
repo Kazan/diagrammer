@@ -94,8 +94,14 @@ export function CustomToolbar({ activeTool, onSelect }: Props) {
                 aria-label={tool.label}
                 className={cn(
                   toolbarButtonVariants({ variant: "default", size: "default" }),
-                  "data-[state=on]:bg-[var(--toolbar-btn-active-bg)] data-[state=on]:border-[var(--toolbar-btn-active-border)] data-[state=on]:text-[var(--toolbar-btn-active-text)]"
+                  "data-[state=on]:bg-[hsla(156,64%,48%,0.15)] data-[state=on]:border-[hsl(156,64%,48%)] data-[state=on]:text-[hsl(156,64%,48%)]",
+                  // Override toggle-group's first/last rounded corners
+                  "!rounded-lg"
                 )}
+                style={{
+                  willChange: "transform",
+                  backfaceVisibility: "hidden",
+                }}
               >
                 <tool.Icon aria-hidden="true" />
               </ToggleGroupItem>

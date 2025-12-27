@@ -6,12 +6,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const toolbarVariants = cva(
-  [
-    "flex gap-1.5 p-2 rounded-[var(--radius)] z-[2147483646]",
-    // Opaque panel background
-    "bg-[#0d1221]/95 backdrop-blur-lg border border-white/8",
-    "shadow-[0_12px_40px_rgba(0,0,0,0.28)]",
-  ].join(" "),
+  "flex gap-1.5 p-2 rounded-[var(--radius)] z-[2147483646]",
   {
     variants: {
       orientation: {
@@ -37,10 +32,11 @@ const toolbarButtonVariants = cva(
     variants: {
       variant: {
         default: [
-          "border-[var(--toolbar-btn-border)] bg-[var(--toolbar-btn-bg)] text-[var(--toolbar-btn-text)]",
-          "shadow-[var(--toolbar-btn-shadow)]",
-          "hover:bg-[var(--toolbar-btn-hover-bg)] hover:border-[var(--toolbar-btn-hover-border)] hover:text-[var(--toolbar-btn-hover-text)]",
-          "hover:shadow-[var(--toolbar-btn-hover-shadow)] hover:-translate-y-px",
+          // Solid opaque background for visibility over canvas
+          "bg-[#0d1221] border-[rgba(255,255,255,0.12)] text-[#7f8ba8]",
+          "shadow-[0_6px_14px_rgba(0,0,0,0.16)]",
+          "hover:bg-[#151d30] hover:border-[rgba(255,255,255,0.20)] hover:text-[#a9b5d1]",
+          "hover:shadow-[0_10px_18px_rgba(0,0,0,0.18)] hover:-translate-y-px",
         ].join(" "),
         ghost: [
           "border-transparent bg-transparent text-[#7f8ba8]",
@@ -68,8 +64,8 @@ const toolbarButtonVariants = cva(
         variant: "default",
         pressed: true,
         className: [
-          "bg-[var(--toolbar-btn-active-bg)] border-[var(--toolbar-btn-active-border)] text-[var(--toolbar-btn-active-text)]",
-          "[&_svg]:text-[var(--toolbar-btn-active-text)]",
+          "bg-[hsla(156,64%,48%,0.15)] border-[hsl(156,64%,48%)] text-[hsl(156,64%,48%)]",
+          "[&_svg]:text-[hsl(156,64%,48%)]",
         ].join(" "),
       },
       {
@@ -117,7 +113,7 @@ export interface ToolbarButtonProps
 }
 
 const ToolbarButton = React.forwardRef<HTMLButtonElement, ToolbarButtonProps>(
-  ({ className, variant, size, pressed = false, asChild = false, ...props }, ref) => {
+  ({ className, variant, size, pressed = false, asChild = false, style, ...props }, ref) => {
     const Comp = asChild ? Slot : "button";
     return (
       <Comp
@@ -128,6 +124,11 @@ const ToolbarButton = React.forwardRef<HTMLButtonElement, ToolbarButtonProps>(
         data-size={size}
         aria-pressed={pressed ?? undefined}
         className={cn(toolbarButtonVariants({ variant, size, pressed }), className)}
+        style={{
+          willChange: "transform",
+          backfaceVisibility: "hidden",
+          ...style,
+        }}
         {...props}
       />
     );
