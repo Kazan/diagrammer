@@ -39,6 +39,56 @@ type TextAlign = "left" | "center" | "right";
 
 type FontType = (typeof FONTS)[number];
 
+// Get bound text element IDs for a container element
+function getBoundTextIds(el: ExcalidrawElement): string[] {
+  if (!el.boundElements) return [];
+  return el.boundElements
+    .filter((b) => b.type === "text")
+    .map((b) => b.id);
+}
+
+// Get all text element IDs that should be affected by the selection
+// This includes direct text elements AND bound text elements from containers
+function getAffectedTextIds(
+  selectedIds: Set<string>,
+  allElements: ReadonlyArray<ExcalidrawElement>,
+): Set<string> {
+  const textIds = new Set<string>();
+  const elementsMap = new Map(allElements.map((el) => [el.id, el]));
+
+  for (const id of selectedIds) {
+    const el = elementsMap.get(id);
+    if (!el) continue;
+
+    if (el.type === "text") {
+      // Direct text element
+      textIds.add(el.id);
+    } else {
+      // Container element - get bound text
+      for (const boundId of getBoundTextIds(el)) {
+        textIds.add(boundId);
+      }
+    }
+  }
+
+  return textIds;
+}
+
+// Get the text element for reading properties (direct text or bound text from container)
+function getTextElementForReading(
+  el: ExcalidrawElement,
+  allElements: ReadonlyArray<ExcalidrawElement>,
+): ExcalidrawTextElement | null {
+  if (el.type === "text") {
+    return el as ExcalidrawTextElement;
+  }
+  // For containers, find the bound text element
+  const boundTextIds = getBoundTextIds(el);
+  if (boundTextIds.length === 0) return null;
+  const textEl = allElements.find((e) => e.id === boundTextIds[0]);
+  return textEl?.type === "text" ? (textEl as ExcalidrawTextElement) : null;
+}
+
 // FontListItem extracted as a separate component to avoid re-creation on parent renders
 function FontListItem({
   font,
@@ -114,25 +164,19 @@ function getTextCapableElements(elements: ReadonlyArray<ExcalidrawElement>): Exc
 }
 
 // Get fontFamily from element (direct for text, from bound text for containers)
-function getFontFamily(el: ExcalidrawElement): number | undefined {
-  if (el.type === "text") {
-    return (el as ExcalidrawTextElement).fontFamily;
-  }
-  return undefined;
+function getFontFamily(el: ExcalidrawElement, allElements: ReadonlyArray<ExcalidrawElement>): number | undefined {
+  const textEl = getTextElementForReading(el, allElements);
+  return textEl?.fontFamily;
 }
 
-function getFontSize(el: ExcalidrawElement): number | undefined {
-  if (el.type === "text") {
-    return (el as ExcalidrawTextElement).fontSize;
-  }
-  return undefined;
+function getFontSize(el: ExcalidrawElement, allElements: ReadonlyArray<ExcalidrawElement>): number | undefined {
+  const textEl = getTextElementForReading(el, allElements);
+  return textEl?.fontSize;
 }
 
-function getTextAlign(el: ExcalidrawElement): TextAlign | undefined {
-  if (el.type === "text") {
-    return (el as ExcalidrawTextElement).textAlign as TextAlign;
-  }
-  return undefined;
+function getTextAlign(el: ExcalidrawElement, allElements: ReadonlyArray<ExcalidrawElement>): TextAlign | undefined {
+  const textEl = getTextElementForReading(el, allElements);
+  return textEl?.textAlign as TextAlign | undefined;
 }
 
 type Props = {
@@ -163,29 +207,30 @@ export function TextStyleFlyout({ elements, allSceneElements, api, selectedIds }
   const textElements = useMemo(() => getTextCapableElements(elements), [elements]);
 
   const currentFontFamily = useMemo(
-    () => getCommonValue(textElements, getFontFamily) ?? FONT_FAMILY.Excalifont,
-    [textElements],
+    () => getCommonValue(textElements, (el) => getFontFamily(el, allSceneElements)) ?? FONT_FAMILY.Excalifont,
+    [textElements, allSceneElements],
   );
 
   const currentFontSize = useMemo(
-    () => getCommonValue(textElements, getFontSize) ?? 20,
-    [textElements],
+    () => getCommonValue(textElements, (el) => getFontSize(el, allSceneElements)) ?? 20,
+    [textElements, allSceneElements],
   );
 
   const currentTextAlign = useMemo(
-    () => getCommonValue(textElements, getTextAlign) ?? "left",
-    [textElements],
+    () => getCommonValue(textElements, (el) => getTextAlign(el, allSceneElements)) ?? "left",
+    [textElements, allSceneElements],
   );
 
   const handleFontChange = useCallback(
     (fontId: number) => {
       if (!api) return;
       const sceneElements = api.getSceneElements();
+      const affectedTextIds = getAffectedTextIds(selectedIds, sceneElements);
       const now = Date.now();
       const randomNonce = () => Math.floor(Math.random() * 1_000_000_000);
-      // Apply font change to selected text elements with version bump
+      // Apply font change to affected text elements (direct or bound)
       const updatedElements = sceneElements.map((el) => {
-        if (selectedIds.has(el.id) && el.type === "text") {
+        if (affectedTextIds.has(el.id) && el.type === "text") {
           return {
             ...el,
             fontFamily: fontId,
@@ -210,11 +255,12 @@ export function TextStyleFlyout({ elements, allSceneElements, api, selectedIds }
     (size: number) => {
       if (!api) return;
       const sceneElements = api.getSceneElements();
+      const affectedTextIds = getAffectedTextIds(selectedIds, sceneElements);
       const now = Date.now();
       const randomNonce = () => Math.floor(Math.random() * 1_000_000_000);
-      // Apply size change to selected text elements with version bump
+      // Apply size change to affected text elements (direct or bound)
       const updatedElements = sceneElements.map((el) => {
-        if (selectedIds.has(el.id) && el.type === "text") {
+        if (affectedTextIds.has(el.id) && el.type === "text") {
           return {
             ...el,
             fontSize: size,
@@ -239,11 +285,12 @@ export function TextStyleFlyout({ elements, allSceneElements, api, selectedIds }
     (align: TextAlign) => {
       if (!api) return;
       const sceneElements = api.getSceneElements();
+      const affectedTextIds = getAffectedTextIds(selectedIds, sceneElements);
       const now = Date.now();
       const randomNonce = () => Math.floor(Math.random() * 1_000_000_000);
-      // Apply alignment change with version bump
+      // Apply alignment change to affected text elements (direct or bound)
       const updatedElements = sceneElements.map((el) => {
-        if (selectedIds.has(el.id) && el.type === "text") {
+        if (affectedTextIds.has(el.id) && el.type === "text") {
           return {
             ...el,
             textAlign: align,
