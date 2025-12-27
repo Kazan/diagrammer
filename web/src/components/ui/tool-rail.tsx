@@ -26,8 +26,9 @@ const railButtonStyles = {
     "hover:shadow-[0_10px_18px_rgba(0,0,0,0.14)] hover:-translate-y-px",
   ].join(" "),
   pressed: [
-    "bg-[hsla(156,64%,48%,0.15)] border-[hsl(156,64%,48%)] text-[hsl(156,64%,48%)]",
-    "[&_svg]:text-[hsl(156,64%,48%)]",
+    "bg-[#3d4555] border-[#3d4555] text-[#e4e7ec]",
+    "[&_svg]:text-[#e4e7ec]",
+    "hover:bg-[#4a5568] hover:border-[#4a5568] hover:text-[#f0f2f5]",
   ].join(" "),
   flyout: [
     "border-slate-900/12 bg-[#f8fafc] text-[#0f172a]",
@@ -80,7 +81,7 @@ export interface ToolRailProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 const ToolRail = React.forwardRef<HTMLDivElement, ToolRailProps>(
-  ({ className, position = "custom", showDivider = false, style, ...props }, ref) => {
+  ({ className, position = "custom", showDivider = false, ...props }, ref) => {
     return (
       <div
         ref={ref}
@@ -90,6 +91,7 @@ const ToolRail = React.forwardRef<HTMLDivElement, ToolRailProps>(
         className={cn(
           "flex flex-col gap-1.5 p-3 rounded-[var(--radius)] z-[2147483646]",
           "animate-[float-in_260ms_ease_both]",
+          "will-change-transform backface-hidden",
           position === "left" && "fixed left-[var(--tool-rail-left)] top-[var(--tool-rail-top)] w-[var(--tool-rail-width)]",
           position === "right" && [
             "fixed",
@@ -105,11 +107,6 @@ const ToolRail = React.forwardRef<HTMLDivElement, ToolRailProps>(
           ],
           className
         )}
-        style={{
-          willChange: "transform",
-          backfaceVisibility: "hidden",
-          ...style,
-        }}
         {...props}
       />
     );
@@ -276,11 +273,11 @@ const RailToggleItem = React.forwardRef<HTMLButtonElement, RailToggleItemProps>(
           size === "sm" && "size-9",
           size === "lg" && "size-12",
           (!size || size === "default") && "size-11",
-          // Active state via data attribute - using Tailwind's data attribute syntax
-          "data-[state=on]:bg-[hsla(156,64%,48%,0.15)]",
-          "data-[state=on]:border-[hsl(156,64%,48%)]",
-          "data-[state=on]:text-[hsl(156,64%,48%)]",
-          "data-[state=on]:[&_svg]:text-[hsl(156,64%,48%)]",
+          // Active state via data attribute - inverted: dark background, light icon
+          "data-[state=on]:bg-[#3d4555]",
+          "data-[state=on]:border-[#3d4555]",
+          "data-[state=on]:text-[#e4e7ec]",
+          "data-[state=on]:[&_svg]:text-[#e4e7ec]",
           className
         )}
         style={{

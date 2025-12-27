@@ -360,6 +360,32 @@ body {
 }
 
 /*
+  Excalidraw context menu styling for e-ink device compatibility.
+  E-ink devices (Boox Air 4C, etc.) may crash on GPU-intensive CSS effects.
+  We disable animations and simplify rendering for the context menu.
+*/
+.excalidraw .context-menu {
+  /* Disable GPU-intensive effects that can crash e-ink WebViews */
+  animation: none !important;
+  transition: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  /* Ensure CPU rendering for e-ink compatibility */
+  transform: translateZ(0);
+  will-change: auto;
+}
+
+.excalidraw .context-menu-item {
+  transition: background-color 0ms !important;
+}
+
+.excalidraw .popover {
+  /* Disable animations that can cause e-ink display issues */
+  animation: none !important;
+  transition: none !important;
+}
+
+/*
   Excalidraw v0.18.0 does not currently expose supported APIs to hide the
   built-in toolbar or the element properties panel. We therefore hide these
   via stable, version-pinned class names.
@@ -393,14 +419,24 @@ body {
 }
 
 .custom-tool.is-active {
-  background: rgba(63, 207, 142, 0.15);
-  border-color: var(--accent);
-  color: var(--accent);
+  background: #3d4555;
+  border-color: #3d4555;
+  color: #e4e7ec;
 }
 
 .custom-tool.is-active svg {
-  color: var(--accent);
+  color: #e4e7ec;
   opacity: 1;
+}
+
+.custom-tool.is-active:hover {
+  background: #4a5568;
+  border-color: #4a5568;
+  color: #f0f2f5;
+}
+
+.custom-tool.is-active:hover svg {
+  color: #f0f2f5;
 }
 
 .selection-props-rail {
@@ -623,9 +659,15 @@ body {
 }
 
 .props-tile.is-active {
-  background: #f3fff8;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(63, 207, 142, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.75);
+  background: #3d4555;
+  border-color: #3d4555;
+  color: #e4e7ec;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.16);
+}
+
+.props-tile.is-active:hover {
+  background: #4a5568;
+  border-color: #4a5568;
 }
 
 .props-tile:focus-visible {

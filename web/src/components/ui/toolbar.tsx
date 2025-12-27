@@ -64,8 +64,9 @@ const toolbarButtonVariants = cva(
         variant: "default",
         pressed: true,
         className: [
-          "bg-[hsla(156,64%,48%,0.15)] border-[hsl(156,64%,48%)] text-[hsl(156,64%,48%)]",
-          "[&_svg]:text-[hsl(156,64%,48%)]",
+          "bg-[#3d4555] border-[#3d4555] text-[#e4e7ec]",
+          "[&_svg]:text-[#e4e7ec]",
+          "hover:bg-[#4a5568] hover:border-[#4a5568] hover:text-[#f0f2f5]",
         ].join(" "),
       },
       {
@@ -89,18 +90,17 @@ export interface ToolbarProps
   extends React.HTMLAttributes<HTMLDivElement>,
     VariantProps<typeof toolbarVariants> {}
 
-function Toolbar({ className, orientation, style, ...props }: ToolbarProps) {
+function Toolbar({ className, orientation, ...props }: ToolbarProps) {
   return (
     <div
       role="toolbar"
       data-slot="toolbar"
       data-orientation={orientation}
-      className={cn(toolbarVariants({ orientation }), className)}
-      style={{
-        willChange: "transform",
-        backfaceVisibility: "hidden",
-        ...style,
-      }}
+      className={cn(
+        toolbarVariants({ orientation }),
+        "will-change-transform backface-hidden",
+        className
+      )}
       {...props}
     />
   );
@@ -113,7 +113,7 @@ export interface ToolbarButtonProps
 }
 
 const ToolbarButton = React.forwardRef<HTMLButtonElement, ToolbarButtonProps>(
-  ({ className, variant, size, pressed = false, asChild = false, style, ...props }, ref) => {
+  ({ className, variant, size, pressed = false, asChild = false, ...props }, ref) => {
     const Comp = asChild ? Slot : "button";
     return (
       <Comp
@@ -123,12 +123,11 @@ const ToolbarButton = React.forwardRef<HTMLButtonElement, ToolbarButtonProps>(
         data-variant={variant}
         data-size={size}
         aria-pressed={pressed ?? undefined}
-        className={cn(toolbarButtonVariants({ variant, size, pressed }), className)}
-        style={{
-          willChange: "transform",
-          backfaceVisibility: "hidden",
-          ...style,
-        }}
+        className={cn(
+          toolbarButtonVariants({ variant, size, pressed }),
+          "will-change-transform backface-hidden",
+          className
+        )}
         {...props}
       />
     );

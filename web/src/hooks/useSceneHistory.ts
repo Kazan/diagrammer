@@ -5,6 +5,55 @@ import { computeSceneSignature } from "../scene-utils";
 
 const DEFAULT_MAX_ENTRIES = 50;
 
+/**
+ * Safely clones a value, falling back to JSON serialization for values
+ * that contain non-cloneable types (Symbols, React elements, functions).
+ * This is necessary because Excalidraw's appState can contain contextMenu
+ * with React element items that structuredClone cannot handle.
+ */
+function safeClone<T>(value: T): T {
+  try {
+    return structuredClone(value);
+  } catch (_err) {
+    // Fallback: use JSON for values with non-cloneable types
+    // This handles React elements, Symbols, functions, etc.
+    try {
+      return JSON.parse(JSON.stringify(value));
+    } catch (_jsonErr) {
+      // Last resort: return the value as-is (shallow reference)
+      // This should rarely happen but prevents crashes
+      console.warn("[safeClone] Could not clone value, returning reference");
+      return value;
+    }
+  }
+}
+
+/**
+ * Creates a safe clone of appState that excludes non-cloneable properties
+ * like contextMenu which contains React elements.
+ */
+function cloneAppState(appState: ReturnType<ExcalidrawImperativeAPI["getAppState"]>) {
+  // First, try structuredClone on the full object
+  try {
+    return structuredClone(appState);
+  } catch (_err) {
+    // If it fails (likely due to contextMenu), clone without problematic properties
+    const { contextMenu, ...rest } = appState;
+    try {
+      return {
+        ...structuredClone(rest),
+        contextMenu: null, // Reset contextMenu as it can't be cloned
+      };
+    } catch (_innerErr) {
+      // Fallback to JSON-based cloning
+      return {
+        ...JSON.parse(JSON.stringify(rest)),
+        contextMenu: null,
+      };
+    }
+  }
+}
+
 type SceneSnapshot = {
   elements: ReturnType<ExcalidrawImperativeAPI["getSceneElementsIncludingDeleted"]>;
   appState: ReturnType<ExcalidrawImperativeAPI["getAppState"]>;
@@ -34,9 +83,9 @@ export function useSceneHistory(options: UseSceneHistoryOptions) {
   const cloneSnapshot = useCallback((): SceneSnapshot | null => {
     if (!api) return null;
     return {
-      elements: structuredClone(api.getSceneElementsIncludingDeleted()),
-      appState: structuredClone(api.getAppState()),
-      files: structuredClone(api.getFiles()),
+      elements: safeClone(api.getSceneElementsIncludingDeleted()),
+      appState: cloneAppState(api.getAppState()),
+      files: safeClone(api.getFiles()),
     };
   }, [api]);
 
@@ -133,10 +182,10 @@ export function useSceneHistory(options: UseSceneHistoryOptions) {
     }
     historyApplyingRef.current = true;
     try {
-      const files = structuredClone(snapshot.files);
+      const files = safeClone(snapshot.files);
       api.updateScene({
-        elements: structuredClone(snapshot.elements),
-        appState: structuredClone(snapshot.appState),
+        elements: safeClone(snapshot.elements),
+        appState: safeClone(snapshot.appState),
         captureUpdate: CaptureUpdateAction.NEVER,
       });
       api.addFiles(Object.values(files));

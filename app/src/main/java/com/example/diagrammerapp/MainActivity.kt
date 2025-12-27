@@ -140,7 +140,12 @@ class MainActivity : ComponentActivity() {
             isVerticalScrollBarEnabled = false
             isHorizontalScrollBarEnabled = false
             overScrollMode = View.OVER_SCROLL_NEVER
+            // Disable Android's long-click handling completely to let Excalidraw's
+            // context menu work on e-ink devices (e.g. Boox Air 4C) where long-press
+            // is translated to a right-click/contextmenu event by the firmware.
             setOnLongClickListener { true }
+            isLongClickable = false
+            isHapticFeedbackEnabled = false
             webViewClient = DiagrammerWebViewClient()
             webChromeClient = DiagrammerWebChromeClient()
             addJavascriptInterface(
