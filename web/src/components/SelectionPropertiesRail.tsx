@@ -19,16 +19,18 @@ import {
   SendToBack,
   SlidersHorizontal,
   Trash2,
+  Type as TypeIcon,
 } from "lucide-react";
 import type { SelectionInfo } from "./SelectionFlyout";
 import ColorPicker from "./ColorPicker";
 import type { PaletteId } from "./ColorPicker";
 import { SelectionStyleFlyout } from "./SelectionStyleFlyout";
+import { TextStyleFlyout } from "./TextStyleFlyout";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Toolbar, ToolbarButton, ToolbarSeparator, ToolbarGroup, ToolbarSwatch } from "@/components/ui/toolbar";
 import { cn } from "@/lib/utils";
 
-export type PropertyKind = "stroke" | "background" | "style" | "arrange";
+export type PropertyKind = "stroke" | "background" | "style" | "text" | "arrange";
 
 type Props = {
   selection: SelectionInfo | null;
@@ -116,7 +118,7 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
   // Close flyouts that are not applicable (e.g., when images are selected).
   const hasImage = elements.some((el) => el.type === "image");
   useEffect(() => {
-    if (hasImage && (openKind === "stroke" || openKind === "background" || openKind === "style")) {
+    if (hasImage && (openKind === "stroke" || openKind === "background" || openKind === "style" || openKind === "text")) {
       setOpenKind(null);
     }
   }, [hasImage, openKind]);
@@ -133,6 +135,10 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
   const isMultiSelect = elements.length > 1;
   const hasFillCapable = elements.some((el) => (!LINE_LIKE_TYPES.has(el.type) && el.type !== "text") || isClosedPolyline(el));
   const hasStyleControls = elements.some((el) => el.type !== "text" && el.type !== "image");
+  // Text controls: show for text elements or shapes that can contain text (have bound text)
+  const hasTextControls = elements.some((el) =>
+    el.type === "text" || el.boundElements?.some((b) => b.type === "text")
+  );
 
   const applyToSelection = (mutate: (el: ExcalidrawElement) => ExcalidrawElement) => {
     if (!api || !elements.length) return;
@@ -433,6 +439,29 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
               className="w-auto min-w-[280px] p-3 rounded-2xl shadow-[0_24px_48px_rgba(0,0,0,0.18)] border-slate-900/8"
             >
               <SelectionStyleFlyout elements={elements} onUpdate={applyToSelection} />
+            </PopoverContent>
+          </Popover>
+        )}
+
+        {hasTextControls && (
+          <Popover open={openKind === "text"} onOpenChange={(open) => setOpenKind(open ? "text" : null)}>
+            <PopoverTrigger asChild>
+              <ToolbarButton aria-label="Text style">
+                <TypeIcon size={18} aria-hidden="true" />
+              </ToolbarButton>
+            </PopoverTrigger>
+            <PopoverContent
+              side="right"
+              align="start"
+              sideOffset={12}
+              className="w-auto min-w-[260px] p-3 rounded-2xl shadow-[0_24px_48px_rgba(0,0,0,0.18)] border-slate-900/8"
+            >
+              <TextStyleFlyout
+                elements={elements}
+                allSceneElements={api?.getSceneElements() ?? []}
+                api={api}
+                selectedIds={selectedIds}
+              />
             </PopoverContent>
           </Popover>
         )}
