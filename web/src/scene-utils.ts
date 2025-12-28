@@ -50,20 +50,33 @@ export const buildSceneSaveEnvelope = async (
   const encoder = new TextEncoder();
   const bytes = encoder.encode(json);
   let sha256: string | undefined;
+
+  // Log envelope building for debugging on problematic devices
+  console.log(`[scene-utils] buildSceneSaveEnvelope: jsonLen=${json.length}, byteLen=${bytes.byteLength}`);
+
   try {
+    // crypto.subtle may not be available in insecure contexts or older WebViews
     if (window.crypto?.subtle) {
       const digest = await window.crypto.subtle.digest("SHA-256", bytes);
       sha256 = toHex(digest);
+      console.log(`[scene-utils] sha256 computed: ${sha256.slice(0, 16)}...`);
+    } else {
+      console.warn("[scene-utils] crypto.subtle not available, skipping sha256");
     }
-  } catch (_err) {
+  } catch (err) {
+    console.warn("[scene-utils] sha256 computation failed:", err);
     sha256 = undefined;
   }
 
-  return {
+  const envelope = {
     json,
     byteLength: bytes.byteLength,
     sha256,
     suggestedName,
     createdAt: Date.now(),
   };
+
+  console.log(`[scene-utils] envelope built: byteLen=${envelope.byteLength}, sha256=${envelope.sha256 ? "present" : "absent"}`);
+
+  return envelope;
 };

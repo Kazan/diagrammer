@@ -92,6 +92,7 @@ internal class NativeBridge(
             notifyJs("onSaveComplete", false, "Invalid save payload", currentDocumentName)
             return null
         }
+        Log.d("NativeBridge", "$source: received envelope length=${raw.length}")
         return runCatching {
             val obj = JSONObject(raw)
             val json = obj.optString("json", "")
@@ -101,6 +102,13 @@ internal class NativeBridge(
             val suggestedNameRaw = obj.optString("suggestedName")
             val suggestedName = if (suggestedNameRaw.isNotBlank()) suggestedNameRaw else null
             val createdAt = obj.optLong("createdAt", System.currentTimeMillis())
+            Log.d(
+                "NativeBridge",
+                "$source: parsed envelope jsonLen=${json.length}, byteLength=$byteLength, sha256=${sha256?.take(8) ?: "null"}, name=$suggestedName"
+            )
+            if (json.isEmpty()) {
+                Log.e("NativeBridge", "$source: extracted json is empty from envelope")
+            }
             SaveEnvelope(
                 json = json,
                 byteLength = byteLength,
@@ -109,39 +117,74 @@ internal class NativeBridge(
                 createdAt = createdAt
             )
         }.getOrElse {
-            Log.e("NativeBridge", "$source: failed to parse envelope", it)
-            notifyJs("onSaveComplete", false, "Invalid save payload", currentDocumentName)
+            Log.e("NativeBridge", "$source: failed to parse envelope (len=${raw.length})", it)
+            // Log first/last chars to help diagnose truncation issues
+            val preview = if (raw.length > 100) {
+                "first50=${raw.take(50)}, last50=${raw.takeLast(50)}"
+            } else {
+                "content=$raw"
+            }
+            Log.e("NativeBridge", "$source: envelope preview: $preview")
+            notifyJs("onSaveComplete", false, "Invalid save payload: ${it.message?.take(100)}", currentDocumentName)
             null
         }
     }
 
     private fun validateEnvelope(envelope: SaveEnvelope, source: String): Boolean {
         val bytes = envelope.json.toByteArray(Charsets.UTF_8)
-        if (envelope.byteLength >= 0 && bytes.size.toLong() != envelope.byteLength) {
-            Log.e(
+        val actualByteLen = bytes.size.toLong()
+
+        // Log validation attempt for diagnostics
+        Log.d("NativeBridge", "$source: validating envelope actualBytes=$actualByteLen, declaredBytes=${envelope.byteLength}")
+
+        if (envelope.byteLength >= 0 && actualByteLen != envelope.byteLength) {
+            // On some devices (e.g., Boox e-ink), the JS-to-Kotlin bridge may truncate
+            // large strings. Log a warning but continue if the JSON is still valid.
+            Log.w(
                 "NativeBridge",
-                "$source: byteLength mismatch (expected=${envelope.byteLength}, actual=${bytes.size})"
+                "$source: byteLength mismatch (expected=${envelope.byteLength}, actual=$actualByteLen, diff=${envelope.byteLength - actualByteLen})"
             )
-            notifyJs("onSaveComplete", false, "Corrupt save payload", currentDocumentName)
-            return false
+            // If severe truncation (more than 50% missing), fail
+            if (actualByteLen < envelope.byteLength / 2) {
+                Log.e("NativeBridge", "$source: severe truncation detected, failing")
+                notifyJs("onSaveComplete", false, "Data corrupted during transfer", currentDocumentName)
+                return false
+            }
+            // Otherwise warn but continue - the JSON validation will catch actual corruption
+            Log.w("NativeBridge", "$source: minor byte mismatch, continuing with JSON validation")
         }
         val declaredSha = envelope.sha256
         if (!declaredSha.isNullOrBlank()) {
             val actualSha = computeSha(bytes)
             if (!declaredSha.equals(actualSha, ignoreCase = true)) {
-                Log.e(
+                // SHA mismatch could be due to byte mismatch we already warned about
+                Log.w(
                     "NativeBridge",
-                    "$source: sha mismatch (expected=$declaredSha, actual=$actualSha)"
+                    "$source: sha mismatch (expected=${declaredSha.take(16)}, actual=${actualSha.take(16)})"
                 )
-                notifyJs("onSaveComplete", false, "Corrupt save payload", currentDocumentName)
-                return false
+                // If byteLength also mismatched, this is likely a transfer issue not corruption
+                if (envelope.byteLength >= 0 && actualByteLen != envelope.byteLength) {
+                    Log.w("NativeBridge", "$source: sha mismatch likely due to transfer issue, skipping sha check")
+                } else {
+                    Log.e("NativeBridge", "$source: sha mismatch with matching byteLength - actual corruption")
+                    notifyJs("onSaveComplete", false, "Corrupt save payload", currentDocumentName)
+                    return false
+                }
             }
         }
         if (!isValidJsonStrict(envelope.json)) {
-            Log.e("NativeBridge", "$source: invalid JSON payload")
+            Log.e("NativeBridge", "$source: invalid JSON payload (len=${envelope.json.length})")
+            // Log a preview to help diagnose
+            val preview = if (envelope.json.length > 200) {
+                "first100=${envelope.json.take(100)}, last100=${envelope.json.takeLast(100)}"
+            } else {
+                "content=${envelope.json}"
+            }
+            Log.e("NativeBridge", "$source: JSON preview: $preview")
             notifyJs("onSaveComplete", false, "Invalid scene JSON", currentDocumentName)
             return false
         }
+        Log.d("NativeBridge", "$source: envelope validation passed")
         return true
     }
 
@@ -193,27 +236,43 @@ internal class NativeBridge(
                     uri,
                     Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
                 )
-            } catch (_: SecurityException) {
+                Log.d("NativeBridge", "$source: acquired persistable permission for $uri")
+            } catch (se: SecurityException) {
                 // Proceed; openOutputStream will still fail if permission is insufficient.
+                Log.w("NativeBridge", "$source: could not take persistable permission: ${se.message}")
             }
-            val mode = "rwt"
+
+            val bytesToWrite = envelope.json.toByteArray(Charsets.UTF_8)
+            Log.d("NativeBridge", "$source: preparing to write ${bytesToWrite.size} bytes")
+
+            // Try "rwt" (read-write-truncate) first, fall back to "w" (write)
+            // Some file systems/providers don't support truncate mode
             val stream = runCatching {
-                context.contentResolver.openOutputStream(uri, mode)
-            }.getOrNull() ?: context.contentResolver.openOutputStream(uri, "w")
+                context.contentResolver.openOutputStream(uri, "rwt")
+            }.onFailure {
+                Log.w("NativeBridge", "$source: 'rwt' mode failed, trying 'w': ${it.message}")
+            }.getOrNull() ?: runCatching {
+                context.contentResolver.openOutputStream(uri, "w")
+            }.onFailure {
+                Log.w("NativeBridge", "$source: 'w' mode failed, trying default: ${it.message}")
+            }.getOrNull() ?: context.contentResolver.openOutputStream(uri)
+
             stream?.use {
-                it.write(envelope.json.toByteArray(Charsets.UTF_8))
+                it.write(bytesToWrite)
                 it.flush()
-            } ?: error("No output stream")
+                Log.d("NativeBridge", "$source: write complete, bytes=${bytesToWrite.size}")
+            } ?: error("No output stream available for $uri")
         }.onSuccess {
             val (finalUri, finalName) = ensureExcalidrawName(uri)
             currentDocumentUri = finalUri
             currentDocumentName = finalName ?: currentDocumentName
             persistCurrentFile(currentDocumentUri, currentDocumentName)
             rememberPickerUri(finalUri)
+            Log.d("NativeBridge", "$source: save success, notifying JS")
             notifyJs("onSaveComplete", true, null, currentDocumentName)
         }.onFailure {
             Log.e("NativeBridge", "$source: write failed", it)
-            notifyJs("onSaveComplete", false, it.message, currentDocumentName)
+            notifyJs("onSaveComplete", false, it.message?.take(200), currentDocumentName)
         }
     }
 

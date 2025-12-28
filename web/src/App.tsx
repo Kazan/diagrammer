@@ -243,22 +243,29 @@ export default function App() {
       const envelope = await buildSceneEnvelope({ suggestedName: currentFileName });
       const serialized = JSON.stringify(envelope);
 
+      // Log for debugging on problematic devices
+      console.log(`[save] envelope: jsonLen=${envelope.json.length}, serializedLen=${serialized.length}, byteLen=${envelope.byteLength}`);
+
       if (hasCurrentFileRef.current) {
         if (nativeBridge?.persistSceneToCurrentDocument) {
+          console.log("[save] calling persistSceneToCurrentDocument");
           nativeBridge.persistSceneToCurrentDocument(serialized);
           return;
         }
         if (nativeBridge?.saveSceneToCurrentDocument) {
+          console.log("[save] calling saveSceneToCurrentDocument (legacy)");
           nativeBridge.saveSceneToCurrentDocument(envelope.json);
           return;
         }
       }
 
       if (nativeBridge?.persistScene) {
+        console.log("[save] calling persistScene");
         nativeBridge.persistScene(serialized);
         return;
       }
       if (nativeBridge?.saveScene) {
+        console.log("[save] calling saveScene (legacy)");
         nativeBridge.saveScene(envelope.json);
         return;
       }
@@ -281,6 +288,7 @@ export default function App() {
         setStatus({ text: "Save failed (storage)", tone: "err" });
       }
     } catch (err) {
+      console.error("[save] failed:", err);
       setStatus({ text: `Save failed: ${String(err)}`, tone: "err" });
     }
   }, [LOCAL_SCENE_KEY, api, buildSceneEnvelope, currentFileName, hasCurrentFileRef, loadLocalEntries, nativeBridge, persistLocalEntries, setCurrentFileName, setIsDirty, setStatus]);
@@ -297,10 +305,16 @@ export default function App() {
     try {
       const envelope = await buildSceneEnvelope({ suggestedName: currentFileName });
       const serialized = JSON.stringify(envelope);
+
+      // Log for debugging on problematic devices
+      console.log(`[saveToDocument] envelope: jsonLen=${envelope.json.length}, serializedLen=${serialized.length}, byteLen=${envelope.byteLength}`);
+
       if (nativeBridge?.persistSceneToDocument || nativeBridge?.saveSceneToDocument) {
         if (nativeBridge.persistSceneToDocument) {
+          console.log("[saveToDocument] calling persistSceneToDocument");
           nativeBridge.persistSceneToDocument(serialized);
         } else {
+          console.log("[saveToDocument] calling saveSceneToDocument (legacy)");
           nativeBridge.saveSceneToDocument?.(envelope.json);
         }
         hasCurrentFileRef.current = true;
@@ -321,6 +335,7 @@ export default function App() {
       setIsDirty(false);
       setCurrentFileName(name);
     } catch (err) {
+      console.error("[saveToDocument] failed:", err);
       setStatus({ text: `Save failed: ${String(err)}`, tone: "err" });
     }
   }, [LOCAL_SCENE_KEY, api, buildSceneEnvelope, currentFileName, hasCurrentFileRef, loadLocalEntries, nativeBridge, persistLocalEntries, setCurrentFileName, setIsDirty, setStatus]);
