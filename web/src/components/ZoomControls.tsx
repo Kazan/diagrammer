@@ -9,9 +9,19 @@ export type ZoomControlsProps = {
   onZoomToContent: () => void;
   onUndo: () => void;
   canUndo: boolean;
+  hasSceneContent: boolean;
 };
 
-export function ZoomControls({ zoom, onZoomIn, onZoomOut, onResetZoom, onZoomToContent, onUndo, canUndo }: ZoomControlsProps) {
+export function ZoomControls({
+  zoom,
+  onZoomIn,
+  onZoomOut,
+  onResetZoom,
+  onZoomToContent,
+  onUndo,
+  canUndo,
+  hasSceneContent,
+}: ZoomControlsProps) {
   const percent = `${Math.round((zoom?.value ?? 1) * 100)}%`;
 
   const handleCenterClick = (event: MouseEvent<HTMLButtonElement>) => {
@@ -27,7 +37,13 @@ export function ZoomControls({ zoom, onZoomIn, onZoomOut, onResetZoom, onZoomToC
   return (
     <div className="zoom-controls" role="toolbar" aria-label="Zoom controls">
       <div className="zoom-controls__group" role="group" aria-label="Zoom in/out">
-        <button type="button" className="zoom-controls__btn" onClick={onZoomOut} aria-label="Zoom out">
+        <button
+          type="button"
+          className="zoom-controls__btn"
+          onClick={onZoomOut}
+          aria-label="Zoom out"
+          disabled={!hasSceneContent}
+        >
           <Minus size={16} aria-hidden="true" />
         </button>
         <button
@@ -36,10 +52,17 @@ export function ZoomControls({ zoom, onZoomIn, onZoomOut, onResetZoom, onZoomToC
           onClick={handleCenterClick}
           onDoubleClick={handleCenterDoubleClick}
           aria-label="Reset zoom or zoom to scene"
+          disabled={!hasSceneContent}
         >
           {percent}
         </button>
-        <button type="button" className="zoom-controls__btn" onClick={onZoomIn} aria-label="Zoom in">
+        <button
+          type="button"
+          className="zoom-controls__btn"
+          onClick={onZoomIn}
+          aria-label="Zoom in"
+          disabled={!hasSceneContent}
+        >
           <Plus size={16} aria-hidden="true" />
         </button>
       </div>

@@ -1178,6 +1178,8 @@ body {
   justify-content: center;
   min-width: 36px;
   font-weight: 600;
+  min-height: 36px;
+  line-height: 20px;
   transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
 }
 
@@ -1185,6 +1187,21 @@ body {
   background: rgba(12, 17, 32, 0.65);
   border-color: rgba(255, 255, 255, 0.22);
   transform: translateY(-1px);
+}
+
+.zoom-controls__btn:disabled {
+  background: rgba(12, 17, 32, 0.35);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.55);
+  cursor: not-allowed;
+  transform: none;
+  opacity: 0.7;
+}
+
+.zoom-controls__btn:disabled:hover {
+  background: rgba(12, 17, 32, 0.35);
+  border-color: rgba(255, 255, 255, 0.12);
+  transform: none;
 }
 
 .zoom-controls__btn--label {

@@ -80,7 +80,6 @@ export function ChromeOverlay({
         onExportSvg={onExportSvg}
         onClear={onClear}
         exporting={exporting}
-        isDirty={isDirty}
         showCopySource={false}
       />
 
@@ -106,6 +105,7 @@ export function ChromeOverlay({
         onZoomToContent={onZoomToContent}
         onUndo={onUndo}
         canUndo={canUndo}
+        hasSceneContent={hasSceneContent}
       />
 
       {showClearConfirm ? (
