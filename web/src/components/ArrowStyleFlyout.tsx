@@ -36,9 +36,10 @@ function getCommonValue<T>(
 const arrowheadOptions: ReadonlyArray<{ id: ArrowheadType; label: string }> = [
   { id: null, label: "None" },
   { id: "arrow", label: "Arrow" },
+  { id: "triangle", label: "Triangle" },
   { id: "bar", label: "Bar" },
   { id: "dot", label: "Dot" },
-  { id: "triangle", label: "Triangle" },
+  { id: "diamond", label: "Diamond" },
 ];
 
 /**
@@ -102,6 +103,15 @@ function ArrowheadIcon({ type, flip = false }: { type: ArrowheadType; flip?: boo
             strokeLinejoin="round"
           />
         )}
+        {type === "diamond" && (
+          <path
+            d="M14 12 L17 8 L20 12 L17 16 Z"
+            fill="currentColor"
+            stroke="currentColor"
+            strokeWidth="1"
+            strokeLinejoin="round"
+          />
+        )}
       </g>
     </svg>
   );
@@ -156,7 +166,7 @@ export function ArrowStyleFlyout({ elements, onUpdate, onStyleCapture }: Props) 
     <div className="props-flyout" role="dialog" aria-label="Arrow style options">
       <div className="props-section">
         <div className="props-section__title">Start</div>
-        <div className="props-grid props-grid--five">
+        <div className="props-grid props-grid--six">
           {arrowheadOptions.map((option) => (
             <button
               key={option.id ?? "none-start"}
@@ -174,7 +184,7 @@ export function ArrowStyleFlyout({ elements, onUpdate, onStyleCapture }: Props) 
 
       <div className="props-section">
         <div className="props-section__title">End</div>
-        <div className="props-grid props-grid--five">
+        <div className="props-grid props-grid--six">
           {arrowheadOptions.map((option) => (
             <button
               key={option.id ?? "none-end"}
