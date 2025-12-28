@@ -21,9 +21,8 @@ const railButtonStyles = {
   ].join(" "),
   default: [
     "bg-[#f0f2f5] border-[#5c6578] text-[#5c6578]",
-    "shadow-[0_6px_14px_rgba(0,0,0,0.12)]",
     "hover:bg-[#e4e7ec] hover:border-[#3d4555] hover:text-[#3d4555]",
-    "hover:shadow-[0_10px_18px_rgba(0,0,0,0.14)] hover:-translate-y-px",
+    "hover:-translate-y-px",
   ].join(" "),
   pressed: [
     "bg-[#3d4555] border-[#3d4555] text-[#e4e7ec]",
@@ -32,13 +31,10 @@ const railButtonStyles = {
   ].join(" "),
   flyout: [
     "border-slate-900/12 bg-[#f8fafc] text-[#0f172a]",
-    "shadow-[inset_0_1px_0_rgba(255,255,255,0.6),0_6px_14px_rgba(0,0,0,0.08)]",
     "hover:bg-[#eef2f7] hover:border-slate-900/20 hover:-translate-y-px",
-    "hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_10px_18px_rgba(0,0,0,0.12)]",
   ].join(" "),
   flyoutPressed: [
     "bg-[#f3fff8] border-[hsl(var(--accent))]",
-    "shadow-[0_0_0_2px_rgba(63,207,142,0.3),inset_0_1px_0_rgba(255,255,255,0.75)]",
   ].join(" "),
 } as const;
 
@@ -358,7 +354,7 @@ const RailPopoverButton = React.forwardRef<HTMLButtonElement, RailPopoverButtonP
           sideOffset={sideOffset}
           className={cn(
             "w-auto p-3 rounded-2xl",
-            "shadow-[0_24px_48px_rgba(0,0,0,0.18)] border-slate-900/8",
+            "border-[#5c6578]",
             contentClassName
           )}
         >
@@ -393,7 +389,7 @@ const RailSwatch = React.forwardRef<HTMLSpanElement, RailSwatchProps>(
             "bg-[#f8fafc] bg-[length:8px_8px]",
             "border border-slate-900/12",
           ],
-          !isTransparent && "border border-slate-900/12 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]",
+          !isTransparent && "border border-slate-900/12",
           className
         )}
         style={!isTransparent ? { backgroundColor: color } : undefined}

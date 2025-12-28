@@ -382,12 +382,10 @@ export default function ColorPicker({
         backgroundSize: "8px 8px",
         backgroundPosition: "0 0, 4px 4px",
         border: "1px solid rgba(255, 255, 255, 0.14)",
-        boxShadow: "0 0 0 1px rgba(0, 0, 0, 0.24)",
       }
     : {
         background: previewColor,
         border: "1px solid rgba(255, 255, 255, 0.14)",
-        boxShadow: "0 0 0 1px rgba(0, 0, 0, 0.24)",
       };
 
   return (
