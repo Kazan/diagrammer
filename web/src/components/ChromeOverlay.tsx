@@ -15,6 +15,7 @@ type Props = {
   onOpen: () => void;
   onSaveNow: () => void;
   onSaveToDocument: () => void;
+  onCopySource: () => void;
   onExportPng: () => void;
   onExportSvg: () => void;
   exporting: "png" | "svg" | null;
@@ -49,6 +50,7 @@ export function ChromeOverlay({
   onOpen,
   onSaveNow,
   onSaveToDocument,
+  onCopySource,
   onExportPng,
   onExportSvg,
   exporting,
@@ -85,6 +87,9 @@ export function ChromeOverlay({
             ) : null}
             <button type="button" className="chrome-button" onClick={onSaveToDocument}>
               Save as…
+            </button>
+            <button type="button" className="chrome-button" onClick={onCopySource}>
+              Copy source
             </button>
             <span className="chrome-strip__divider" aria-hidden="true" />
             <button

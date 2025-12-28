@@ -150,6 +150,9 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
     () => getCommonValue<string | null>(elements, (el) => el.backgroundColor ?? null) ?? DEFAULT_FILL,
     [elements],
   );
+  const isFillTransparent = backgroundColor === "transparent";
+  const isStrokeTransparent = strokeColor === "transparent";
+  const isTextTransparent = textColor === "transparent";
 
   const selectionBounds = useMemo(() => {
     if (!elements.length) return null;
@@ -275,33 +278,116 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
       return true;
     });
 
+    const boundTextIds = new Set<string>();
+    for (const el of sourceElements) {
+      if (el.boundElements) {
+        for (const bound of el.boundElements) {
+          boundTextIds.add(bound.id);
+        }
+      }
+    }
+    const boundTextElements = scene.filter((el) => boundTextIds.has(el.id));
+    const duplicationSource: ExcalidrawElement[] = [...sourceElements];
+    for (const boundText of boundTextElements) {
+      if (!duplicationSource.some((el) => el.id === boundText.id)) {
+        duplicationSource.push(boundText as ExcalidrawElement);
+      }
+    }
+
+    const cloneOffset = { dx: 16, dy: 16 } as const;
+
     const clones: ExcalidrawElement[] = canUseSkeletonDuplication
       ? convertToExcalidrawElements(
-          sourceElements as unknown as NonNullable<Parameters<typeof convertToExcalidrawElements>[0]>,
+          duplicationSource as unknown as NonNullable<Parameters<typeof convertToExcalidrawElements>[0]>,
           { regenerateIds: true },
-        ).map((el, index) => ({ ...el, x: el.x + 16 + index * 4, y: el.y + 16 + index * 4 }))
+        ).map((el) => ({ ...el, x: el.x + cloneOffset.dx, y: el.y + cloneOffset.dy }))
       : (() => {
           const randomId = () => Math.random().toString(36).slice(2, 10);
           const randomNonce = () => Math.floor(Math.random() * 1_000_000_000);
-          return sourceElements.map((el, index) => ({
+          return duplicationSource.map((el) => ({
             ...el,
             id: randomId(),
             seed: randomNonce(),
             version: 1,
             versionNonce: randomNonce(),
             isDeleted: false,
-            x: el.x + 16 + index * 4,
-            y: el.y + 16 + index * 4,
+            x: el.x + cloneOffset.dx,
+            y: el.y + cloneOffset.dy,
           }));
         })();
 
-    const nextSelectedElementIds = clones.reduce<Record<string, true>>((acc, clone) => {
+    const remapBoundIds = (elementsToRemap: ExcalidrawElement[]) => {
+      const idMap = new Map<string, string>();
+      duplicationSource.forEach((source, index) => {
+        const clone = elementsToRemap[index];
+        if (clone) {
+          idMap.set(source.id, clone.id);
+        }
+      });
+
+      const remapped = elementsToRemap.map((clone) => {
+        const mappedBoundElements = clone.boundElements
+          ? clone.boundElements.map((binding) => {
+              const mappedId = idMap.get(binding.id);
+              return mappedId ? { ...binding, id: mappedId } : binding;
+            })
+          : clone.boundElements;
+
+        const mappedContainer = "containerId" in clone && clone.containerId ? idMap.get(clone.containerId) : null;
+
+        return {
+          ...clone,
+          ...(mappedBoundElements ? { boundElements: mappedBoundElements } : {}),
+          ...(mappedContainer ? { containerId: mappedContainer } : {}),
+        } as ExcalidrawElement;
+      });
+
+      return { remapped, idMap } as const;
+    };
+
+    const adjustBoundTextPositions = (
+      remapped: ExcalidrawElement[],
+      idMap: Map<string, string>,
+    ): ExcalidrawElement[] => {
+      const reverseIdMap = new Map<string, string>();
+      idMap.forEach((cloneId, sourceId) => reverseIdMap.set(cloneId, sourceId));
+
+      const cloneLookup = new Map(remapped.map((el) => [el.id, el]));
+      const sourceLookup = new Map(duplicationSource.map((el) => [el.id, el]));
+
+      return remapped.map((el) => {
+        if (el.type !== "text") return el;
+        if (!("containerId" in el) || !el.containerId) return el;
+        const containerClone = cloneLookup.get(el.containerId);
+        if (!containerClone || !("width" in containerClone && "height" in containerClone)) return el;
+
+        const sourceId = reverseIdMap.get(el.id);
+        const sourceText = sourceId ? sourceLookup.get(sourceId) : null;
+        const textWidth = el.width;
+        const textHeight = el.height;
+
+        const newX = containerClone.x + (containerClone.width - textWidth) / 2;
+        const newY = containerClone.y + (containerClone.height - textHeight) / 2;
+
+        return {
+          ...el,
+          x: newX,
+          y: newY,
+          // Preserve any other properties; width/height come from cloned text
+        } as ExcalidrawElement;
+      });
+    };
+
+    const { remapped, idMap } = remapBoundIds(clones);
+    const clonesWithBoundFix = adjustBoundTextPositions(remapped, idMap);
+
+    const nextSelectedElementIds = clonesWithBoundFix.reduce<Record<string, true>>((acc, clone) => {
       acc[clone.id] = true;
       return acc;
     }, {});
 
     api.updateScene({
-      elements: [...scene, ...clones],
+      elements: [...scene, ...clonesWithBoundFix],
       appState: { selectedElementIds: nextSelectedElementIds, selectedGroupIds: {} },
     });
   };
@@ -447,8 +533,16 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
               />
             }
           >
-            <RailSwatch color={strokeColor} />
-            <Signature size={18} aria-hidden="true" />
+            <span
+              className={cn(
+                "stroke-color-indicator",
+                isStrokeTransparent && "stroke-color-indicator--transparent",
+              )}
+              aria-hidden="true"
+              style={isStrokeTransparent ? undefined : { color: strokeColor }}
+            >
+              <Signature size={22} strokeWidth={2.4} aria-hidden="true" />
+            </span>
           </RailPopoverButton>
         )}
 
@@ -469,8 +563,14 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
               />
             }
           >
-            <RailSwatch color={backgroundColor} />
-            <PaintBucket size={18} aria-hidden="true" />
+            <span
+              className={cn(
+                "fill-color-indicator",
+                isFillTransparent && "fill-color-indicator--transparent",
+              )}
+              aria-hidden="true"
+              style={isFillTransparent ? undefined : { backgroundColor }}
+            />
           </RailPopoverButton>
         )}
 
@@ -522,7 +622,16 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
               />
             }
           >
-            <ALargeSmall size={18} aria-hidden="true" />
+            <span
+              className={cn(
+                "text-color-indicator",
+                isTextTransparent && "text-color-indicator--transparent",
+              )}
+              aria-hidden="true"
+              style={isTextTransparent ? undefined : { color: textColor }}
+            >
+              A
+            </span>
           </RailPopoverButton>
         )}
       </RailSection>
