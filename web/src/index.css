@@ -1358,6 +1358,134 @@ body {
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/*
+  E-ink device optimizations.
+  When the app detects an e-ink device (Boox, Onyx, Kindle, etc.),
+  it adds the .eink-device class to the <html> element.
+  This disables drop shadows and GPU-intensive effects that can
+  cause visual artifacts or performance issues on e-ink displays.
+*/
+.eink-device {
+  /* Disable all box-shadow effects via CSS variable overrides */
+  --shadow: none;
+  --toolbar-btn-shadow: none;
+  --toolbar-btn-hover-shadow: none;
+}
+
+/* Remove shadows from chrome buttons (top toolbar) */
+.eink-device .chrome-button {
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+.eink-device .chrome-button:hover {
+  box-shadow: none !important;
+}
+
+/* Remove shadows from chrome banner (status messages) */
+.eink-device .chrome-banner {
+  box-shadow: none !important;
+}
+
+/* Remove shadows from custom toolbar buttons */
+.eink-device .custom-tool {
+  box-shadow: none !important;
+}
+.eink-device .custom-tool:hover {
+  box-shadow: none !important;
+}
+
+/* Remove shadows from selection properties rail buttons */
+.eink-device .selection-props-rail__button {
+  box-shadow: none !important;
+}
+.eink-device .selection-props-rail__button:hover {
+  box-shadow: none !important;
+}
+
+/* Remove shadows from selection properties flyout */
+.eink-device .selection-props-rail__flyout {
+  box-shadow: none !important;
+  border: 1px solid rgba(15, 23, 42, 0.2) !important;
+}
+
+/* Remove shadows from arrange tiles in flyouts */
+.eink-device .arrange-tile {
+  box-shadow: none !important;
+}
+.eink-device .arrange-tile:hover {
+  box-shadow: none !important;
+}
+
+/* Remove shadows from props tiles in flyouts */
+.eink-device .props-tile {
+  box-shadow: none !important;
+}
+.eink-device .props-tile:hover {
+  box-shadow: none !important;
+}
+.eink-device .props-tile.is-active {
+  box-shadow: none !important;
+}
+
+/* Remove shadows from zoom controls */
+.eink-device .zoom-controls__group {
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+.eink-device .zoom-controls__btn {
+  box-shadow: none !important;
+}
+.eink-device .zoom-controls__btn:hover {
+  box-shadow: none !important;
+}
+
+.eink-device .zoom-controls__undo {
+  box-shadow: none !important;
+}
+.eink-device .zoom-controls__undo:hover {
+  box-shadow: none !important;
+}
+.eink-device .zoom-controls__undo--active {
+  box-shadow: none !important;
+}
+.eink-device .zoom-controls__undo--active:hover {
+  box-shadow: none !important;
+}
+
+/* Remove shadows from native status component */
+.eink-device .native-status {
+  box-shadow: none !important;
+}
+.eink-device .native-status__banner {
+  box-shadow: none !important;
+}
+
+/* Remove shadows from color indicators */
+.eink-device .stroke-color-indicator--transparent {
+  box-shadow: none !important;
+}
+.eink-device .fill-color-indicator {
+  box-shadow: none !important;
+}
+.eink-device .selection-props-rail__swatch {
+  box-shadow: none !important;
+}
+
+/* Remove text shadows from any text elements */
+.eink-device * {
+  text-shadow: none !important;
+}
+
+/* Reduce/disable backdrop blur for e-ink */
+.eink-device .zoom-controls__group,
+.eink-device .chrome-overlay,
+.eink-device .selection-props-rail__flyout,
+.eink-device .native-status {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
