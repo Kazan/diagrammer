@@ -17,9 +17,10 @@ export type ExplicitStyleDefaults = {
   opacity?: number;
   roundness?: "sharp" | "round";
 
-  // Arrow/line styles
-  startArrowhead?: "arrow" | "bar" | "dot" | "triangle" | null;
-  endArrowhead?: "arrow" | "bar" | "dot" | "triangle" | null;
+  // Arrow/line styles (matches Excalidraw's Arrowhead type)
+  startArrowhead?: "arrow" | "bar" | "dot" | "circle" | "circle_outline" | "triangle" | "triangle_outline" | "diamond" | "diamond_outline" | "crowfoot_one" | "crowfoot_many" | "crowfoot_one_or_many" | null;
+  endArrowhead?: "arrow" | "bar" | "dot" | "circle" | "circle_outline" | "triangle" | "triangle_outline" | "diamond" | "diamond_outline" | "crowfoot_one" | "crowfoot_many" | "crowfoot_one_or_many" | null;
+  elbowed?: boolean;
 
   // Text styles
   fontFamily?: number;
@@ -66,6 +67,9 @@ function mapToAppStateProps(
   }
   if (defaults.endArrowhead !== undefined) {
     props.currentItemEndArrowhead = defaults.endArrowhead;
+  }
+  if (defaults.elbowed !== undefined) {
+    props.currentItemArrowType = defaults.elbowed ? "elbow" : "round";
   }
   if (defaults.fontFamily !== undefined) {
     props.currentItemFontFamily = defaults.fontFamily;

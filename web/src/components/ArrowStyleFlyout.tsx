@@ -1,5 +1,5 @@
 import { useMemo, useCallback } from "react";
-import type { ExcalidrawElement, ExcalidrawLinearElement } from "@excalidraw/excalidraw/element/types";
+import type { ExcalidrawElement, ExcalidrawLinearElement, ExcalidrawArrowElement } from "@excalidraw/excalidraw/element/types";
 import type { ExplicitStyleDefaults } from "@/hooks/useExplicitStyleDefaults";
 
 /**
@@ -36,9 +36,10 @@ function getCommonValue<T>(
 const arrowheadOptions: ReadonlyArray<{ id: ArrowheadType; label: string }> = [
   { id: null, label: "None" },
   { id: "arrow", label: "Arrow" },
+  { id: "triangle", label: "Triangle" },
   { id: "bar", label: "Bar" },
   { id: "dot", label: "Dot" },
-  { id: "triangle", label: "Triangle" },
+  { id: "diamond", label: "Diamond" },
 ];
 
 /**
@@ -102,7 +103,55 @@ function ArrowheadIcon({ type, flip = false }: { type: ArrowheadType; flip?: boo
             strokeLinejoin="round"
           />
         )}
+        {type === "diamond" && (
+          <path
+            d="M14 12 L17 8 L20 12 L17 16 Z"
+            fill="currentColor"
+            stroke="currentColor"
+            strokeWidth="1"
+            strokeLinejoin="round"
+          />
+        )}
       </g>
+    </svg>
+  );
+}
+
+/**
+ * Icon for line style (straight vs elbowed).
+ */
+function LineStyleIcon({ elbowed }: { elbowed: boolean }) {
+  return (
+    <svg
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      {elbowed ? (
+        // Elbowed/stepped line
+        <path
+          d="M4 8 H12 V16 H20"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill="none"
+        />
+      ) : (
+        // Straight line
+        <line
+          x1="4"
+          y1="12"
+          x2="20"
+          y2="12"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
+      )}
     </svg>
   );
 }
@@ -116,6 +165,14 @@ export function ArrowStyleFlyout({ elements, onUpdate, onStyleCapture }: Props) 
     [elements],
   );
 
+  // Filter to only arrow elements (elbowed is only for arrows)
+  const arrowElements = useMemo(
+    () => elements.filter((el): el is ExcalidrawArrowElement =>
+      el.type === "arrow"
+    ),
+    [elements],
+  );
+
   const startArrowhead = useMemo(
     () => getCommonValue(linearElements, (el) => (el as ExcalidrawLinearElement).startArrowhead),
     [linearElements],
@@ -124,6 +181,11 @@ export function ArrowStyleFlyout({ elements, onUpdate, onStyleCapture }: Props) 
   const endArrowhead = useMemo(
     () => getCommonValue(linearElements, (el) => (el as ExcalidrawLinearElement).endArrowhead),
     [linearElements],
+  );
+
+  const elbowed = useMemo(
+    () => getCommonValue(arrowElements, (el) => (el as ExcalidrawArrowElement).elbowed ?? false),
+    [arrowElements],
   );
 
   const handleStartArrowheadChange = useCallback(
@@ -148,15 +210,28 @@ export function ArrowStyleFlyout({ elements, onUpdate, onStyleCapture }: Props) 
     [onUpdate, onStyleCapture],
   );
 
+  const handleElbowedChange = useCallback(
+    (value: boolean) => {
+      onUpdate((el) => {
+        if (el.type !== "arrow") return el;
+        return { ...el, elbowed: value };
+      });
+      onStyleCapture?.("elbowed", value);
+    },
+    [onUpdate, onStyleCapture],
+  );
+
   if (!linearElements.length) {
     return null;
   }
+
+  const hasArrows = arrowElements.length > 0;
 
   return (
     <div className="props-flyout" role="dialog" aria-label="Arrow style options">
       <div className="props-section">
         <div className="props-section__title">Start</div>
-        <div className="props-grid props-grid--five">
+        <div className="props-grid props-grid--six">
           {arrowheadOptions.map((option) => (
             <button
               key={option.id ?? "none-start"}
@@ -174,7 +249,7 @@ export function ArrowStyleFlyout({ elements, onUpdate, onStyleCapture }: Props) 
 
       <div className="props-section">
         <div className="props-section__title">End</div>
-        <div className="props-grid props-grid--five">
+        <div className="props-grid props-grid--six">
           {arrowheadOptions.map((option) => (
             <button
               key={option.id ?? "none-end"}
@@ -189,6 +264,32 @@ export function ArrowStyleFlyout({ elements, onUpdate, onStyleCapture }: Props) 
           ))}
         </div>
       </div>
+
+      {hasArrows && (
+        <div className="props-section">
+          <div className="props-section__title">Line style</div>
+          <div className="props-grid props-grid--two">
+            <button
+              type="button"
+              className={`props-tile${elbowed === false ? " is-active" : ""}`}
+              onClick={() => handleElbowedChange(false)}
+              aria-pressed={elbowed === false}
+              aria-label="Straight line"
+            >
+              <LineStyleIcon elbowed={false} />
+            </button>
+            <button
+              type="button"
+              className={`props-tile${elbowed === true ? " is-active" : ""}`}
+              onClick={() => handleElbowedChange(true)}
+              aria-pressed={elbowed === true}
+              aria-label="Elbowed line"
+            >
+              <LineStyleIcon elbowed />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
