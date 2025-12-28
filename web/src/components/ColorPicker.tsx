@@ -157,6 +157,8 @@ export type ColorPickerProps = {
   title?: string;
   initialShadeIndex?: 1 | 2 | 3 | 4 | 5;
   paletteId?: PaletteId;
+  /** Show keyboard shortcut keys on swatches (default: false) */
+  showKeys?: boolean;
 };
 
 export default function ColorPicker({
@@ -166,6 +168,7 @@ export default function ColorPicker({
   title = "Colors",
   initialShadeIndex = 3,
   paletteId = "default",
+  showKeys = false,
 }: ColorPickerProps) {
   const inputId = useId();
   const [inputValue, setInputValue] = useState(value ?? DEFAULT_COLOR);
@@ -429,7 +432,7 @@ export default function ColorPicker({
                 aria-pressed={isActive}
                 aria-label={swatch.title ?? swatch.value}
               >
-                <span className="color-swatch__key">{swatch.label}</span>
+                <span className={`color-swatch__key${showKeys ? "" : " color-swatch__key--hidden"}`}>{swatch.label}</span>
               </button>
             );
           })}
@@ -497,9 +500,10 @@ export default function ColorPicker({
             className="color-picker__custom-preview"
             aria-label="Selected color preview"
             style={{
-              width: 26,
-              height: 26,
-              borderRadius: 7,
+              width: 28,
+              height: 28,
+              borderRadius: 6,
+              flexShrink: 0,
               ...previewStyle,
             }}
             onClick={handleCustomPicker}
@@ -512,8 +516,8 @@ export default function ColorPicker({
               }
             }}
           />
-          <button type="button" className="selection-flyout__btn" onClick={handleEyedropper} aria-label="Pick color from canvas">
-            <Pipette size={16} aria-hidden="true" />
+          <button type="button" className="color-picker__eyedropper" onClick={handleEyedropper} aria-label="Pick color from canvas">
+            <Pipette size={14} aria-hidden="true" />
           </button>
           <input
             ref={colorInputRef}

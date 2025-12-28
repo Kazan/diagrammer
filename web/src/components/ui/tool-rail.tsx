@@ -357,7 +357,7 @@ const RailPopoverButton = React.forwardRef<HTMLButtonElement, RailPopoverButtonP
           align={align}
           sideOffset={sideOffset}
           className={cn(
-            "w-auto min-w-[280px] p-3 rounded-2xl",
+            "w-auto p-3 rounded-2xl",
             "shadow-[0_24px_48px_rgba(0,0,0,0.18)] border-slate-900/8",
             contentClassName
           )}

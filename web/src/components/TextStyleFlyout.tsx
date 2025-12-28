@@ -320,7 +320,7 @@ export function TextStyleFlyout({ elements, allSceneElements, api, selectedIds, 
   );
 
   return (
-    <div className="flex flex-col gap-4 min-w-[240px]" role="dialog" aria-label="Text style options">
+    <div className="flex flex-col gap-4 w-[180px]" role="dialog" aria-label="Text style options">
       {/* Fonts */}
       <div className="flex flex-col gap-2">
         {fontsInScene.length > 0 && (
