@@ -62,6 +62,10 @@ With the keystore present, run `make apk` to produce a signed release APK in `bu
 - WebView restrictions: JS enabled, DOM storage on; file access from file URLs blocked; mixed content blocked by default; navigation locked to `appassets.androidplatform.net`.
 - Safe Browsing enabled on API 26+; renderer death handled by recreating the activity.
 
+## License and notices
+- Project license: MIT (see `LICENSE`).
+- Third-party libraries: see `THIRD-PARTY-NOTICES.md` for dependency attributions.
+
 ## Next steps
 - Replace the placeholder HTML with the actual Excalidraw bundle and fonts.
 - Implement autosave cadence in JS; debounce writes before calling `NativeBridge.saveScene`.
