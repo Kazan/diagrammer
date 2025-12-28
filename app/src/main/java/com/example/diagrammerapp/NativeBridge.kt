@@ -231,6 +231,9 @@ internal class NativeBridge(
             "$source: writing to uri=${uri}, bytes=${envelope.byteLength}, suggested=${envelope.suggestedName}"
         )
         runCatching {
+            // Note: Permission should already be granted via the document picker.
+            // We attempt to take persistable permission but don't fail if it's not available.
+            // On Boox and some other e-ink devices, the permission model is stricter.
             try {
                 context.contentResolver.takePersistableUriPermission(
                     uri,
@@ -238,30 +241,41 @@ internal class NativeBridge(
                 )
                 Log.d("NativeBridge", "$source: acquired persistable permission for $uri")
             } catch (se: SecurityException) {
-                // Proceed; openOutputStream will still fail if permission is insufficient.
-                Log.w("NativeBridge", "$source: could not take persistable permission: ${se.message}")
+                // This is expected if the URI doesn't support persistable permissions.
+                // The transient permission from the picker should still work.
+                Log.w("NativeBridge", "$source: could not take persistable permission (expected on some devices): ${se.message}")
             }
 
             val bytesToWrite = envelope.json.toByteArray(Charsets.UTF_8)
-            Log.d("NativeBridge", "$source: preparing to write ${bytesToWrite.size} bytes")
+            Log.d("NativeBridge", "$source: preparing to write ${bytesToWrite.size} bytes to ${uri.scheme}://${uri.authority}")
 
-            // Try "rwt" (read-write-truncate) first, fall back to "w" (write)
-            // Some file systems/providers don't support truncate mode
+            // Try write modes in order of preference:
+            // 1. "wt" (write-truncate) - most compatible with SAF
+            // 2. "w" (write) - fallback
+            // 3. default mode - last resort
             val stream = runCatching {
-                context.contentResolver.openOutputStream(uri, "rwt")
+                context.contentResolver.openOutputStream(uri, "wt")
             }.onFailure {
-                Log.w("NativeBridge", "$source: 'rwt' mode failed, trying 'w': ${it.message}")
+                Log.w("NativeBridge", "$source: 'wt' mode failed: ${it.message}")
             }.getOrNull() ?: runCatching {
                 context.contentResolver.openOutputStream(uri, "w")
             }.onFailure {
-                Log.w("NativeBridge", "$source: 'w' mode failed, trying default: ${it.message}")
-            }.getOrNull() ?: context.contentResolver.openOutputStream(uri)
+                Log.w("NativeBridge", "$source: 'w' mode failed: ${it.message}")
+            }.getOrNull() ?: runCatching {
+                context.contentResolver.openOutputStream(uri)
+            }.onFailure {
+                Log.e("NativeBridge", "$source: default mode failed: ${it.message}")
+            }.getOrNull()
 
-            stream?.use {
+            if (stream == null) {
+                error("No output stream available for $uri - check storage permissions")
+            }
+
+            stream.use {
                 it.write(bytesToWrite)
                 it.flush()
                 Log.d("NativeBridge", "$source: write complete, bytes=${bytesToWrite.size}")
-            } ?: error("No output stream available for $uri")
+            }
         }.onSuccess {
             val (finalUri, finalName) = ensureExcalidrawName(uri)
             currentDocumentUri = finalUri
@@ -461,6 +475,20 @@ internal class NativeBridge(
         }
         pendingEnvelope = null
         if (!validateEnvelope(envelope, "completeDocumentSave")) return
+
+        // Take persistable URI permission immediately after picker returns
+        // This is critical for Boox e-ink devices which are strict about permissions
+        try {
+            context.contentResolver.takePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            )
+            Log.d("NativeBridge", "completeDocumentSave: took persistable permission for $uri")
+        } catch (se: SecurityException) {
+            Log.w("NativeBridge", "completeDocumentSave: could not take persistable permission: ${se.message}")
+            // Continue anyway - the write operation will use the transient permission from the picker
+        }
+
         ioScope.launch {
             writeEnvelopeToUri(uri, envelope, "completeDocumentSave")
         }

@@ -3,6 +3,7 @@
 package com.example.diagrammerapp
 
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
@@ -76,7 +77,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private val overwriteDocumentLauncher = registerForActivityResult(
-        ActivityResultContracts.OpenDocument()
+        OverwriteDocumentContract(::pickerInitialUri)
     ) { uri ->
         nativeBridge?.completeDocumentSave(uri)
         enterImmersive()
@@ -326,6 +327,34 @@ private class OpenSceneDocumentContract(
 
     override fun parseResult(resultCode: Int, intent: Intent?): Uri? {
         return ActivityResultContracts.OpenDocument().parseResult(resultCode, intent)
+    }
+}
+
+/**
+ * Contract for opening an existing document with write permissions for overwriting.
+ * This is different from OpenDocument because we explicitly need write access.
+ */
+private class OverwriteDocumentContract(
+    private val initialUriProvider: () -> Uri?
+) : ActivityResultContract<Array<String>, Uri?>() {
+    override fun createIntent(context: Context, input: Array<String>): Intent {
+        return Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+            putExtra(Intent.EXTRA_MIME_TYPES, input)
+            putExtra(DocumentsContract.EXTRA_INITIAL_URI, initialUriProvider())
+            // Explicitly request both read and write permissions
+            addFlags(
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
+                    Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+            )
+        }
+    }
+
+    override fun parseResult(resultCode: Int, intent: Intent?): Uri? {
+        if (resultCode != android.app.Activity.RESULT_OK) return null
+        return intent?.data
     }
 }
 
