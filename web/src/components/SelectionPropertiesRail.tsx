@@ -91,6 +91,13 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
     [elements]
   );
 
+  const stampVersion = (el: ExcalidrawElement, now: number) => ({
+    ...el,
+    version: (el.version ?? 0) + 1,
+    versionNonce: Math.floor(Math.random() * 1_000_000_000),
+    updated: now,
+  });
+
   // Determine selection composition for color control visibility
   const selectionComposition = useMemo(() => {
     const hasDirectText = elements.some((el) => el.type === "text");
@@ -203,8 +210,16 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
   // Handlers
   const applyToSelection = (mutate: (el: ExcalidrawElement) => ExcalidrawElement) => {
     if (!api || !elements.length) return;
-    const nextElements = api.getSceneElements().map((el) => (selectedIds.has(el.id) ? mutate({ ...el }) : el));
-    api.updateScene({ elements: nextElements });
+    const now = Date.now();
+    const nextElements = api
+      .getSceneElements()
+      .map((el) => {
+        if (!selectedIds.has(el.id)) return el;
+        const mutated = mutate({ ...el });
+        const hasVersionBump = typeof mutated.version === "number" && mutated.version !== el.version;
+        return hasVersionBump ? mutated : stampVersion(mutated, now);
+      });
+    api.updateScene({ elements: nextElements, captureUpdate: CaptureUpdateAction.IMMEDIATELY });
   };
 
   const moveSelection = (action: LayerAction) => {
@@ -410,11 +425,14 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
         }
       }
     }
+    const now = Date.now();
     const nextElements = sceneElements.map((el) => {
-      if (selectedIds.has(el.id) || textIds.has(el.id)) return { ...el, strokeColor: color };
+      if (selectedIds.has(el.id) || textIds.has(el.id)) {
+        return stampVersion({ ...el, strokeColor: color }, now);
+      }
       return el;
     });
-    api.updateScene({ elements: nextElements });
+    api.updateScene({ elements: nextElements, captureUpdate: CaptureUpdateAction.IMMEDIATELY });
     onStyleCapture?.("strokeColor", color);
   };
 
@@ -435,11 +453,12 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
         }
       }
     }
+    const now = Date.now();
     const nextElements = sceneElements.map((el) => {
-      if (textIdsToUpdate.has(el.id)) return { ...el, strokeColor: color };
+      if (textIdsToUpdate.has(el.id)) return stampVersion({ ...el, strokeColor: color }, now);
       return el;
     });
-    api.updateScene({ elements: nextElements });
+    api.updateScene({ elements: nextElements, captureUpdate: CaptureUpdateAction.IMMEDIATELY });
     // Text color uses strokeColor for text elements, but we don't capture it
     // as a separate default since text elements inherit from strokeColor
   };

@@ -55,6 +55,7 @@ export default function App() {
   const [isDirty, setIsDirty] = useState(false);
   const [hasSceneContent, setHasSceneContent] = useState(false);
   const [selectionInfo, setSelectionInfo] = useState<SelectionInfo | null>(null);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const HIDE_DEFAULT_PROPS_FLYOUT = false;
   const openFileResolveRef = useRef<((handles: NativeFileHandle[]) => void) | null>(null);
   const openFileRejectRef = useRef<((reason: any) => void) | null>(null);
@@ -557,8 +558,25 @@ export default function App() {
       setStatus({ text: "Canvas not ready", tone: "warn" });
       return;
     }
+    if (!isDirty) {
+      api.resetScene({ resetLoadingState: true });
+      return;
+    }
+    setShowClearConfirm(true);
+  }, [api, isDirty, setStatus]);
+
+  const handleForceClear = useCallback(() => {
+    if (!api) {
+      setStatus({ text: "Canvas not ready", tone: "warn" });
+      return;
+    }
     api.resetScene({ resetLoadingState: true });
+    setShowClearConfirm(false);
   }, [api, setStatus]);
+
+  const handleCancelClear = useCallback(() => {
+    setShowClearConfirm(false);
+  }, []);
 
   const handleSelectTool = (tool: ToolType) => {
     if (tool === "image") {
@@ -624,6 +642,9 @@ export default function App() {
         onExportPng={handleExportPng}
         onExportSvg={handleExportSvg}
         onClear={handleClear}
+        showClearConfirm={showClearConfirm}
+        onForceClear={handleForceClear}
+        onCancelClear={handleCancelClear}
         exporting={exporting}
         zoom={zoom}
         onZoomIn={handleZoomIn}

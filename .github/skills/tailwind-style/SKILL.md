@@ -1,11 +1,11 @@
 ---
 name: diagrammer-tailwind-style
-description: Styling and layout guidance for the Diagrammer web app using Tailwind CSS v4, existing design tokens, and shadcn/radix primitives. Use when adding or updating UI styles, spacing, layering, or visual polish.
+description: MANDATORY for any web UI or styling change. Must be followed whenever touching web/src UI, layout, or CSS. Absolutely no shadows, glows, or flares; keep everything flat and token-driven.
 ---
 
 # Diagrammer Tailwind Styling
 
-Use this skill whenever a task involves changing visual design, spacing, layering, or theming in the web app. It assumes Tailwind CSS v4, React 18, Vite, and the existing design tokens defined in [web/src/index.css](web/src/index.css).
+Use this skill whenever a task involves changing visual design, spacing, layering, theming, or any Tailwind/CSS in the web app. If you cannot apply it, state why. It assumes Tailwind CSS v4, React 18, Vite, and the existing design tokens defined in [web/src/index.css](web/src/index.css).
 
 ## Stack Snapshot
 - Tailwind CSS v4 imported in CSS (`@import "tailwindcss"`) with utilities merged via `twMerge` in `cn` ([web/src/lib/utils.ts](web/src/lib/utils.ts)).
@@ -27,7 +27,7 @@ Keep colors and spacing aligned to the tokens declared in `:root` in [web/src/in
 - Compose classes with `cn(...)`; for reusable patterns or stateful styles, add/extend CVA variants instead of sprinkling repeated class strings.
 - Respect focus/hover/pressed states already defined in primitives; if you add new states, mirror contrast and transitions used in existing variants.
 - Keep motion light; existing pattern uses `animate-[float-in_260ms_ease_both]` and short transitions (~120ms).
-- Avoid drop shadows, glow, or heavy visual flare; styles must look clean on eInk (including color eInk) with minimal contrast stress. Prefer flat fills, borders, and subtle state cues over elevation effects.
+- Avoid drop shadows, glow, or heavy visual flare; styles must look clean on eInk (including color eInk) with minimal contrast stress. Prefer flat fills, borders, and subtle state cues over elevation effects. No shadows or flares.
 
 ## Component Usage Patterns
 - **Buttons**: Use `Button` and extend `buttonVariants` for new variants or sizes. Keep outline/focus styles consistent with existing focus-visible rings.
