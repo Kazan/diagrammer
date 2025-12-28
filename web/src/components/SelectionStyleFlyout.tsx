@@ -7,6 +7,20 @@ const DEFAULT_FILL = "#b7f5c4";
 const DEFAULT_STROKE_WIDTH = 2;
 const DEFAULT_OPACITY = 100;
 
+/**
+ * Check if a line element forms a closed polygon (first and last points are the same).
+ * Closed polylines can have a fill color applied.
+ */
+const isClosedPolyline = (el: ExcalidrawElement): boolean => {
+  if (el.type !== "line") return false;
+  const points = (el as { points?: readonly [number, number][] }).points;
+  if (!points || points.length < 3) return false;
+  const [firstX, firstY] = points[0];
+  const [lastX, lastY] = points[points.length - 1];
+  const epsilon = 0.5;
+  return Math.abs(firstX - lastX) <= epsilon && Math.abs(firstY - lastY) <= epsilon;
+};
+
 function getCommonValue<T>(elements: ReadonlyArray<ExcalidrawElement>, pick: (el: ExcalidrawElement) => T): T | null {
   if (!elements.length) return null;
   const first = pick(elements[0]);
@@ -171,67 +185,76 @@ export function SelectionStyleFlyout({ elements, onUpdate, onStyleCapture }: Pro
   const fillActive = resolveFillActive(fillStyle);
   const showEdges = useMemo(() => elements.length > 0, [elements]);
 
+  // Hide fill options for line-only selections (arrows/lines don't support fill)
+  // Exception: closed polylines (lines where first and last points meet) can have fill
+  const showFill = useMemo(
+    () => elements.some((el) => (el.type !== "arrow" && el.type !== "line") || isClosedPolyline(el)),
+    [elements],
+  );
+
   return (
     <div className="props-flyout" role="dialog" aria-label="Style options">
-      <div className="props-section">
-        <div className="props-section__title">Fill</div>
-        <div className="props-grid">
-          <button
-            type="button"
-            className={`props-tile${fillActive === "hachure" ? " is-active" : ""}`}
-            onClick={() => handleFillChange("hachure")}
-            aria-pressed={fillActive === "hachure"}
-            aria-label="Sketch fill"
-          >
-            <span
-              className="style-icon style-icon--fill-hachure"
-              aria-hidden="true"
-              style={{
-                backgroundColor: "#f8fafc",
-                backgroundImage: `repeating-linear-gradient(135deg, ${toRgba(baseFillColor, 0.38)} 0 6px, transparent 6px 12px)`,
-              }}
-            />
-          </button>
-          <button
-            type="button"
-            className={`props-tile${fillActive === "cross-hatch" ? " is-active" : ""}`}
-            onClick={() => handleFillChange("cross-hatch")}
-            aria-pressed={fillActive === "cross-hatch"}
-            aria-label="Cross hatch fill"
-          >
-            <span
-              className="style-icon style-icon--fill-cross"
-              aria-hidden="true"
-              style={{
-                backgroundColor: "#f8fafc",
-                backgroundImage:
-                  `repeating-linear-gradient(135deg, ${toRgba(baseFillColor, 0.34)} 0 6px, transparent 6px 12px), ` +
-                  `repeating-linear-gradient(45deg, ${toRgba(baseFillColor, 0.34)} 0 6px, transparent 6px 12px)`,
-              }}
-            />
-          </button>
-          <button
-            type="button"
-            className={`props-tile${fillActive === "solid" ? " is-active" : ""}`}
-            onClick={() => handleFillChange("solid")}
-            aria-pressed={fillActive === "solid"}
-            aria-label="Solid fill"
-          >
-            <span
-              className="style-icon style-icon--fill-solid"
-              aria-hidden="true"
-              style={{
-                backgroundColor: "#f8fafc",
-                backgroundImage: `linear-gradient(${baseFillColor}, ${baseFillColor})`,
-                backgroundSize: "60% 60%",
-                backgroundPosition: "center",
-                backgroundRepeat: "no-repeat",
-                borderColor: toRgba(baseFillColor, 0.7),
-              }}
-            />
-          </button>
+      {showFill && (
+        <div className="props-section">
+          <div className="props-section__title">Fill</div>
+          <div className="props-grid">
+            <button
+              type="button"
+              className={`props-tile${fillActive === "hachure" ? " is-active" : ""}`}
+              onClick={() => handleFillChange("hachure")}
+              aria-pressed={fillActive === "hachure"}
+              aria-label="Sketch fill"
+            >
+              <span
+                className="style-icon style-icon--fill-hachure"
+                aria-hidden="true"
+                style={{
+                  backgroundColor: "#f8fafc",
+                  backgroundImage: `repeating-linear-gradient(135deg, ${toRgba(baseFillColor, 0.38)} 0 6px, transparent 6px 12px)`,
+                }}
+              />
+            </button>
+            <button
+              type="button"
+              className={`props-tile${fillActive === "cross-hatch" ? " is-active" : ""}`}
+              onClick={() => handleFillChange("cross-hatch")}
+              aria-pressed={fillActive === "cross-hatch"}
+              aria-label="Cross hatch fill"
+            >
+              <span
+                className="style-icon style-icon--fill-cross"
+                aria-hidden="true"
+                style={{
+                  backgroundColor: "#f8fafc",
+                  backgroundImage:
+                    `repeating-linear-gradient(135deg, ${toRgba(baseFillColor, 0.34)} 0 6px, transparent 6px 12px), ` +
+                    `repeating-linear-gradient(45deg, ${toRgba(baseFillColor, 0.34)} 0 6px, transparent 6px 12px)`,
+                }}
+              />
+            </button>
+            <button
+              type="button"
+              className={`props-tile${fillActive === "solid" ? " is-active" : ""}`}
+              onClick={() => handleFillChange("solid")}
+              aria-pressed={fillActive === "solid"}
+              aria-label="Solid fill"
+            >
+              <span
+                className="style-icon style-icon--fill-solid"
+                aria-hidden="true"
+                style={{
+                  backgroundColor: "#f8fafc",
+                  backgroundImage: `linear-gradient(${baseFillColor}, ${baseFillColor})`,
+                  backgroundSize: "60% 60%",
+                  backgroundPosition: "center",
+                  backgroundRepeat: "no-repeat",
+                  borderColor: toRgba(baseFillColor, 0.7),
+                }}
+              />
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="props-section">
         <div className="props-section__title">Stroke width</div>
