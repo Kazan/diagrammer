@@ -747,6 +747,11 @@ body {
   justify-content: start;
 }
 
+.props-grid--five {
+  grid-template-columns: repeat(5, minmax(var(--props-tile-size), var(--props-tile-size)));
+  justify-content: start;
+}
+
 .props-tile {
   width: 100%;
   height: auto;
