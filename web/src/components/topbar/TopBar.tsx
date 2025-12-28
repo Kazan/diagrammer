@@ -75,6 +75,7 @@ export function TopBar({
         onExportPng={onExportPng}
         onExportSvg={onExportSvg}
         exporting={exporting}
+        isDirty={isDirty}
         showOpen={showOpen}
         showSave={showSave}
         showSaveAs={showSaveAs}

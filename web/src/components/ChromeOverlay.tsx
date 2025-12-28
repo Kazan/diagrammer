@@ -66,6 +66,8 @@ export function ChromeOverlay({
         onExportPng={onExportPng}
         onExportSvg={onExportSvg}
         exporting={exporting}
+        isDirty={isDirty}
+        showCopySource={false}
       />
 
       {/* Status banner for transient messages */}

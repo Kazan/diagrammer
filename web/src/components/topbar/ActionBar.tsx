@@ -28,6 +28,8 @@ export type ActionBarProps = {
   onExportSvg: () => void;
   /** Which export is currently in progress, if any */
   exporting: "png" | "svg" | null;
+  /** Whether the current scene has unsaved changes */
+  isDirty: boolean;
   /** Toggle visibility of the Open button */
   showOpen?: boolean;
   /** Toggle visibility of the Save button */
@@ -55,6 +57,7 @@ export function ActionBar({
   onExportPng,
   onExportSvg,
   exporting,
+  isDirty,
   showOpen = true,
   showSave = true,
   showSaveAs = true,
@@ -119,6 +122,7 @@ export function ActionBar({
                   size="sm"
                   className={chromeButtonTone}
                   onClick={onSaveAs}
+                  disabled={!isDirty}
                 >
                   <SaveAllIcon />
                   <span className="hidden sm:inline">Save As</span>
@@ -162,7 +166,7 @@ export function ActionBar({
                   size="sm"
                   className={chromeButtonTone}
                   onClick={onExportPng}
-                  disabled={exporting === "png"}
+                  disabled={!isDirty || exporting === "png"}
                 >
                   {exporting === "png" ? (
                     <Loader2Icon className="animate-spin" />
@@ -186,7 +190,7 @@ export function ActionBar({
                   size="sm"
                   className={chromeButtonTone}
                   onClick={onExportSvg}
-                  disabled={exporting === "svg"}
+                  disabled={!isDirty || exporting === "svg"}
                 >
                   {exporting === "svg" ? (
                     <Loader2Icon className="animate-spin" />
