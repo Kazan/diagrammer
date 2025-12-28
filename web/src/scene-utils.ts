@@ -28,9 +28,6 @@ export const computeSceneSignature = (elements: readonly any[], appState: any) =
   return `${elemSig}::${appSig}`;
 };
 
-export const computeSceneSignatureFromScene = (scene: any) =>
-  computeSceneSignature(scene?.elements ?? [], scene?.appState ?? {});
-
 export const EMPTY_SCENE_SIG = computeSceneSignature(EMPTY_SCENE.elements, EMPTY_SCENE.appState);
 
 export type SceneSaveEnvelope = {
