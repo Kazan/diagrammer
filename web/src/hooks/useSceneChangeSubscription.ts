@@ -18,6 +18,7 @@ export type SceneChangeOptions = {
   setActiveTool: (tool: ToolType) => void;
   setCurrentFileName: (name: string) => void;
   setIsDirty: (dirty: boolean) => void;
+  setHasSceneContent: (hasContent: boolean) => void;
   setStatus: (status: { text: string; tone: "ok" | "warn" | "err" }) => void;
   clearFileAssociation: () => void;
   suppressNextDirtyRef: MutableRefObject<boolean>;
@@ -75,6 +76,7 @@ export function useSceneChangeSubscription(opts: SceneChangeOptions) {
     setActiveTool,
     setCurrentFileName,
     setIsDirty,
+    setHasSceneContent,
     setStatus,
     clearFileAssociation,
     suppressNextDirtyRef,
@@ -93,10 +95,12 @@ export function useSceneChangeSubscription(opts: SceneChangeOptions) {
     if (!api) return undefined;
     let selectionRaf = 0;
     const unsubscribe = api.onChange((elements, appState) => {
+      const visibleCount = elements.filter((el) => !el.isDeleted).length;
       if (sceneLoadInProgressRef.current) {
         const sig = computeSceneSignature(elements, appState);
         prevSceneSigRef.current = sig;
-        prevNonEmptySceneRef.current = elements.some((el) => !el.isDeleted);
+        prevNonEmptySceneRef.current = visibleCount > 0;
+        setHasSceneContent(visibleCount > 0);
         console.log("[NativeBridge] onChange during load", { sig, visible: elements.length });
         return;
       }
@@ -105,7 +109,8 @@ export function useSceneChangeSubscription(opts: SceneChangeOptions) {
         loadSkipRef.current -= 1;
         const sig = computeSceneSignature(elements, appState);
         prevSceneSigRef.current = sig;
-        prevNonEmptySceneRef.current = elements.some((el) => !el.isDeleted);
+        prevNonEmptySceneRef.current = visibleCount > 0;
+        setHasSceneContent(visibleCount > 0);
         suppressNextDirtyRef.current = false;
         expectedSceneSigRef.current = null;
         setIsDirty(false);
@@ -117,7 +122,6 @@ export function useSceneChangeSubscription(opts: SceneChangeOptions) {
         setActiveTool(tool);
       }
 
-      const visibleCount = elements.filter((el) => !el.isDeleted).length;
       const hadNonEmptyScene = prevNonEmptySceneRef.current;
       const becameEmpty = hydratedSceneRef.current && hadNonEmptyScene && visibleCount === 0;
 
@@ -130,6 +134,7 @@ export function useSceneChangeSubscription(opts: SceneChangeOptions) {
           expectedSceneSigRef.current = null;
           prevSceneSigRef.current = sig;
           prevNonEmptySceneRef.current = visibleCount > 0;
+          setHasSceneContent(visibleCount > 0);
           setIsDirty(false);
           return;
         }
@@ -139,6 +144,7 @@ export function useSceneChangeSubscription(opts: SceneChangeOptions) {
           suppressNextDirtyRef.current = true;
           prevSceneSigRef.current = EMPTY_SCENE_SIG;
           prevNonEmptySceneRef.current = false;
+          setHasSceneContent(false);
           clearFileAssociation();
           setStatus({ text: "Canvas cleared", tone: "warn" });
         } else {
@@ -146,12 +152,14 @@ export function useSceneChangeSubscription(opts: SceneChangeOptions) {
             suppressNextDirtyRef.current = false;
             prevSceneSigRef.current = sig;
             prevNonEmptySceneRef.current = visibleCount > 0;
+            setHasSceneContent(visibleCount > 0);
           } else {
             if (prevSceneSigRef.current && sig !== prevSceneSigRef.current) {
               setIsDirty(true);
             }
             prevSceneSigRef.current = sig;
             prevNonEmptySceneRef.current = visibleCount > 0;
+            setHasSceneContent(visibleCount > 0);
           }
         }
       }
@@ -186,6 +194,7 @@ export function useSceneChangeSubscription(opts: SceneChangeOptions) {
     setActiveTool,
     setCurrentFileName,
     setIsDirty,
+    setHasSceneContent,
     setStatus,
     suppressNextDirtyRef,
     onSelectionChange,

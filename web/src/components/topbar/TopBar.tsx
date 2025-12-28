@@ -18,12 +18,14 @@ export type TopBarProps = FileStatusProps &
  *   isDirty={true}
  *   lastSaved={new Date()}
  *   canSave={true}
+ *   hasSceneContent={true}
  *   onOpen={handleOpen}
  *   onSave={handleSave}
  *   onSaveAs={handleSaveAs}
  *   onCopySource={handleCopySource}
  *   onExportPng={handleExportPng}
  *   onExportSvg={handleExportSvg}
+ *   onClear={handleClear}
  *   exporting={null}
  * />
  * ```
@@ -35,12 +37,14 @@ export function TopBar({
   lastSaved,
   // ActionBar props
   canSave,
+  hasSceneContent,
   onOpen,
   onSave,
   onSaveAs,
   onCopySource,
   onExportPng,
   onExportSvg,
+  onClear,
   exporting,
   showOpen,
   showSave,
@@ -48,6 +52,7 @@ export function TopBar({
   showCopySource,
   showExportPng,
   showExportSvg,
+  showClear,
   // Common props
   className,
 }: TopBarProps) {
@@ -68,12 +73,14 @@ export function TopBar({
 
       <ActionBar
         canSave={canSave}
+        hasSceneContent={hasSceneContent}
         onOpen={onOpen}
         onSave={onSave}
         onSaveAs={onSaveAs}
         onCopySource={onCopySource}
         onExportPng={onExportPng}
         onExportSvg={onExportSvg}
+        onClear={onClear}
         exporting={exporting}
         isDirty={isDirty}
         showOpen={showOpen}
@@ -82,6 +89,7 @@ export function TopBar({
         showCopySource={showCopySource}
         showExportPng={showExportPng}
         showExportSvg={showExportSvg}
+        showClear={showClear}
       />
     </header>
   );
