@@ -1,7 +1,7 @@
 import { CustomToolbar, type ToolType } from "./CustomToolbar";
-import { FileChip } from "./FileChip";
 import { NativeStatus, type StatusMessage } from "./NativeStatus";
 import { ZoomControls } from "./ZoomControls";
+import { TopBar } from "./topbar";
 
 type Props = {
   fileName: string;
@@ -27,16 +27,6 @@ type Props = {
   onUndo: () => void;
   canUndo: boolean;
 };
-
-function StatusChip({
-  tone,
-  label,
-}: {
-  tone: "ok" | "warn" | "err";
-  label: string;
-}) {
-  return <span className={`status-chip status-chip--${tone}`}>{label}</span>;
-}
 
 export function ChromeOverlay({
   fileName,
@@ -64,60 +54,32 @@ export function ChromeOverlay({
 }: Props) {
   return (
     <>
-      <div className="chrome-overlay">
-        <div className="chrome-strip" role="region" aria-label="Canvas controls">
-          <div className="chrome-strip__meta">
-            <FileChip name={fileName} isDirty={isDirty} />
-            <div className="chrome-strip__chips" aria-label="File state">
-              <StatusChip tone={isDirty ? "warn" : "ok"} label={isDirty ? "Dirty" : "Clean"} />
-              <StatusChip
-                tone={lastSaved ? "ok" : "warn"}
-                label={lastSaved ? `Saved ${lastSaved.toLocaleTimeString()}` : "Unsaved"}
-              />
-            </div>
-          </div>
-          <div className="chrome-strip__actions" aria-label="File actions">
-            <button type="button" className="chrome-button" onClick={onOpen}>
-              Open
-            </button>
-            {canSave ? (
-              <button type="button" className="chrome-button" onClick={onSaveNow}>
-                Save
-              </button>
-            ) : null}
-            <button type="button" className="chrome-button" onClick={onSaveToDocument}>
-              Save as…
-            </button>
-            <button type="button" className="chrome-button" onClick={onCopySource}>
-              Copy source
-            </button>
-            <span className="chrome-strip__divider" aria-hidden="true" />
-            <button
-              type="button"
-              className="chrome-button"
-              onClick={onExportPng}
-              disabled={exporting === "png"}
-              aria-busy={exporting === "png"}
-            >
-              {exporting === "png" ? "Exporting PNG…" : "Export PNG"}
-            </button>
-            <button
-              type="button"
-              className="chrome-button"
-              onClick={onExportSvg}
-              disabled={exporting === "svg"}
-              aria-busy={exporting === "svg"}
-            >
-              {exporting === "svg" ? "Exporting SVG…" : "Export SVG"}
-            </button>
-          </div>
+      <TopBar
+        fileName={fileName}
+        isDirty={isDirty}
+        lastSaved={lastSaved}
+        canSave={canSave}
+        onOpen={onOpen}
+        onSave={onSaveNow}
+        onSaveAs={onSaveToDocument}
+        onCopySource={onCopySource}
+        onExportPng={onExportPng}
+        onExportSvg={onExportSvg}
+        exporting={exporting}
+      />
+
+      {/* Status banner for transient messages */}
+      {status ? (
+        <div
+          className={`chrome-banner chrome-banner--${status.tone}`}
+          role="status"
+          aria-live="polite"
+          style={{ position: "fixed", top: 80, left: 16, right: 16, zIndex: 29 }}
+        >
+          {status.text}
         </div>
-        {status ? (
-          <div className={`chrome-banner chrome-banner--${status.tone}`} role="status" aria-live="polite">
-            {status.text}
-          </div>
-        ) : null}
-      </div>
+      ) : null}
+
       <CustomToolbar activeTool={activeTool} onSelect={onSelectTool} />
       <NativeStatus present={nativePresent} lastSaved={lastSaved} status={status} />
       <ZoomControls

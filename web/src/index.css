@@ -84,6 +84,10 @@
     --status-ok: #3fcf8e;
     --status-warn: #f59e0b;
     --status-error: #ef4444;
+
+    /* Semantic Status Colors for Tailwind */
+    --success: 156 72% 52%;
+    --warning: 38 92% 50%;
   }
 }
 
