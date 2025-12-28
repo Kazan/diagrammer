@@ -603,7 +603,6 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
             open={openKind === "text"}
             onOpenChange={(open) => setOpenKind(open ? "text" : null)}
             aria-label="Text style"
-            contentClassName="min-w-[260px]"
             content={
               <TextStyleFlyout
                 elements={elements}

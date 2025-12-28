@@ -11,7 +11,7 @@ import {
   Type as TypeIcon,
 } from "lucide-react";
 import { ToolbarButton } from "@/components/ui/toolbar";
-import { cn } from "@/lib/utils";
+import { cn, recenterBoundTextInContainers } from "@/lib/utils";
 import type { ExplicitStyleDefaults } from "@/hooks/useExplicitStyleDefaults";
 
 // Font definitions with CSS font-family for preview
@@ -251,7 +251,9 @@ export function TextStyleFlyout({ elements, allSceneElements, api, selectedIds, 
         refreshDimensions: true,
         repairBindings: true,
       });
-      api.updateScene({ elements: restored, captureUpdate: CaptureUpdateAction.IMMEDIATELY });
+      // Recenter bound text elements in their containers after dimension recalculation
+      const recentered = recenterBoundTextInContainers(restored as ExcalidrawElement[], affectedTextIds);
+      api.updateScene({ elements: recentered, captureUpdate: CaptureUpdateAction.IMMEDIATELY });
       onStyleCapture?.("fontFamily", fontId);
     },
     [api, selectedIds, onStyleCapture],
@@ -282,7 +284,9 @@ export function TextStyleFlyout({ elements, allSceneElements, api, selectedIds, 
         refreshDimensions: true,
         repairBindings: true,
       });
-      api.updateScene({ elements: restored, captureUpdate: CaptureUpdateAction.IMMEDIATELY });
+      // Recenter bound text elements in their containers after dimension recalculation
+      const recentered = recenterBoundTextInContainers(restored as ExcalidrawElement[], affectedTextIds);
+      api.updateScene({ elements: recentered, captureUpdate: CaptureUpdateAction.IMMEDIATELY });
       onStyleCapture?.("fontSize", size);
     },
     [api, selectedIds, onStyleCapture],
@@ -313,14 +317,16 @@ export function TextStyleFlyout({ elements, allSceneElements, api, selectedIds, 
         refreshDimensions: true,
         repairBindings: true,
       });
-      api.updateScene({ elements: restored, captureUpdate: CaptureUpdateAction.IMMEDIATELY });
+      // Recenter bound text elements in their containers after dimension recalculation
+      const recentered = recenterBoundTextInContainers(restored as ExcalidrawElement[], affectedTextIds);
+      api.updateScene({ elements: recentered, captureUpdate: CaptureUpdateAction.IMMEDIATELY });
       onStyleCapture?.("textAlign", align);
     },
     [api, selectedIds, onStyleCapture],
   );
 
   return (
-    <div className="flex flex-col gap-4 min-w-[240px]" role="dialog" aria-label="Text style options">
+    <div className="flex flex-col gap-4 w-[180px]" role="dialog" aria-label="Text style options">
       {/* Fonts */}
       <div className="flex flex-col gap-2">
         {fontsInScene.length > 0 && (
