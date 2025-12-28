@@ -28,6 +28,18 @@ export type ActionBarProps = {
   onExportSvg: () => void;
   /** Which export is currently in progress, if any */
   exporting: "png" | "svg" | null;
+  /** Toggle visibility of the Open button */
+  showOpen?: boolean;
+  /** Toggle visibility of the Save button */
+  showSave?: boolean;
+  /** Toggle visibility of the Save As button */
+  showSaveAs?: boolean;
+  /** Toggle visibility of the Copy button */
+  showCopySource?: boolean;
+  /** Toggle visibility of the Export PNG button */
+  showExportPng?: boolean;
+  /** Toggle visibility of the Export SVG button */
+  showExportSvg?: boolean;
 };
 
 /**
@@ -43,9 +55,19 @@ export function ActionBar({
   onExportPng,
   onExportSvg,
   exporting,
+  showOpen = true,
+  showSave = true,
+  showSaveAs = true,
+  showCopySource = true,
+  showExportPng = true,
+  showExportSvg = true,
 }: ActionBarProps) {
   const chromeButtonTone =
     "bg-[var(--btn-bg)] text-[var(--btn-text)] border-[var(--btn-border)] hover:bg-[var(--btn-hover-bg)] hover:text-[var(--btn-hover-text)] hover:border-[var(--btn-hover-border)] active:bg-[var(--btn-pressed-bg)] active:text-[var(--btn-pressed-text)] active:border-[var(--btn-pressed-border)] shadow-none";
+
+  const hasFileActions =
+    showOpen || (showSave && canSave) || showSaveAs || showCopySource;
+  const hasExportActions = showExportPng || showExportSvg;
 
   return (
     <ButtonGroup
@@ -53,118 +75,134 @@ export function ActionBar({
       aria-label="Scene actions"
     >
       {/* File operations group */}
-      <ButtonGroup>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              className={chromeButtonTone}
-              onClick={onOpen}
-            >
-              <FolderOpenIcon />
-              <span className="hidden sm:inline">Open</span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Open scene</TooltipContent>
-        </Tooltip>
+      {hasFileActions && (
+        <ButtonGroup>
+          {showOpen && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={chromeButtonTone}
+                  onClick={onOpen}
+                >
+                  <FolderOpenIcon />
+                  <span className="hidden sm:inline">Open</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Open scene</TooltipContent>
+            </Tooltip>
+          )}
 
-        {canSave && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className={chromeButtonTone}
-                onClick={onSave}
-              >
-                <SaveIcon />
-                <span className="hidden sm:inline">Save</span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Save to current file</TooltipContent>
-          </Tooltip>
-        )}
+          {showSave && canSave && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={chromeButtonTone}
+                  onClick={onSave}
+                >
+                  <SaveIcon />
+                  <span className="hidden sm:inline">Save</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Save to current file</TooltipContent>
+            </Tooltip>
+          )}
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              className={chromeButtonTone}
-              onClick={onSaveAs}
-            >
-              <SaveAllIcon />
-              <span className="hidden sm:inline">Save As</span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Save to new location</TooltipContent>
-        </Tooltip>
+          {showSaveAs && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={chromeButtonTone}
+                  onClick={onSaveAs}
+                >
+                  <SaveAllIcon />
+                  <span className="hidden sm:inline">Save As</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Save to new location</TooltipContent>
+            </Tooltip>
+          )}
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              className={chromeButtonTone}
-              onClick={onCopySource}
-            >
-              <CopyIcon />
-              <span className="hidden sm:inline">Copy</span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Copy scene source to clipboard</TooltipContent>
-        </Tooltip>
-      </ButtonGroup>
+          {showCopySource && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={chromeButtonTone}
+                  onClick={onCopySource}
+                >
+                  <CopyIcon />
+                  <span className="hidden sm:inline">Copy</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Copy scene source to clipboard</TooltipContent>
+            </Tooltip>
+          )}
+        </ButtonGroup>
+      )}
 
-      <ButtonGroupSeparator className="mx-1 h-6 self-center" />
+      {hasFileActions && hasExportActions ? (
+        <ButtonGroupSeparator className="mx-1 h-6 self-center" />
+      ) : null}
 
       {/* Export group */}
-      <ButtonGroup>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              className={chromeButtonTone}
-              onClick={onExportPng}
-              disabled={exporting === "png"}
-            >
-              {exporting === "png" ? (
-                <Loader2Icon className="animate-spin" />
-              ) : (
-                <ImageIcon />
-              )}
-              <span className="hidden sm:inline">
-                {exporting === "png" ? "Exporting…" : "PNG"}
-              </span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Export as PNG image</TooltipContent>
-        </Tooltip>
+      {hasExportActions && (
+        <ButtonGroup>
+          {showExportPng && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={chromeButtonTone}
+                  onClick={onExportPng}
+                  disabled={exporting === "png"}
+                >
+                  {exporting === "png" ? (
+                    <Loader2Icon className="animate-spin" />
+                  ) : (
+                    <ImageIcon />
+                  )}
+                  <span className="hidden sm:inline">
+                    {exporting === "png" ? "Exporting…" : "PNG"}
+                  </span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Export as PNG image</TooltipContent>
+            </Tooltip>
+          )}
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              className={chromeButtonTone}
-              onClick={onExportSvg}
-              disabled={exporting === "svg"}
-            >
-              {exporting === "svg" ? (
-                <Loader2Icon className="animate-spin" />
-              ) : (
-                <FileCodeIcon />
-              )}
-              <span className="hidden sm:inline">
-                {exporting === "svg" ? "Exporting…" : "SVG"}
-              </span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Export as SVG vector</TooltipContent>
-        </Tooltip>
-      </ButtonGroup>
+          {showExportSvg && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={chromeButtonTone}
+                  onClick={onExportSvg}
+                  disabled={exporting === "svg"}
+                >
+                  {exporting === "svg" ? (
+                    <Loader2Icon className="animate-spin" />
+                  ) : (
+                    <FileCodeIcon />
+                  )}
+                  <span className="hidden sm:inline">
+                    {exporting === "svg" ? "Exporting…" : "SVG"}
+                  </span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Export as SVG vector</TooltipContent>
+            </Tooltip>
+          )}
+        </ButtonGroup>
+      )}
     </ButtonGroup>
   );
 }

@@ -42,6 +42,12 @@ export function TopBar({
   onExportPng,
   onExportSvg,
   exporting,
+  showOpen,
+  showSave,
+  showSaveAs,
+  showCopySource,
+  showExportPng,
+  showExportSvg,
   // Common props
   className,
 }: TopBarProps) {
@@ -69,6 +75,12 @@ export function TopBar({
         onExportPng={onExportPng}
         onExportSvg={onExportSvg}
         exporting={exporting}
+        showOpen={showOpen}
+        showSave={showSave}
+        showSaveAs={showSaveAs}
+        showCopySource={showCopySource}
+        showExportPng={showExportPng}
+        showExportSvg={showExportSvg}
       />
     </header>
   );
