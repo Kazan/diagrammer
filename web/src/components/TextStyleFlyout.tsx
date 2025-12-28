@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { ToolbarButton } from "@/components/ui/toolbar";
 import { cn } from "@/lib/utils";
+import type { ExplicitStyleDefaults } from "@/hooks/useExplicitStyleDefaults";
 
 // Font definitions with CSS font-family for preview
 const FONTS = [
@@ -184,9 +185,13 @@ type Props = {
   allSceneElements: ReadonlyArray<ExcalidrawElement>;
   api: ExcalidrawImperativeAPI | null;
   selectedIds: Set<string>;
+  onStyleCapture?: <K extends keyof ExplicitStyleDefaults>(
+    key: K,
+    value: ExplicitStyleDefaults[K],
+  ) => void;
 };
 
-export function TextStyleFlyout({ elements, allSceneElements, api, selectedIds }: Props) {
+export function TextStyleFlyout({ elements, allSceneElements, api, selectedIds, onStyleCapture }: Props) {
   // Get fonts used in the scene
   const fontsInScene = useMemo(() => {
     const fontIds = new Set<number>();
@@ -247,8 +252,9 @@ export function TextStyleFlyout({ elements, allSceneElements, api, selectedIds }
         repairBindings: true,
       });
       api.updateScene({ elements: restored, captureUpdate: CaptureUpdateAction.IMMEDIATELY });
+      onStyleCapture?.("fontFamily", fontId);
     },
-    [api, selectedIds],
+    [api, selectedIds, onStyleCapture],
   );
 
   const handleSizeChange = useCallback(
@@ -277,8 +283,9 @@ export function TextStyleFlyout({ elements, allSceneElements, api, selectedIds }
         repairBindings: true,
       });
       api.updateScene({ elements: restored, captureUpdate: CaptureUpdateAction.IMMEDIATELY });
+      onStyleCapture?.("fontSize", size);
     },
-    [api, selectedIds],
+    [api, selectedIds, onStyleCapture],
   );
 
   const handleAlignChange = useCallback(
@@ -307,8 +314,9 @@ export function TextStyleFlyout({ elements, allSceneElements, api, selectedIds }
         repairBindings: true,
       });
       api.updateScene({ elements: restored, captureUpdate: CaptureUpdateAction.IMMEDIATELY });
+      onStyleCapture?.("textAlign", align);
     },
-    [api, selectedIds],
+    [api, selectedIds, onStyleCapture],
   );
 
   return (

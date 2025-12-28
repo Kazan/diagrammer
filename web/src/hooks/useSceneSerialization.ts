@@ -25,5 +25,5 @@ export function useSceneSerialization(api: ExcalidrawImperativeAPI | null) {
     [serializeScenePayload]
   );
 
-  return { serializeScenePayload, buildSceneEnvelope } as const;
+  return { buildSceneEnvelope } as const;
 }

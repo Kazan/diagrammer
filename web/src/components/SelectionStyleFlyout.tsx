@@ -1,6 +1,7 @@
 import { useMemo, useCallback, type ChangeEvent } from "react";
 import { ROUNDNESS } from "@excalidraw/excalidraw";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
+import type { ExplicitStyleDefaults } from "@/hooks/useExplicitStyleDefaults";
 
 const DEFAULT_FILL = "#b7f5c4";
 const DEFAULT_STROKE_WIDTH = 2;
@@ -18,6 +19,10 @@ function getCommonValue<T>(elements: ReadonlyArray<ExcalidrawElement>, pick: (el
 type Props = {
   elements: ReadonlyArray<ExcalidrawElement>;
   onUpdate: (mutate: (el: ExcalidrawElement) => ExcalidrawElement) => void;
+  onStyleCapture?: <K extends keyof ExplicitStyleDefaults>(
+    key: K,
+    value: ExplicitStyleDefaults[K],
+  ) => void;
 };
 
 type FillOption = ExcalidrawElement["fillStyle"];
@@ -64,7 +69,7 @@ function roundnessFromElement(el: ExcalidrawElement): RoundnessKind {
   return el.roundness ? "round" : "sharp";
 }
 
-export function SelectionStyleFlyout({ elements, onUpdate }: Props) {
+export function SelectionStyleFlyout({ elements, onUpdate, onStyleCapture }: Props) {
   const baseFillColor = useMemo(() => {
     const common = getCommonValue(elements, (el) => el.backgroundColor);
     if (!common || common === "transparent") return DEFAULT_FILL;
@@ -110,29 +115,33 @@ export function SelectionStyleFlyout({ elements, onUpdate }: Props) {
           fillStyle: option,
         };
       });
+      onStyleCapture?.("fillStyle", option);
     },
-    [onUpdate],
+    [onUpdate, onStyleCapture],
   );
 
   const handleStrokeWidthChange = useCallback(
     (value: number) => {
       onUpdate((el) => ({ ...el, strokeWidth: value }));
+      onStyleCapture?.("strokeWidth", value);
     },
-    [onUpdate],
+    [onUpdate, onStyleCapture],
   );
 
   const handleStrokeStyleChange = useCallback(
     (value: StrokeStyleOption) => {
       onUpdate((el) => ({ ...el, strokeStyle: value }));
+      onStyleCapture?.("strokeStyle", value);
     },
-    [onUpdate],
+    [onUpdate, onStyleCapture],
   );
 
   const handleRoughnessChange = useCallback(
     (value: number) => {
       onUpdate((el) => ({ ...el, roughness: value }));
+      onStyleCapture?.("roughness", value);
     },
-    [onUpdate],
+    [onUpdate, onStyleCapture],
   );
 
   const handleRoundnessChange = useCallback(
@@ -143,16 +152,20 @@ export function SelectionStyleFlyout({ elements, onUpdate }: Props) {
         }
         return { ...el, roundness: null };
       });
+      if (value) {
+        onStyleCapture?.("roundness", value);
+      }
     },
-    [onUpdate],
+    [onUpdate, onStyleCapture],
   );
 
   const handleOpacityChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
       const value = Number(event.target.value);
       onUpdate((el) => ({ ...el, opacity: value }));
+      onStyleCapture?.("opacity", value);
     },
-    [onUpdate],
+    [onUpdate, onStyleCapture],
   );
 
   const fillActive = resolveFillActive(fillStyle);

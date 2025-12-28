@@ -25,6 +25,7 @@ import { useSceneHydration } from "./hooks/useSceneHydration";
 import { useSceneHistory } from "./hooks/useSceneHistory";
 import { useZoomControls } from "./hooks/useZoomControls";
 import { useImageInsertion } from "./hooks/useImageInsertion";
+import { useExplicitStyleDefaults } from "./hooks/useExplicitStyleDefaults";
 import type { NativeFileHandle } from "./native-bridge";
 import { loadLocalSceneEntries, persistLocalSceneEntries, type LocalSceneEntry } from "./local-scenes";
 
@@ -125,6 +126,8 @@ export default function App() {
     setActiveTool,
     setStatus,
   });
+
+  const { captureStyleChange } = useExplicitStyleDefaults({ api });
 
   useEffect(() => {
     // Preserve localStorage for browser fallback; clear only in native contexts.
@@ -321,6 +324,41 @@ export default function App() {
       setStatus({ text: `Save failed: ${String(err)}`, tone: "err" });
     }
   }, [LOCAL_SCENE_KEY, api, buildSceneEnvelope, currentFileName, hasCurrentFileRef, loadLocalEntries, nativeBridge, persistLocalEntries, setCurrentFileName, setIsDirty, setStatus]);
+
+  const handleCopySource = useCallback(async () => {
+    if (!api) {
+      setStatus({ text: "Canvas not ready", tone: "warn" });
+      return;
+    }
+    try {
+      const envelope = await buildSceneEnvelope({ suggestedName: currentFileName });
+      const sceneJson = envelope.json;
+
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(sceneJson);
+      } else if (typeof document !== "undefined" && typeof document.execCommand === "function") {
+        const textarea = document.createElement("textarea");
+        textarea.value = sceneJson;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "fixed";
+        textarea.style.top = "-9999px";
+        document.body.appendChild(textarea);
+        textarea.select();
+        textarea.setSelectionRange(0, textarea.value.length);
+        const successful = document.execCommand("copy");
+        document.body.removeChild(textarea);
+        if (!successful) {
+          throw new Error("Clipboard fallback failed");
+        }
+      } else {
+        throw new Error("Clipboard not available");
+      }
+      setStatus({ text: "Scene source copied to clipboard", tone: "ok" });
+    } catch (err) {
+      console.error("Copy failed", err);
+      setStatus({ text: `Copy failed: ${String(err)}`, tone: "err" });
+    }
+  }, [api, buildSceneEnvelope, currentFileName, setStatus]);
 
   const handleOpenFromOverlay = useCallback(() => {
     // Prefer native picker when available; otherwise use local storage fallback.
@@ -533,7 +571,7 @@ export default function App() {
           </WelcomeScreen>
         </Excalidraw>
       </div>
-      <SelectionPropertiesRail selection={selectionInfo} api={api} />
+      <SelectionPropertiesRail selection={selectionInfo} api={api} onStyleCapture={captureStyleChange} />
       <ChromeOverlay
         fileName={currentFileName}
         isDirty={isDirty}
@@ -546,6 +584,7 @@ export default function App() {
         onOpen={handleOpenFromOverlay}
         onSaveNow={handleSaveNow}
         onSaveToDocument={handleSaveToDocument}
+        onCopySource={handleCopySource}
         onExportPng={handleExportPng}
         onExportSvg={handleExportSvg}
         exporting={exporting}

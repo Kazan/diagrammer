@@ -1,10 +1,7 @@
 import { useEffect, useMemo, useState, type MutableRefObject } from "react";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import { buildDefaultLocalAppStateOverrides, restoreSceneForApp } from "../excalidraw-restore";
-import {
-  EMPTY_SCENE,
-  computeSceneSignature,
-} from "../scene-utils";
+import { computeSceneSignature } from "../scene-utils";
 
 export function useSceneHydration(options: {
   api: ExcalidrawImperativeAPI | null;
