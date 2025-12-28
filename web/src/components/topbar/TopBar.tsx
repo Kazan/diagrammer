@@ -25,6 +25,7 @@ export type TopBarProps = FileStatusProps &
  *   onCopySource={handleCopySource}
  *   onExportPng={handleExportPng}
  *   onExportSvg={handleExportSvg}
+ *   onClear={handleClear}
  *   exporting={null}
  * />
  * ```
@@ -43,6 +44,7 @@ export function TopBar({
   onCopySource,
   onExportPng,
   onExportSvg,
+  onClear,
   exporting,
   showOpen,
   showSave,
@@ -50,6 +52,7 @@ export function TopBar({
   showCopySource,
   showExportPng,
   showExportSvg,
+  showClear,
   // Common props
   className,
 }: TopBarProps) {
@@ -77,6 +80,7 @@ export function TopBar({
         onCopySource={onCopySource}
         onExportPng={onExportPng}
         onExportSvg={onExportSvg}
+        onClear={onClear}
         exporting={exporting}
         isDirty={isDirty}
         showOpen={showOpen}
@@ -85,6 +89,7 @@ export function TopBar({
         showCopySource={showCopySource}
         showExportPng={showExportPng}
         showExportSvg={showExportSvg}
+        showClear={showClear}
       />
     </header>
   );

@@ -19,6 +19,7 @@ type Props = {
   onCopySource: () => void;
   onExportPng: () => void;
   onExportSvg: () => void;
+  onClear: () => void;
   exporting: "png" | "svg" | null;
   zoom: { value: number };
   onZoomIn: () => void;
@@ -45,6 +46,7 @@ export function ChromeOverlay({
   onCopySource,
   onExportPng,
   onExportSvg,
+  onClear,
   exporting,
   zoom,
   onZoomIn,
@@ -68,6 +70,7 @@ export function ChromeOverlay({
         onCopySource={onCopySource}
         onExportPng={onExportPng}
         onExportSvg={onExportSvg}
+        onClear={onClear}
         exporting={exporting}
         isDirty={isDirty}
         showCopySource={false}

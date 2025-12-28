@@ -6,6 +6,7 @@ import {
   ImageIcon,
   FileCodeIcon,
   Loader2Icon,
+  EraserIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup, ButtonGroupSeparator } from "@/components/ui/button-group";
@@ -28,6 +29,8 @@ export type ActionBarProps = {
   onExportPng: () => void;
   /** Callback when "Export SVG" is clicked */
   onExportSvg: () => void;
+  /** Callback when "Clear" is clicked */
+  onClear: () => void;
   /** Which export is currently in progress, if any */
   exporting: "png" | "svg" | null;
   /** Whether the current scene has unsaved changes */
@@ -44,6 +47,8 @@ export type ActionBarProps = {
   showExportPng?: boolean;
   /** Toggle visibility of the Export SVG button */
   showExportSvg?: boolean;
+  /** Toggle visibility of the Clear button */
+  showClear?: boolean;
 };
 
 /**
@@ -59,6 +64,7 @@ export function ActionBar({
   onCopySource,
   onExportPng,
   onExportSvg,
+  onClear,
   exporting,
   isDirty,
   showOpen = true,
@@ -67,6 +73,7 @@ export function ActionBar({
   showCopySource = true,
   showExportPng = true,
   showExportSvg = true,
+  showClear = true,
 }: ActionBarProps) {
   const chromeButtonTone =
     "bg-[var(--btn-bg)] text-[var(--btn-text)] border-[var(--btn-border)] hover:bg-[var(--btn-hover-bg)] hover:text-[var(--btn-hover-text)] hover:border-[var(--btn-hover-border)] active:bg-[var(--btn-pressed-bg)] active:text-[var(--btn-pressed-text)] active:border-[var(--btn-pressed-border)] shadow-none";
@@ -74,6 +81,7 @@ export function ActionBar({
   const hasFileActions =
     showOpen || (showSave && canSave) || showSaveAs || showCopySource;
   const hasExportActions = showExportPng || showExportSvg;
+  const hasClearActions = showClear;
 
   return (
     <ButtonGroup
@@ -208,6 +216,31 @@ export function ActionBar({
               <TooltipContent>Export as SVG vector</TooltipContent>
             </Tooltip>
           )}
+        </ButtonGroup>
+      )}
+
+      {(hasFileActions || hasExportActions) && hasClearActions ? (
+        <ButtonGroupSeparator className="mx-1 h-6 self-center" />
+      ) : null}
+
+      {/* Clear group */}
+      {hasClearActions && (
+        <ButtonGroup>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className={chromeButtonTone}
+                onClick={onClear}
+                disabled={!hasSceneContent}
+              >
+                <EraserIcon />
+                <span className="hidden sm:inline">Clear</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Clear canvas</TooltipContent>
+          </Tooltip>
         </ButtonGroup>
       )}
     </ButtonGroup>

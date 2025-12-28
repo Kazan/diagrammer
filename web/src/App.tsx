@@ -552,6 +552,14 @@ export default function App() {
     setExporting,
   );
 
+  const handleClear = useCallback(() => {
+    if (!api) {
+      setStatus({ text: "Canvas not ready", tone: "warn" });
+      return;
+    }
+    api.resetScene({ resetLoadingState: true });
+  }, [api, setStatus]);
+
   const handleSelectTool = (tool: ToolType) => {
     if (tool === "image") {
       setActiveTool("image");
@@ -615,6 +623,7 @@ export default function App() {
         onCopySource={handleCopySource}
         onExportPng={handleExportPng}
         onExportSvg={handleExportSvg}
+        onClear={handleClear}
         exporting={exporting}
         zoom={zoom}
         onZoomIn={handleZoomIn}
