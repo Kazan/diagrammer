@@ -18,27 +18,24 @@ const railButtonStyles = {
     "focus-visible:ring-2 focus-visible:ring-[hsl(var(--accent))] focus-visible:ring-offset-2",
     "disabled:pointer-events-none disabled:opacity-50",
     "[&_svg]:pointer-events-none [&_svg]:relative [&_svg]:z-10 [&_svg:not([class*='size-'])]:size-[18px] [&_svg]:stroke-[1.7]",
+    "will-change-transform backface-hidden",
   ].join(" "),
   default: [
-    "bg-[#f0f2f5] border-[#5c6578] text-[#5c6578]",
-    "shadow-[0_6px_14px_rgba(0,0,0,0.12)]",
-    "hover:bg-[#e4e7ec] hover:border-[#3d4555] hover:text-[#3d4555]",
-    "hover:shadow-[0_10px_18px_rgba(0,0,0,0.14)] hover:-translate-y-px",
+    "bg-[var(--btn-bg)] border-[var(--btn-border)] text-[var(--btn-border)]",
+    "hover:bg-[var(--btn-hover-bg)] hover:border-[var(--btn-hover-border)] hover:text-[var(--btn-hover-border)]",
+    "hover:-translate-y-px",
   ].join(" "),
   pressed: [
-    "bg-[#3d4555] border-[#3d4555] text-[#e4e7ec]",
-    "[&_svg]:text-[#e4e7ec]",
-    "hover:bg-[#4a5568] hover:border-[#4a5568] hover:text-[#f0f2f5]",
+    "bg-[var(--btn-pressed-bg)] border-[var(--btn-pressed-border)] text-[var(--btn-pressed-text)]",
+    "[&_svg]:text-[var(--btn-pressed-text)]",
+    "hover:bg-[var(--btn-pressed-hover-bg)] hover:border-[var(--btn-pressed-hover-border)] hover:text-[var(--btn-pressed-hover-text)]",
   ].join(" "),
   flyout: [
-    "border-slate-900/12 bg-[#f8fafc] text-[#0f172a]",
-    "shadow-[inset_0_1px_0_rgba(255,255,255,0.6),0_6px_14px_rgba(0,0,0,0.08)]",
-    "hover:bg-[#eef2f7] hover:border-slate-900/20 hover:-translate-y-px",
-    "hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_10px_18px_rgba(0,0,0,0.12)]",
+    "border-[var(--flyout-item-border)] bg-[var(--flyout-item-bg)] text-[var(--flyout-text)]",
+    "hover:bg-[var(--flyout-item-hover-bg)] hover:border-[var(--flyout-item-hover-border)] hover:-translate-y-px",
   ].join(" "),
   flyoutPressed: [
     "bg-[#f3fff8] border-[hsl(var(--accent))]",
-    "shadow-[0_0_0_2px_rgba(63,207,142,0.3),inset_0_1px_0_rgba(255,255,255,0.75)]",
   ].join(" "),
 } as const;
 
@@ -190,7 +187,7 @@ export interface RailButtonProps
 }
 
 const RailButton = React.forwardRef<HTMLButtonElement, RailButtonProps>(
-  ({ className, variant, size, pressed = false, asChild = false, style, ...props }, ref) => {
+  ({ className, variant, size, pressed = false, asChild = false, ...props }, ref) => {
     const Comp = asChild ? Slot : "button";
     return (
       <Comp
@@ -201,11 +198,6 @@ const RailButton = React.forwardRef<HTMLButtonElement, RailButtonProps>(
         data-size={size}
         aria-pressed={pressed ?? undefined}
         className={cn(railButtonVariants({ variant, size, pressed }), className)}
-        style={{
-          willChange: "transform",
-          backfaceVisibility: "hidden",
-          ...style,
-        }}
         {...props}
       />
     );
@@ -262,7 +254,7 @@ export interface RailToggleItemProps
 }
 
 const RailToggleItem = React.forwardRef<HTMLButtonElement, RailToggleItemProps>(
-  ({ className, variant = "default", size, style, ...props }, ref) => {
+  ({ className, variant = "default", size, ...props }, ref) => {
     return (
       <ToggleGroupPrimitive.Item
         ref={ref}
@@ -274,17 +266,12 @@ const RailToggleItem = React.forwardRef<HTMLButtonElement, RailToggleItemProps>(
           size === "lg" && "size-12",
           (!size || size === "default") && "size-11",
           // Active state via data attribute - inverted: dark background, light icon
-          "data-[state=on]:bg-[#3d4555]",
-          "data-[state=on]:border-[#3d4555]",
-          "data-[state=on]:text-[#e4e7ec]",
-          "data-[state=on]:[&_svg]:text-[#e4e7ec]",
+          "data-[state=on]:bg-[var(--btn-pressed-bg)]",
+          "data-[state=on]:border-[var(--btn-pressed-border)]",
+          "data-[state=on]:text-[var(--btn-pressed-text)]",
+          "data-[state=on]:[&_svg]:text-[var(--btn-pressed-text)]",
           className
         )}
-        style={{
-          willChange: "transform",
-          backfaceVisibility: "hidden",
-          ...style,
-        }}
         {...props}
       />
     );
@@ -358,7 +345,7 @@ const RailPopoverButton = React.forwardRef<HTMLButtonElement, RailPopoverButtonP
           sideOffset={sideOffset}
           className={cn(
             "w-auto p-3 rounded-2xl",
-            "shadow-[0_24px_48px_rgba(0,0,0,0.18)] border-slate-900/8",
+            "border-[var(--flyout-border)]",
             contentClassName
           )}
         >
@@ -390,10 +377,10 @@ const RailSwatch = React.forwardRef<HTMLSpanElement, RailSwatchProps>(
           "absolute inset-2 rounded-[9px] pointer-events-none z-0",
           isTransparent && [
             "bg-[linear-gradient(135deg,rgba(15,23,42,0.08)_25%,transparent_25%,transparent_50%,rgba(15,23,42,0.08)_50%,rgba(15,23,42,0.08)_75%,transparent_75%,transparent)]",
-            "bg-[#f8fafc] bg-[length:8px_8px]",
-            "border border-slate-900/12",
+            "bg-[var(--flyout-item-bg)] bg-[length:8px_8px]",
+            "border border-[var(--flyout-item-border)]",
           ],
-          !isTransparent && "border border-slate-900/12 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]",
+          !isTransparent && "border border-[var(--flyout-item-border)]",
           className
         )}
         style={!isTransparent ? { backgroundColor: color } : undefined}

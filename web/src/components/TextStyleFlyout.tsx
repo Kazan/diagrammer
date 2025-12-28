@@ -108,7 +108,7 @@ function FontListItem({
       className={cn(
         "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors",
         "hover:bg-slate-100",
-        isActive && "bg-[#3d4555] border border-[#3d4555] text-white [&_svg]:text-slate-300",
+        isActive && "bg-[var(--btn-pressed-bg)] border border-[var(--btn-pressed-border)] text-[var(--btn-pressed-text)] [&_svg]:text-slate-300",
         !isActive && "border border-transparent"
       )}
       onPointerDownCapture={(e) => {
@@ -132,9 +132,8 @@ function FontListItem({
       aria-pressed={isActive}
     >
       <font.icon size={16} className={cn("flex-shrink-0", isActive ? "text-slate-300" : "text-slate-500")} aria-hidden="true" />
-      <span
-        className={cn("text-[15px]", isActive ? "text-white" : "text-slate-900")}
-        style={{ fontFamily: font.fontFamily }}
+      <span className={cn("text-[15px] font-[family-name:var(--font-preview)]", isActive ? "text-[var(--btn-pressed-text)]" : "text-[var(--flyout-text)]")}
+        style={{ "--font-preview": font.fontFamily } as React.CSSProperties}
       >
         {font.name}
       </span>

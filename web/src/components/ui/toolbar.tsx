@@ -27,26 +27,24 @@ const toolbarButtonVariants = cva(
     "focus-visible:ring-2 focus-visible:ring-[hsl(var(--accent))] focus-visible:ring-offset-2",
     "disabled:pointer-events-none disabled:opacity-50",
     "[&_svg]:pointer-events-none [&_svg]:relative [&_svg]:z-10 [&_svg:not([class*='size-'])]:size-[18px] [&_svg]:stroke-[1.7]",
+    "will-change-transform backface-hidden",
   ].join(" "),
   {
     variants: {
       variant: {
         default: [
           // Light opaque background with dark icon and border
-          "bg-[#f0f2f5] border-[#5c6578] text-[#5c6578]",
-          "shadow-[0_6px_14px_rgba(0,0,0,0.12)]",
-          "hover:bg-[#e4e7ec] hover:border-[#3d4555] hover:text-[#3d4555]",
-          "hover:shadow-[0_10px_18px_rgba(0,0,0,0.14)] hover:-translate-y-px",
+          "bg-[var(--btn-bg)] border-[var(--btn-border)] text-[var(--btn-border)]",
+          "hover:bg-[var(--btn-hover-bg)] hover:border-[var(--btn-hover-border)] hover:text-[var(--btn-hover-border)]",
+          "hover:-translate-y-px",
         ].join(" "),
         ghost: [
-          "border-transparent bg-transparent text-[#5c6578]",
-          "hover:bg-slate-200/60 hover:text-[#3d4555]",
+          "border-transparent bg-transparent text-[var(--btn-border)]",
+          "hover:bg-slate-200/60 hover:text-[var(--btn-hover-border)]",
         ].join(" "),
         flyout: [
-          "border-slate-900/12 bg-[#f8fafc] text-[#0f172a]",
-          "shadow-[inset_0_1px_0_rgba(255,255,255,0.6),0_6px_14px_rgba(0,0,0,0.08)]",
-          "hover:bg-[#eef2f7] hover:border-slate-900/20 hover:-translate-y-px",
-          "hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_10px_18px_rgba(0,0,0,0.12)]",
+          "border-[var(--flyout-item-border)] bg-[var(--flyout-item-bg)] text-[var(--flyout-text)]",
+          "hover:bg-[var(--flyout-item-hover-bg)] hover:border-[var(--flyout-item-hover-border)] hover:-translate-y-px",
         ].join(" "),
       },
       size: {
@@ -64,9 +62,9 @@ const toolbarButtonVariants = cva(
         variant: "default",
         pressed: true,
         className: [
-          "bg-[#3d4555] border-[#3d4555] text-[#e4e7ec]",
-          "[&_svg]:text-[#e4e7ec]",
-          "hover:bg-[#4a5568] hover:border-[#4a5568] hover:text-[#f0f2f5]",
+          "bg-[var(--btn-pressed-bg)] border-[var(--btn-pressed-border)] text-[var(--btn-pressed-text)]",
+          "[&_svg]:text-[var(--btn-pressed-text)]",
+          "hover:bg-[var(--btn-pressed-hover-bg)] hover:border-[var(--btn-pressed-hover-border)] hover:text-[var(--btn-pressed-hover-text)]",
         ].join(" "),
       },
       {
@@ -74,7 +72,6 @@ const toolbarButtonVariants = cva(
         pressed: true,
         className: [
           "bg-[#f3fff8] border-[hsl(var(--accent))]",
-          "shadow-[0_0_0_2px_rgba(63,207,142,0.3),inset_0_1px_0_rgba(255,255,255,0.75)]",
         ].join(" "),
       },
     ],
@@ -125,7 +122,6 @@ const ToolbarButton = React.forwardRef<HTMLButtonElement, ToolbarButtonProps>(
         aria-pressed={pressed ?? undefined}
         className={cn(
           toolbarButtonVariants({ variant, size, pressed }),
-          "will-change-transform backface-hidden",
           className
         )}
         {...props}
@@ -199,10 +195,10 @@ function ToolbarSwatch({ className, color, ...props }: ToolbarSwatchProps) {
         "absolute inset-2 rounded-[9px] pointer-events-none z-0",
         isTransparent && [
           "bg-[linear-gradient(135deg,rgba(15,23,42,0.08)_25%,transparent_25%,transparent_50%,rgba(15,23,42,0.08)_50%,rgba(15,23,42,0.08)_75%,transparent_75%,transparent)]",
-          "bg-[#f8fafc] bg-[length:8px_8px]",
-          "border border-slate-900/12",
+          "bg-[var(--flyout-item-bg)] bg-[length:8px_8px]",
+          "border border-[var(--flyout-item-border)]",
         ],
-        !isTransparent && "border border-slate-900/12 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]",
+        !isTransparent && "border border-[var(--flyout-item-border)]",
         className
       )}
       style={!isTransparent ? { backgroundColor: color } : undefined}

@@ -53,26 +53,26 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
       }
 
       return (
-        <div className="flex flex-col items-center justify-center h-screen w-screen bg-[#060a18] text-[#e7ecf5] font-[system-ui,sans-serif] p-5 text-center">
-          <h2 className="text-[#ef4444] mb-4">
+        <div className="flex flex-col items-center justify-center h-screen w-screen bg-[var(--bg)] text-[var(--text)] font-[system-ui,sans-serif] p-5 text-center">
+          <h2 className="text-[var(--status-error)] mb-4">
             Something went wrong
           </h2>
-          <p className="text-[#9aa7bd] mb-6 max-w-[400px]">
+          <p className="text-[var(--legacy-muted)] mb-6 max-w-[400px]">
             An unexpected error occurred. This may happen on some devices during
             certain touch interactions.
           </p>
           <button
             onClick={this.handleRetry}
-            className="px-6 py-3 text-base bg-[#3fcf8e] text-[#060a18] border-none rounded-lg cursor-pointer font-semibold hover:bg-[#35b67a] transition-colors"
+            className="px-6 py-3 text-base bg-[var(--status-ok)] text-[var(--bg)] border-none rounded-lg cursor-pointer font-semibold hover:opacity-90 transition-opacity"
           >
             Try Again
           </button>
           {this.state.error && (
-            <details className="mt-6 text-xs text-[#9aa7bd] max-w-[90vw] text-left">
+            <details className="mt-6 text-xs text-[var(--legacy-muted)] max-w-[90vw] text-left">
               <summary className="cursor-pointer mb-2">
                 Error Details
               </summary>
-              <pre className="bg-[#0c1226] p-3 rounded-lg overflow-auto max-h-[200px]">
+              <pre className="bg-[var(--bg-2)] p-3 rounded-lg overflow-auto max-h-[200px]">
                 {this.state.error.name}: {this.state.error.message}
                 {"\n\n"}
                 {this.state.error.stack}
