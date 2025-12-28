@@ -17,6 +17,10 @@ export type ExplicitStyleDefaults = {
   opacity?: number;
   roundness?: "sharp" | "round";
 
+  // Arrow/line styles
+  startArrowhead?: "arrow" | "bar" | "dot" | "triangle" | null;
+  endArrowhead?: "arrow" | "bar" | "dot" | "triangle" | null;
+
   // Text styles
   fontFamily?: number;
   fontSize?: number;
@@ -55,6 +59,13 @@ function mapToAppStateProps(
   }
   if (defaults.roundness !== undefined) {
     props.currentItemRoundness = defaults.roundness;
+  }
+  // Arrow/line arrowhead defaults
+  if (defaults.startArrowhead !== undefined) {
+    props.currentItemStartArrowhead = defaults.startArrowhead;
+  }
+  if (defaults.endArrowhead !== undefined) {
+    props.currentItemEndArrowhead = defaults.endArrowhead;
   }
   if (defaults.fontFamily !== undefined) {
     props.currentItemFontFamily = defaults.fontFamily;

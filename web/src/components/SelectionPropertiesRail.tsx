@@ -14,6 +14,7 @@ import {
   Copy,
   Group as GroupIcon,
   Layers as LayersIcon,
+  MoveRight,
   PaintBucket,
   SendToBack,
   Signature,
@@ -26,6 +27,7 @@ import type { SelectionInfo } from "./SelectionFlyout";
 import ColorPicker from "./ColorPicker";
 import type { PaletteId } from "./ColorPicker";
 import { SelectionStyleFlyout } from "./SelectionStyleFlyout";
+import { ArrowStyleFlyout } from "./ArrowStyleFlyout";
 import { TextStyleFlyout } from "./TextStyleFlyout";
 import type { ExplicitStyleDefaults } from "@/hooks/useExplicitStyleDefaults";
 import {
@@ -39,7 +41,7 @@ import {
 } from "@/components/ui/tool-rail";
 import { cn } from "@/lib/utils";
 
-export type PropertyKind = "stroke" | "background" | "style" | "text" | "textColor" | "arrange";
+export type PropertyKind = "stroke" | "background" | "style" | "arrow" | "text" | "textColor" | "arrange";
 
 type Props = {
   selection: SelectionInfo | null;
@@ -183,11 +185,15 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
 
   // Close flyouts that are not applicable
   const hasImage = elements.some((el) => el.type === "image");
+  const hasLinearElements = elements.some((el) => el.type === "arrow" || el.type === "line");
   useEffect(() => {
     if (hasImage && (openKind === "stroke" || openKind === "background" || openKind === "style" || openKind === "text" || openKind === "textColor")) {
       setOpenKind(null);
     }
-  }, [hasImage, openKind]);
+    if (!hasLinearElements && openKind === "arrow") {
+      setOpenKind(null);
+    }
+  }, [hasImage, hasLinearElements, openKind]);
 
   useEffect(() => {
     if (openKind !== "arrange") return;
@@ -201,6 +207,7 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
   const isMultiSelect = elements.length > 1;
   const hasFillCapable = elements.some((el) => (!LINE_LIKE_TYPES.has(el.type) && el.type !== "text") || isClosedPolyline(el));
   const hasStyleControls = elements.some((el) => el.type !== "text" && el.type !== "image");
+  const hasArrowControls = elements.some((el) => el.type === "arrow" || el.type === "line");
   const hasTextControls = elements.some((el) =>
     el.type === "text" || el.boundElements?.some((b) => b.type === "text")
   );
@@ -613,6 +620,18 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
             content={<SelectionStyleFlyout elements={elements} onUpdate={applyToSelection} onStyleCapture={onStyleCapture} />}
           >
             <SlidersHorizontal size={18} aria-hidden="true" />
+          </RailPopoverButton>
+        )}
+
+        {/* Arrow style controls */}
+        {hasArrowControls && (
+          <RailPopoverButton
+            open={openKind === "arrow"}
+            onOpenChange={(open) => setOpenKind(open ? "arrow" : null)}
+            aria-label="Arrow style"
+            content={<ArrowStyleFlyout elements={elements} onUpdate={applyToSelection} onStyleCapture={onStyleCapture} />}
+          >
+            <MoveRight size={18} aria-hidden="true" />
           </RailPopoverButton>
         )}
 
