@@ -18,6 +18,7 @@ export type TopBarProps = FileStatusProps &
  *   isDirty={true}
  *   lastSaved={new Date()}
  *   canSave={true}
+ *   hasSceneContent={true}
  *   onOpen={handleOpen}
  *   onSave={handleSave}
  *   onSaveAs={handleSaveAs}
@@ -35,6 +36,7 @@ export function TopBar({
   lastSaved,
   // ActionBar props
   canSave,
+  hasSceneContent,
   onOpen,
   onSave,
   onSaveAs,
@@ -68,6 +70,7 @@ export function TopBar({
 
       <ActionBar
         canSave={canSave}
+        hasSceneContent={hasSceneContent}
         onOpen={onOpen}
         onSave={onSave}
         onSaveAs={onSaveAs}

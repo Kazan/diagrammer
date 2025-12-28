@@ -12,6 +12,7 @@ type Props = {
   lastSaved: Date | null;
   status: StatusMessage | null;
   canSave: boolean;
+  hasSceneContent: boolean;
   onOpen: () => void;
   onSaveNow: () => void;
   onSaveToDocument: () => void;
@@ -37,6 +38,7 @@ export function ChromeOverlay({
   lastSaved,
   status,
   canSave,
+  hasSceneContent,
   onOpen,
   onSaveNow,
   onSaveToDocument,
@@ -59,6 +61,7 @@ export function ChromeOverlay({
         isDirty={isDirty}
         lastSaved={lastSaved}
         canSave={canSave}
+        hasSceneContent={hasSceneContent}
         onOpen={onOpen}
         onSave={onSaveNow}
         onSaveAs={onSaveToDocument}

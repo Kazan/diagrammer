@@ -14,6 +14,8 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip
 export type ActionBarProps = {
   /** Whether the current file can be saved (has a known location) */
   canSave: boolean;
+  /** Whether the scene currently has any visible elements */
+  hasSceneContent: boolean;
   /** Callback when "Open" is clicked */
   onOpen: () => void;
   /** Callback when "Save" is clicked (quick save to current location) */
@@ -50,6 +52,7 @@ export type ActionBarProps = {
  */
 export function ActionBar({
   canSave,
+  hasSceneContent,
   onOpen,
   onSave,
   onSaveAs,
@@ -166,7 +169,7 @@ export function ActionBar({
                   size="sm"
                   className={chromeButtonTone}
                   onClick={onExportPng}
-                  disabled={!isDirty || exporting === "png"}
+                  disabled={!hasSceneContent || exporting === "png"}
                 >
                   {exporting === "png" ? (
                     <Loader2Icon className="animate-spin" />
@@ -190,7 +193,7 @@ export function ActionBar({
                   size="sm"
                   className={chromeButtonTone}
                   onClick={onExportSvg}
-                  disabled={!isDirty || exporting === "svg"}
+                  disabled={!hasSceneContent || exporting === "svg"}
                 >
                   {exporting === "svg" ? (
                     <Loader2Icon className="animate-spin" />

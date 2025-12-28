@@ -53,6 +53,7 @@ export default function App() {
   const [activeTool, setActiveTool] = useState<ToolType>("selection");
   const [currentFileName, setCurrentFileName] = useState(initialStoredName || "Unsaved");
   const [isDirty, setIsDirty] = useState(false);
+  const [hasSceneContent, setHasSceneContent] = useState(false);
   const [selectionInfo, setSelectionInfo] = useState<SelectionInfo | null>(null);
   const HIDE_DEFAULT_PROPS_FLYOUT = false;
   const openFileResolveRef = useRef<((handles: NativeFileHandle[]) => void) | null>(null);
@@ -150,6 +151,12 @@ export default function App() {
     }
   }, []);
 
+  useEffect(() => {
+    if (!api) return;
+    const hasVisibleElements = api.getSceneElements().some((el) => !el.isDeleted);
+    setHasSceneContent(hasVisibleElements);
+  }, [api]);
+
   const { buildSceneEnvelope } = useSceneSerialization(api);
 
   const excalidrawUIOptions = useMemo(
@@ -223,7 +230,9 @@ export default function App() {
         api.scrollToContent(elements, { fitToViewport: true, animate: false });
       }
       prevSceneSigRef.current = computeSceneSignature(api.getSceneElements(), api.getAppState());
-      prevNonEmptySceneRef.current = elements.some((el) => !el.isDeleted);
+      const hasVisibleElements = elements.some((el) => !el.isDeleted);
+      prevNonEmptySceneRef.current = hasVisibleElements;
+      setHasSceneContent(hasVisibleElements);
       suppressNextDirtyRef.current = true;
       resetHistoryFromCurrentScene();
       setIsDirty(false);
@@ -409,6 +418,7 @@ export default function App() {
     setActiveTool,
     setCurrentFileName,
     setIsDirty,
+    setHasSceneContent,
     setStatus,
     clearFileAssociation,
     suppressNextDirtyRef,
@@ -491,8 +501,10 @@ export default function App() {
     applyRestoredScene(api, restored);
     const elements = api.getSceneElementsIncludingDeleted();
     const appState = api.getAppState();
+    const hasVisibleElements = elements.some((el) => !el.isDeleted);
     prevSceneSigRef.current = computeSceneSignature(elements, appState);
-    prevNonEmptySceneRef.current = elements.some((el) => !el.isDeleted);
+    prevNonEmptySceneRef.current = hasVisibleElements;
+    setHasSceneContent(hasVisibleElements);
     suppressNextDirtyRef.current = true;
     expectedSceneSigRef.current = prevSceneSigRef.current;
     loadSkipRef.current = 3;
@@ -591,6 +603,7 @@ export default function App() {
         fileName={currentFileName}
         isDirty={isDirty}
         canSave={hasCurrentFileRef.current}
+        hasSceneContent={hasSceneContent}
         activeTool={activeTool}
         onSelectTool={handleSelectTool}
         nativePresent={nativePresent}
