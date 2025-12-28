@@ -44,13 +44,24 @@ export function ActionBar({
   onExportSvg,
   exporting,
 }: ActionBarProps) {
+  const chromeButtonTone =
+    "bg-[var(--btn-bg)] text-[var(--btn-text)] border-[var(--btn-border)] hover:bg-[var(--btn-hover-bg)] hover:text-[var(--btn-hover-text)] hover:border-[var(--btn-hover-border)] active:bg-[var(--btn-pressed-bg)] active:text-[var(--btn-pressed-text)] active:border-[var(--btn-pressed-border)] shadow-none";
+
   return (
-    <ButtonGroup className="gap-1">
+    <ButtonGroup
+      className="gap-1 pointer-events-auto"
+      aria-label="Scene actions"
+    >
       {/* File operations group */}
       <ButtonGroup>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="sm" onClick={onOpen}>
+            <Button
+              variant="outline"
+              size="sm"
+              className={chromeButtonTone}
+              onClick={onOpen}
+            >
               <FolderOpenIcon />
               <span className="hidden sm:inline">Open</span>
             </Button>
@@ -61,7 +72,12 @@ export function ActionBar({
         {canSave && (
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="sm" onClick={onSave}>
+              <Button
+                variant="outline"
+                size="sm"
+                className={chromeButtonTone}
+                onClick={onSave}
+              >
                 <SaveIcon />
                 <span className="hidden sm:inline">Save</span>
               </Button>
@@ -72,7 +88,12 @@ export function ActionBar({
 
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="sm" onClick={onSaveAs}>
+            <Button
+              variant="outline"
+              size="sm"
+              className={chromeButtonTone}
+              onClick={onSaveAs}
+            >
               <SaveAllIcon />
               <span className="hidden sm:inline">Save As</span>
             </Button>
@@ -82,7 +103,12 @@ export function ActionBar({
 
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="sm" onClick={onCopySource}>
+            <Button
+              variant="outline"
+              size="sm"
+              className={chromeButtonTone}
+              onClick={onCopySource}
+            >
               <CopyIcon />
               <span className="hidden sm:inline">Copy</span>
             </Button>
@@ -98,8 +124,9 @@ export function ActionBar({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
+              className={chromeButtonTone}
               onClick={onExportPng}
               disabled={exporting === "png"}
             >
@@ -119,8 +146,9 @@ export function ActionBar({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
+              className={chromeButtonTone}
               onClick={onExportSvg}
               disabled={exporting === "svg"}
             >
