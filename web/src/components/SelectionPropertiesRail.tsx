@@ -27,6 +27,7 @@ import ColorPicker from "./ColorPicker";
 import type { PaletteId } from "./ColorPicker";
 import { SelectionStyleFlyout } from "./SelectionStyleFlyout";
 import { TextStyleFlyout } from "./TextStyleFlyout";
+import type { ExplicitStyleDefaults } from "@/hooks/useExplicitStyleDefaults";
 import {
   ToolRail,
   RailSection,
@@ -44,6 +45,10 @@ type Props = {
   selection: SelectionInfo | null;
   api: ExcalidrawImperativeAPI | null;
   onRequestOpen?: (kind: PropertyKind) => void;
+  onStyleCapture?: <K extends keyof ExplicitStyleDefaults>(
+    key: K,
+    value: ExplicitStyleDefaults[K],
+  ) => void;
 };
 
 const DEFAULT_STROKE = "#0f172a";
@@ -75,7 +80,7 @@ function getCommonValue<T>(
   return first;
 }
 
-export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props) {
+export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyleCapture }: Props) {
   const elements = selection?.elements ?? [];
 
   // All hooks must be called unconditionally, before any early return
@@ -410,9 +415,13 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
       return el;
     });
     api.updateScene({ elements: nextElements });
+    onStyleCapture?.("strokeColor", color);
   };
 
-  const handleBackgroundChange = (color: string) => applyToSelection((el) => ({ ...el, backgroundColor: color }));
+  const handleBackgroundChange = (color: string) => {
+    applyToSelection((el) => ({ ...el, backgroundColor: color }));
+    onStyleCapture?.("backgroundColor", color);
+  };
 
   const handleTextColorChange = (color: string) => {
     if (!api) return;
@@ -431,6 +440,8 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
       return el;
     });
     api.updateScene({ elements: nextElements });
+    // Text color uses strokeColor for text elements, but we don't capture it
+    // as a separate default since text elements inherit from strokeColor
   };
 
   // Flyout button for arrange panel
@@ -580,7 +591,7 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
             open={openKind === "style"}
             onOpenChange={(open) => setOpenKind(open ? "style" : null)}
             aria-label="Stroke and fill style"
-            content={<SelectionStyleFlyout elements={elements} onUpdate={applyToSelection} />}
+            content={<SelectionStyleFlyout elements={elements} onUpdate={applyToSelection} onStyleCapture={onStyleCapture} />}
           >
             <SlidersHorizontal size={18} aria-hidden="true" />
           </RailPopoverButton>
@@ -599,6 +610,7 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen }: Props
                 allSceneElements={api?.getSceneElements() ?? []}
                 api={api}
                 selectedIds={selectedIds}
+                onStyleCapture={onStyleCapture}
               />
             }
           >

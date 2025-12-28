@@ -25,6 +25,7 @@ import { useSceneHydration } from "./hooks/useSceneHydration";
 import { useSceneHistory } from "./hooks/useSceneHistory";
 import { useZoomControls } from "./hooks/useZoomControls";
 import { useImageInsertion } from "./hooks/useImageInsertion";
+import { useExplicitStyleDefaults } from "./hooks/useExplicitStyleDefaults";
 import type { NativeFileHandle } from "./native-bridge";
 import { loadLocalSceneEntries, persistLocalSceneEntries, type LocalSceneEntry } from "./local-scenes";
 
@@ -125,6 +126,8 @@ export default function App() {
     setActiveTool,
     setStatus,
   });
+
+  const { captureStyleChange } = useExplicitStyleDefaults({ api });
 
   useEffect(() => {
     // Preserve localStorage for browser fallback; clear only in native contexts.
@@ -568,7 +571,7 @@ export default function App() {
           </WelcomeScreen>
         </Excalidraw>
       </div>
-      <SelectionPropertiesRail selection={selectionInfo} api={api} />
+      <SelectionPropertiesRail selection={selectionInfo} api={api} onStyleCapture={captureStyleChange} />
       <ChromeOverlay
         fileName={currentFileName}
         isDirty={isDirty}
