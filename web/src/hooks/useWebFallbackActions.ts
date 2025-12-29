@@ -140,13 +140,34 @@ export function useWebFallbackActions({
             ],
           });
 
+          // Check if the chosen filename has .excalidraw extension
+          // Some browsers (like VS Code Simple Browser) don't enforce the extension
+          const chosenName = handle.name as string;
+          if (!chosenName.toLowerCase().endsWith(".excalidraw")) {
+            // Fall back to anchor download with proper extension
+            console.warn("File picker did not enforce .excalidraw extension, using download fallback");
+            const baseName = chosenName.replace(/\.[^.]+$/, "") || chosenName;
+            const correctedFilename = `${baseName}.excalidraw`;
+            const blob = new Blob([json], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const anchor = document.createElement("a");
+            anchor.href = url;
+            anchor.download = correctedFilename;
+            document.body.appendChild(anchor);
+            anchor.click();
+            document.body.removeChild(anchor);
+            URL.revokeObjectURL(url);
+            setStatus({ text: `Downloaded: ${correctedFilename}`, tone: "ok" });
+            setIsDirty(false);
+            return baseName;
+          }
+
           const writable = await handle.createWritable();
           await writable.write(json);
           await writable.close();
 
-          // The browser should enforce .excalidraw extension with excludeAcceptAllOption
-          const savedName = (handle.name as string).replace(/\.excalidraw$/i, "");
-          setStatus({ text: `Saved: ${handle.name}`, tone: "ok" });
+          const savedName = chosenName.replace(/\.excalidraw$/i, "");
+          setStatus({ text: `Saved: ${chosenName}`, tone: "ok" });
           setIsDirty(false);
           return savedName;
         } catch (err: any) {

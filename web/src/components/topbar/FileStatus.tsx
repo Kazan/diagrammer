@@ -6,13 +6,32 @@ export type FileStatusProps = {
   fileName: string;
   isDirty: boolean;
   lastSaved: Date | null;
+  /** Whether native bridge is available - controls what info is shown */
+  nativePresent?: boolean;
 };
 
 /**
  * FileStatus displays the current file name and state indicators (dirty/clean, saved/unsaved).
  * Used on the left side of the TopBar.
+ * When nativePresent is false, only shows a minimal "Edited" indicator when dirty.
  */
-export function FileStatus({ fileName, isDirty, lastSaved }: FileStatusProps) {
+export function FileStatus({ fileName, isDirty, lastSaved, nativePresent = true }: FileStatusProps) {
+  // When native bridge is not available, show minimal UI
+  if (!nativePresent) {
+    if (!isDirty) return null;
+    return (
+      <div className="flex items-center">
+        <Badge
+          variant="outline"
+          className="gap-1.5 text-xs border-red-400/60 bg-red-500/15 text-red-600"
+        >
+          <CircleIcon className="size-2 fill-current" />
+          Edited
+        </Badge>
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-center gap-3 min-w-0">
       {/* File name with icon */}
