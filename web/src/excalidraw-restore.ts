@@ -1,5 +1,6 @@
-import { CaptureUpdateAction, restore, THEME } from "@excalidraw/excalidraw";
-import type { AppState, ExcalidrawImperativeAPI, NormalizedZoomValue } from "@excalidraw/excalidraw/types";
+import { CaptureUpdateAction, restore } from "@excalidraw/excalidraw";
+import type { AppState, ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import { buildSceneAppStateDefaults } from "./scene-defaults";
 
 type RestoredScene = ReturnType<typeof restore>;
 type RestoreInput = Parameters<typeof restore>[0];
@@ -55,14 +56,7 @@ export function buildDefaultLocalAppStateOverrides(opts?: {
   objectsSnapModeEnabled?: boolean;
   zoomValue?: number;
 }): Partial<AppState> {
-  return {
-    viewBackgroundColor: opts?.viewBackgroundColor ?? "#ffffff",
-    objectsSnapModeEnabled: opts?.objectsSnapModeEnabled ?? true,
-    theme: THEME.LIGHT,
-    zoom: {
-      value: ((opts?.zoomValue ?? 1) as NormalizedZoomValue),
-    },
-  };
+  return buildSceneAppStateDefaults(opts);
 }
 
 export function applyRestoredScene(api: ExcalidrawImperativeAPI, restored: RestoredScene) {

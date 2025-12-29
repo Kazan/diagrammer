@@ -92,6 +92,12 @@
 }
 
 :root {
+  /* Canvas Background Colors - used by Excalidraw scene */
+  --canvas-bg-white: #ffffff;
+  --canvas-bg-light: #f5f5f5;
+  --canvas-bg-grid: #ecececff;
+  --canvas-bg-default: var(--canvas-bg-white);
+
   /* Legacy CSS variables - keep for existing styles */
   --bg: #060a18;
   --bg-2: #0c1226;

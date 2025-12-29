@@ -49,11 +49,7 @@ export function useSceneHydration(options: {
   }, [LOCAL_FS_KEY, LOCAL_SCENE_KEY]);
 
   const initialData = useMemo(() => {
-    const localOverrides = buildDefaultLocalAppStateOverrides({
-      viewBackgroundColor: "#ffffff",
-      objectsSnapModeEnabled: true,
-      zoomValue: 1,
-    });
+    const localOverrides = buildDefaultLocalAppStateOverrides();
     const restored = restoreSceneForApp(startupRawScene, localOverrides);
     const hasVisibleElements = restored.elements.some((el) => !el.isDeleted);
     return {

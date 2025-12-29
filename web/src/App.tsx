@@ -35,6 +35,8 @@ import {
   restoreSceneForApp,
 } from "./excalidraw-restore";
 
+import { resetSceneToDefaults } from "./scene-defaults";
+
 import { computeSceneSignature, stripExtension } from "./scene-utils";
 
 export default function App() {
@@ -219,11 +221,7 @@ export default function App() {
       const parsed = JSON.parse(entry.scene);
       const restored = restoreSceneForApp(
         parsed,
-        buildDefaultLocalAppStateOverrides({
-          viewBackgroundColor: "#ffffff",
-          objectsSnapModeEnabled: true,
-          zoomValue: 1,
-        }),
+        buildDefaultLocalAppStateOverrides(),
       );
       applyRestoredScene(api, restored);
       const elements = api.getSceneElements();
@@ -493,11 +491,7 @@ export default function App() {
     sceneLoadInProgressRef.current = true;
     const restored = restoreSceneForApp(
       parsedScene,
-      buildDefaultLocalAppStateOverrides({
-        viewBackgroundColor: "#ffffff",
-        objectsSnapModeEnabled: true,
-        zoomValue: 1,
-      }),
+      buildDefaultLocalAppStateOverrides(),
     );
     applyRestoredScene(api, restored);
     const elements = api.getSceneElementsIncludingDeleted();
@@ -559,7 +553,7 @@ export default function App() {
       return;
     }
     if (!isDirty) {
-      api.resetScene({ resetLoadingState: true });
+      resetSceneToDefaults(api);
       return;
     }
     setShowClearConfirm(true);
@@ -570,7 +564,7 @@ export default function App() {
       setStatus({ text: "Canvas not ready", tone: "warn" });
       return;
     }
-    api.resetScene({ resetLoadingState: true });
+    resetSceneToDefaults(api);
     setShowClearConfirm(false);
   }, [api, setStatus]);
 

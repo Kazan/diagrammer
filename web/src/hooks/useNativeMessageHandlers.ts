@@ -149,11 +149,7 @@ export function useNativeMessageHandlers(deps: NativeMessageDeps) {
 
         const restoredForSig = restoreSceneForApp(
           parsedScene,
-          buildDefaultLocalAppStateOverrides({
-            viewBackgroundColor: "#ffffff",
-            objectsSnapModeEnabled: true,
-            zoomValue: 1,
-          }),
+          buildDefaultLocalAppStateOverrides(),
         );
         nextSig = computeSceneSignature(restoredForSig.elements, restoredForSig.appState);
         hasElements = restoredForSig.elements.some((el) => !el.isDeleted);
@@ -201,11 +197,7 @@ export function useNativeMessageHandlers(deps: NativeMessageDeps) {
           if (parsedScene) {
             const restored = restoreSceneForApp(
               parsedScene,
-              buildDefaultLocalAppStateOverrides({
-                viewBackgroundColor: "#ffffff",
-                objectsSnapModeEnabled: true,
-                zoomValue: 1,
-              }),
+              buildDefaultLocalAppStateOverrides(),
             );
             applyRestoredScene(api, restored);
             const elements = api.getSceneElementsIncludingDeleted();

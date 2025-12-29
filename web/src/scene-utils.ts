@@ -1,11 +1,12 @@
 import { THEME } from "@excalidraw/excalidraw";
+import { DEFAULT_SCENE_SETTINGS, getCanvasBackgroundColor } from "./scene-defaults";
 
 export const EMPTY_SCENE = {
   elements: [],
   appState: {
-    viewBackgroundColor: "#ecececff",
-    theme: THEME.LIGHT,
-    objectsSnapModeEnabled: true,
+    viewBackgroundColor: getCanvasBackgroundColor("grid"),
+    theme: DEFAULT_SCENE_SETTINGS.theme,
+    objectsSnapModeEnabled: DEFAULT_SCENE_SETTINGS.objectsSnapModeEnabled,
   },
   files: {},
 };
