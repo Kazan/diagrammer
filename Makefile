@@ -21,18 +21,13 @@ define check_device
 endef
 
 .PHONY: e2e-load-scene
-start:
-	$(call check_device)
-	$(ADB) $(ADB_DEVICE_FLAG) shell am force-stop $(APP_ID)
-	$(ADB) $(ADB_DEVICE_FLAG) shell pm clear $(APP_ID)
-	$(ADB) $(ADB_DEVICE_FLAG) shell am start -S -W -n $(APP_ID)/.MainActivity
 WEB_DIR := web
 WEB_PORT ?= 5173
 AVD_NAME ?= tablet_eink_android_36
 AVD_PACKAGE ?= "system-images;android-36;google_apis_playstore;arm64-v8a"
 AVD_DEVICE ?= pixel_tablet
 
-.PHONY: web run apk deps ci start-emulator stop-emulator create-emulator destroy-emulator recreate-emulator
+.PHONY: web run apk deps ci start-emulator stop-emulator create-emulator destroy-emulator recreate-emulator deploy debug
 
 deps:
 	cd $(WEB_DIR) && npm ci
@@ -43,14 +38,34 @@ web:
 	DEV_PID=$$!; sleep 2; open "http://localhost:$(WEB_PORT)/assets/web/"; \
 	wait $$DEV_PID)
 
-run: install start
+# Local emulator development (uses AVD_NAME emulator)
+run:
+	$(MAKE) deps
+	cd $(WEB_DIR) && npm run build -- --mode development
+	$(ADB) -s emulator-5554 wait-for-device
+	$(ADB) -s emulator-5554 uninstall $(APP_ID) || true
+	./gradlew installDebug -PandroidSerial=emulator-5554
+	$(ADB) -s emulator-5554 shell am start -S -W -n $(APP_ID)/.MainActivity
 
-install:
+# Deploy debug build to configured device
+debug:
 	$(call check_device)
 	$(MAKE) deps
 	cd $(WEB_DIR) && npm run build -- --mode development
 	$(ADB) $(ADB_DEVICE_FLAG) wait-for-device
-	./gradlew installDebug
+	$(ADB) $(ADB_DEVICE_FLAG) uninstall $(APP_ID) || true
+	./gradlew installDebug -PandroidSerial=$(ADB_DEVICE_ID)
+	$(ADB) $(ADB_DEVICE_FLAG) shell am start -S -W -n $(APP_ID)/.MainActivity
+
+# Deploy production build to configured device
+deploy:
+	$(call check_device)
+	$(MAKE) deps
+	cd $(WEB_DIR) && npm run build
+	$(ADB) $(ADB_DEVICE_FLAG) wait-for-device
+	$(ADB) $(ADB_DEVICE_FLAG) uninstall $(APP_ID) || true
+	./gradlew installRelease -PandroidSerial=$(ADB_DEVICE_ID)
+	$(ADB) $(ADB_DEVICE_FLAG) shell am start -S -W -n $(APP_ID)/.MainActivity
 
 apk:
 	$(MAKE) deps
@@ -62,8 +77,7 @@ emu:
 	@emulator -avd $(AVD_NAME) &
 
 stop-emulator:
-	$(call check_device)
-	$(ADB) $(ADB_DEVICE_FLAG) emu kill
+	$(ADB) emu kill
 
 create-emulator:
 	$(SDKMANAGER) --install $(AVD_PACKAGE)
