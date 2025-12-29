@@ -18,7 +18,7 @@ export function LibrarySidebar({
   excalidrawAPI,
   config = {},
 }: LibrarySidebarProps) {
-  const { columns = 5, itemSize = 64 } = config;
+  const { columns = 4, itemSize = 64 } = config;
 
   const [isOpen, setIsOpen] = useState(false);
   const [libraries, setLibraries] = useState<LibraryCategory[]>([]);
@@ -79,16 +79,6 @@ export function LibrarySidebar({
     <>
       {/* Edge trigger button */}
       <LibraryTrigger onClick={toggleSidebar} isOpen={isOpen} />
-
-      {/* Backdrop - closes sidebar when clicking outside */}
-      {isOpen && (
-        <div
-          className="fixed inset-0 z-[calc(var(--z-chrome)-1)]"
-          style={{ top: "var(--tool-rail-top)" }}
-          onClick={closeSidebar}
-          aria-hidden="true"
-        />
-      )}
 
       {/* Sidebar panel */}
       <div
