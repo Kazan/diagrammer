@@ -16,8 +16,8 @@ import {
   Layers as LayersIcon,
   MoveRight,
   PaintBucket,
+  Palette,
   SendToBack,
-  Signature,
   SlidersHorizontal,
   Trash2,
   Type as TypeIcon,
@@ -39,7 +39,7 @@ import {
   RailSwatch,
   railButtonVariants,
 } from "@/components/ui/tool-rail";
-import { cn } from "@/lib/utils";
+import { cn, shouldUseDarkForeground } from "@/lib/utils";
 
 export type PropertyKind = "stroke" | "background" | "style" | "arrow" | "text" | "textColor" | "arrange";
 
@@ -573,12 +573,16 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
             <span
               className={cn(
                 "stroke-color-indicator",
-                isStrokeTransparent && "stroke-color-indicator--transparent",
+                isStrokeTransparent
+                  ? "stroke-color-indicator--transparent"
+                  : shouldUseDarkForeground(strokeColor)
+                    ? "stroke-color-indicator--filled-dark"
+                    : "stroke-color-indicator--filled",
               )}
               aria-hidden="true"
-              style={isStrokeTransparent ? undefined : { color: strokeColor }}
+              style={isStrokeTransparent ? undefined : { backgroundColor: strokeColor }}
             >
-              <Signature size={22} strokeWidth={2.4} aria-hidden="true" />
+              <Palette className="size-[24px]" strokeWidth={1.4} aria-hidden="true" />
             </span>
           </RailPopoverButton>
         )}
@@ -603,11 +607,17 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
             <span
               className={cn(
                 "fill-color-indicator",
-                isFillTransparent && "fill-color-indicator--transparent",
+                isFillTransparent
+                  ? "fill-color-indicator--transparent"
+                  : shouldUseDarkForeground(backgroundColor)
+                    ? "fill-color-indicator--filled-dark"
+                    : "fill-color-indicator--filled",
               )}
               aria-hidden="true"
               style={isFillTransparent ? undefined : { backgroundColor }}
-            />
+            >
+              <PaintBucket className="size-[24px]" strokeWidth={1.4} aria-hidden="true" />
+            </span>
           </RailPopoverButton>
         )}
 
@@ -674,12 +684,16 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
             <span
               className={cn(
                 "text-color-indicator",
-                isTextTransparent && "text-color-indicator--transparent",
+                isTextTransparent
+                  ? "text-color-indicator--transparent"
+                  : shouldUseDarkForeground(textColor)
+                    ? "text-color-indicator--filled-dark"
+                    : "text-color-indicator--filled",
               )}
               aria-hidden="true"
-              style={isTextTransparent ? undefined : { color: textColor }}
+              style={isTextTransparent ? undefined : { backgroundColor: textColor }}
             >
-              A
+              <ALargeSmall className="size-[24px]" strokeWidth={1.4} aria-hidden="true" />
             </span>
           </RailPopoverButton>
         )}

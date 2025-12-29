@@ -1,5 +1,5 @@
 import { Minus, Plus, Undo2 } from "lucide-react";
-import type { MouseEvent } from "react";
+import type { PointerEvent } from "react";
 
 export type ZoomControlsProps = {
   zoom: { value: number };
@@ -24,13 +24,22 @@ export function ZoomControls({
 }: ZoomControlsProps) {
   const percent = `${Math.round((zoom?.value ?? 1) * 100)}%`;
 
-  const handleCenterClick = (event: MouseEvent<HTMLButtonElement>) => {
-    if (event.detail > 1) return; // ignore the two click events that accompany a double-click
+  /**
+   * Prevent default on pointerDown to avoid ghost clicks and
+   * ensure consistent behavior across eInk devices (Nova Boox, etc.)
+   */
+  const handlePointerDown = (event: PointerEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+  };
+
+  const handleCenterPointerUp = (event: PointerEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    // Ignore if this looks like part of a double-tap sequence
+    if (event.detail > 1) return;
     onResetZoom();
   };
 
-  const handleCenterDoubleClick = (event: MouseEvent<HTMLButtonElement>) => {
-    event.preventDefault();
+  const handleCenterDoubleClick = () => {
     onZoomToContent();
   };
 
@@ -40,7 +49,8 @@ export function ZoomControls({
         <button
           type="button"
           className="zoom-controls__btn"
-          onClick={onZoomOut}
+          onPointerDown={handlePointerDown}
+          onPointerUp={(e) => { e.preventDefault(); onZoomOut(); }}
           aria-label="Zoom out"
           disabled={!hasSceneContent}
         >
@@ -49,7 +59,8 @@ export function ZoomControls({
         <button
           type="button"
           className="zoom-controls__btn zoom-controls__btn--label"
-          onClick={handleCenterClick}
+          onPointerDown={handlePointerDown}
+          onPointerUp={handleCenterPointerUp}
           onDoubleClick={handleCenterDoubleClick}
           aria-label="Reset zoom or zoom to scene"
           disabled={!hasSceneContent}
@@ -59,7 +70,8 @@ export function ZoomControls({
         <button
           type="button"
           className="zoom-controls__btn"
-          onClick={onZoomIn}
+          onPointerDown={handlePointerDown}
+          onPointerUp={(e) => { e.preventDefault(); onZoomIn(); }}
           aria-label="Zoom in"
           disabled={!hasSceneContent}
         >
@@ -69,7 +81,8 @@ export function ZoomControls({
       <button
         type="button"
         className={`zoom-controls__btn zoom-controls__undo${canUndo ? " zoom-controls__undo--active" : ""}`}
-        onClick={onUndo}
+        onPointerDown={handlePointerDown}
+        onPointerUp={(e) => { e.preventDefault(); onUndo(); }}
         aria-label="Undo"
         disabled={!canUndo}
       >

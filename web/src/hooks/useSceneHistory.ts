@@ -6,6 +6,18 @@ import { computeSceneSignature } from "../scene-utils";
 const DEFAULT_MAX_ENTRIES = 50;
 
 /**
+ * Check if debug mode is enabled via localStorage.
+ * Toggle with: localStorage.setItem('diagrammer.debug', '1') or '0'
+ */
+function isDebugEnabled(): boolean {
+  try {
+    return window.localStorage.getItem("diagrammer.debug") === "1";
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Safely clones a value, falling back to JSON serialization for values
  * that contain non-cloneable types (Symbols, React elements, functions).
  * This is necessary because Excalidraw's appState can contain contextMenu
@@ -173,12 +185,33 @@ export function useSceneHistory(options: UseSceneHistoryOptions) {
   }, [api, commitSnapshot]);
 
   const handleUndo = useCallback(() => {
-    if (!api) return;
-    const targetIndex = historyIndexRef.current - 1;
+    const debug = isDebugEnabled();
+    const historyLen = historyRef.current.length;
+    const historyIdx = historyIndexRef.current;
+
+    if (debug) {
+      console.log(`[undo] called: api=${!!api}, historyLen=${historyLen}, historyIdx=${historyIdx}`);
+      setStatus({ text: `[DBG] undo: api=${!!api} len=${historyLen} idx=${historyIdx}`, tone: "warn" });
+    }
+
+    if (!api) {
+      if (debug) {
+        console.warn("[undo] aborted: api is null");
+        setStatus({ text: "[DBG] undo aborted: no api", tone: "err" });
+      }
+      return;
+    }
+    const targetIndex = historyIdx - 1;
     const snapshot = historyRef.current[targetIndex];
     if (!snapshot) {
+      if (debug) {
+        console.warn(`[undo] aborted: no snapshot at index ${targetIndex}`);
+      }
       setStatus({ text: "Nothing to undo", tone: "warn" });
       return;
+    }
+    if (debug) {
+      console.log(`[undo] applying snapshot at index ${targetIndex}`);
     }
     historyApplyingRef.current = true;
     try {
@@ -195,6 +228,15 @@ export function useSceneHistory(options: UseSceneHistoryOptions) {
       pendingHistorySigRef.current = null;
       pointerInteractionRef.current = false;
       setCanUndo(historyIndexRef.current > 0);
+      if (debug) {
+        console.log(`[undo] success: newIdx=${targetIndex}, canUndo=${targetIndex > 0}`);
+        setStatus({ text: `[DBG] undo OK: idx=${targetIndex}`, tone: "ok" });
+      }
+    } catch (err) {
+      console.error("[undo] error:", err);
+      if (debug) {
+        setStatus({ text: `[DBG] undo error: ${String(err)}`, tone: "err" });
+      }
     } finally {
       window.requestAnimationFrame(() => {
         historyApplyingRef.current = false;
