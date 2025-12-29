@@ -1,3 +1,4 @@
+import { restoreElements } from "@excalidraw/excalidraw";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 
@@ -15,6 +16,7 @@ const CaptureUpdateAction = {
 /**
  * Regenerates IDs for elements and updates group references.
  * Returns new elements with fresh IDs while preserving internal relationships.
+ * Uses restoreElements to ensure all element properties are properly normalized.
  */
 function cloneElementsWithNewIds(
   elements: readonly ExcalidrawElement[]
@@ -39,42 +41,83 @@ function cloneElementsWithNewIds(
   }
 
   // Second pass: clone elements with new IDs and update references
-  const cloned = elements.map((el) => {
+  const rawCloned = elements.map((el) => {
     const newId = idMap.get(el.id)!;
 
     // Update groupIds if present
     const newGroupIds = el.groupIds?.map((gid: string) => groupIdMap.get(gid) ?? gid);
 
-    // Handle bound elements if present
-    let newBoundElements = el.boundElements;
-    if (el.boundElements) {
+    // Handle bound elements - convert old boundElementIds format to new boundElements format
+    // and update IDs for both formats
+    let newBoundElements: ExcalidrawElement["boundElements"] = null;
+
+    // Handle new format (boundElements)
+    if (el.boundElements && Array.isArray(el.boundElements)) {
       newBoundElements = el.boundElements.map((bound) => ({
         ...bound,
         id: idMap.get(bound.id) ?? bound.id,
       }));
     }
+    // Handle old format (boundElementIds) - convert to new format
+    else if ("boundElementIds" in el) {
+      const boundElementIds = (el as Record<string, unknown>).boundElementIds;
+      if (Array.isArray(boundElementIds) && boundElementIds.length > 0) {
+        newBoundElements = boundElementIds
+          .filter((id): id is string => typeof id === "string")
+          .map((id) => ({
+            id: idMap.get(id) ?? id,
+            type: "text" as const, // boundElementIds was typically used for text bindings
+          }));
+      }
+    }
 
-    // Handle container/frame references
+    // Handle container/frame references - only set if they exist and are not null/undefined
     const containerId =
-      "containerId" in el && el.containerId
+      "containerId" in el && el.containerId != null
         ? idMap.get(el.containerId as string) ?? el.containerId
-        : undefined;
+        : null;
     const frameId =
-      "frameId" in el && el.frameId
+      "frameId" in el && el.frameId != null
         ? idMap.get(el.frameId as string) ?? el.frameId
-        : undefined;
+        : null;
 
-    return {
+    // Build the cloned element, explicitly setting properties to avoid undefined values
+    const clonedEl: Record<string, unknown> = {
       ...el,
       id: newId,
       groupIds: newGroupIds ?? [],
       boundElements: newBoundElements,
-      ...(containerId !== undefined && { containerId }),
-      ...(frameId !== undefined && { frameId }),
       seed: Math.floor(Math.random() * 2147483647),
       version: 1,
       versionNonce: Math.floor(Math.random() * 2147483647),
-    } as ExcalidrawElement;
+    };
+
+    // Only include containerId/frameId if they have actual values
+    if (containerId != null) {
+      clonedEl.containerId = containerId;
+    } else if ("containerId" in clonedEl) {
+      clonedEl.containerId = null;
+    }
+
+    if (frameId != null) {
+      clonedEl.frameId = frameId;
+    } else if ("frameId" in clonedEl) {
+      clonedEl.frameId = null;
+    }
+
+    // Remove deprecated boundElementIds property if present
+    if ("boundElementIds" in clonedEl) {
+      delete clonedEl.boundElementIds;
+    }
+
+    return clonedEl as ExcalidrawElement;
+  });
+
+  // Use restoreElements to normalize all element properties and repair bindings
+  // This ensures text elements have proper originalText, dimensions are correct, etc.
+  const cloned = restoreElements(rawCloned, null, {
+    refreshDimensions: true,
+    repairBindings: true,
   });
 
   return { cloned, groupIdMap };
@@ -193,18 +236,26 @@ export function insertLibraryItem(
   const currentElements = api.getSceneElements();
 
   // Build selection state
-  const selectedElementIds = Object.fromEntries(
-    positionedElements.map((el) => [el.id, true])
-  );
-  const selectedGroupIds = newGroupId ? { [newGroupId]: true } : {};
+  const selectedElementIds: Record<string, true> = {};
+  for (const el of positionedElements) {
+    selectedElementIds[el.id] = true;
+  }
+  const selectedGroupIds: Record<string, true> = {};
+  if (newGroupId) {
+    selectedGroupIds[newGroupId] = true;
+  }
 
   // Update scene with new elements appended
   api.updateScene({
     elements: [...currentElements, ...positionedElements],
     appState: {
+      ...api.getAppState(),
       selectedElementIds,
       selectedGroupIds,
     },
     captureUpdate: CaptureUpdateAction.IMMEDIATELY,
   });
+
+  // Switch to selection tool so user can interact with inserted elements
+  api.setActiveTool({ type: "selection" });
 }
