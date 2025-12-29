@@ -15,6 +15,7 @@ import {
   Group as GroupIcon,
   Layers as LayersIcon,
   MoveRight,
+  Ungroup,
   PaintBucket,
   Palette,
   SendToBack,
@@ -183,6 +184,22 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
     return { minX, minY, maxX, maxY, width: maxX - minX, height: maxY - minY };
   }, [elements]);
 
+  const sharedGroupIds = useMemo(() => {
+    if (!elements.length) return [] as string[];
+    const [first, ...rest] = elements;
+    const baseIds = [...(first.groupIds ?? [])].filter(Boolean);
+    if (!baseIds.length) return [] as string[];
+    return baseIds.filter((groupId) => rest.every((el) => (el.groupIds ?? []).includes(groupId)));
+  }, [elements]);
+
+  const selectedGroupIds = api?.getAppState().selectedGroupIds ?? {};
+  const groupedSelectionIds = useMemo(() => {
+    const activeGroupIds = Object.keys(selectedGroupIds).filter(Boolean);
+    if (activeGroupIds.length) return activeGroupIds;
+    return sharedGroupIds;
+  }, [selectedGroupIds, sharedGroupIds]);
+  const isGroupedSelection = groupedSelectionIds.length > 0;
+
   // Close flyouts that are not applicable
   const hasImage = elements.some((el) => el.type === "image");
   const hasLinearElements = elements.some((el) => el.type === "arrow" || el.type === "line");
@@ -230,6 +247,31 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
         return hasVersionBump ? mutated : stampVersion(mutated, now);
       });
     api.updateScene({ elements: nextElements, captureUpdate: CaptureUpdateAction.IMMEDIATELY });
+  };
+
+  const handleUngroupSelection = () => {
+    if (!api || !elements.length) return;
+    const now = Date.now();
+    const groupsToRemove = groupedSelectionIds;
+    if (!groupsToRemove.length) return;
+
+    const nextElements = api.getSceneElements().map((el) => {
+      if (!selectedIds.has(el.id)) return el;
+      const nextGroupIds = (el.groupIds ?? []).filter((groupId) => !groupsToRemove.includes(groupId));
+      if (nextGroupIds.length === (el.groupIds ?? []).length) return el;
+      return stampVersion({ ...el, groupIds: nextGroupIds }, now);
+    });
+
+    const nextSelectedElementIds = elements.reduce<Record<string, true>>((acc, el) => {
+      acc[el.id] = true;
+      return acc;
+    }, {});
+
+    api.updateScene({
+      elements: nextElements,
+      appState: { ...api.getAppState(), selectedGroupIds: {}, selectedElementIds: nextSelectedElementIds },
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    });
   };
 
   const moveSelection = (action: LayerAction) => {
@@ -579,7 +621,11 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
         <div className="flex flex-col gap-2">
           <div className="text-[13px] font-bold text-slate-900">Actions</div>
           <div className="grid grid-cols-1 gap-2" role="group" aria-label="Grouping">
-            <ArrangeTile Icon={GroupIcon} label="Group selection" testId="arrange-group" onClick={handleGroupSelection} />
+            {isGroupedSelection ? (
+              <ArrangeTile Icon={Ungroup} label="Ungroup selection" testId="arrange-ungroup" onClick={handleUngroupSelection} />
+            ) : (
+              <ArrangeTile Icon={GroupIcon} label="Group selection" testId="arrange-group" onClick={handleGroupSelection} />
+            )}
           </div>
         </div>
       )}

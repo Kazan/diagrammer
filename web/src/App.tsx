@@ -14,6 +14,7 @@ import { type ToolType } from "./components/CustomToolbar";
 import { SelectionPropertiesRail } from "./components/SelectionPropertiesRail";
 import type { SelectionInfo } from "./components/SelectionFlyout";
 import { type StatusMessage } from "./components/NativeStatus";
+import { LibrarySidebar } from "./components/LibrarySidebar";
 import { useNativeBridge, useNativeBridgeCallbacks } from "./hooks/useNativeBridge";
 import { useNativeFileHandles } from "./hooks/useNativeFileHandles";
 import { useNativePickers } from "./hooks/useNativePickers";
@@ -631,6 +632,7 @@ export default function App() {
         </Excalidraw>
       </div>
       <SelectionPropertiesRail selection={selectionInfo} api={api} onStyleCapture={captureStyleChange} />
+      <LibrarySidebar excalidrawAPI={api} />
       <ChromeOverlay
         fileName={currentFileName}
         isDirty={isDirty}
