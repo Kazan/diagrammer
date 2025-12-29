@@ -18,20 +18,32 @@ const CaptureUpdateAction = {
  */
 function cloneElementsWithNewIds(
   elements: readonly ExcalidrawElement[]
-): ExcalidrawElement[] {
+): { cloned: ExcalidrawElement[]; groupIdMap: Map<string, string> } {
   const idMap = new Map<string, string>();
+  const groupIdMap = new Map<string, string>();
 
-  // First pass: generate new IDs
+  // First pass: generate new IDs for elements
   for (const el of elements) {
     idMap.set(el.id, randomId());
   }
 
+  // Collect all existing group IDs and generate new ones
+  for (const el of elements) {
+    if (el.groupIds) {
+      for (const gid of el.groupIds) {
+        if (!groupIdMap.has(gid)) {
+          groupIdMap.set(gid, randomId());
+        }
+      }
+    }
+  }
+
   // Second pass: clone elements with new IDs and update references
-  return elements.map((el) => {
+  const cloned = elements.map((el) => {
     const newId = idMap.get(el.id)!;
 
     // Update groupIds if present
-    const newGroupIds = el.groupIds?.map((gid: string) => idMap.get(gid) ?? gid);
+    const newGroupIds = el.groupIds?.map((gid: string) => groupIdMap.get(gid) ?? gid);
 
     // Handle bound elements if present
     let newBoundElements = el.boundElements;
@@ -64,6 +76,8 @@ function cloneElementsWithNewIds(
       versionNonce: Math.floor(Math.random() * 2147483647),
     } as ExcalidrawElement;
   });
+
+  return { cloned, groupIdMap };
 }
 
 /**
@@ -118,8 +132,22 @@ function getViewportCenter(api: ExcalidrawImperativeAPI): { x: number; y: number
 }
 
 /**
+ * Checks if all elements already share a common group.
+ */
+function elementsShareGroup(elements: readonly ExcalidrawElement[]): boolean {
+  if (elements.length <= 1) return true;
+  const [first, ...rest] = elements;
+  const firstGroups = first.groupIds ?? [];
+  if (!firstGroups.length) return false;
+  return firstGroups.some((gid) =>
+    rest.every((el) => (el.groupIds ?? []).includes(gid))
+  );
+}
+
+/**
  * Inserts library item elements into the Excalidraw scene.
  * - Clones elements with new IDs
+ * - Groups elements if they don't already share a group
  * - Offsets to viewport center
  * - Captures update for undo/redo
  * - Selects inserted elements
@@ -131,10 +159,21 @@ export function insertLibraryItem(
   if (!api || elements.length === 0) return;
 
   // Clone elements with regenerated IDs
-  const clonedElements = cloneElementsWithNewIds(elements);
+  const { cloned: clonedElements } = cloneElementsWithNewIds(elements);
+
+  // If multiple elements and they don't already share a group, group them
+  let finalElements = clonedElements;
+  let newGroupId: string | null = null;
+  if (clonedElements.length > 1 && !elementsShareGroup(clonedElements)) {
+    newGroupId = randomId();
+    finalElements = clonedElements.map((el) => ({
+      ...el,
+      groupIds: [...el.groupIds, newGroupId!],
+    }));
+  }
 
   // Calculate bounding box of cloned elements
-  const bbox = getBoundingBox(clonedElements);
+  const bbox = getBoundingBox(finalElements);
 
   // Get viewport center
   const viewportCenter = getViewportCenter(api);
@@ -144,7 +183,7 @@ export function insertLibraryItem(
   const offsetY = viewportCenter.y - (bbox.minY + bbox.height / 2);
 
   // Apply offset to all elements
-  const positionedElements = clonedElements.map((el) => ({
+  const positionedElements = finalElements.map((el) => ({
     ...el,
     x: el.x + offsetX,
     y: el.y + offsetY,
@@ -153,16 +192,18 @@ export function insertLibraryItem(
   // Get current scene elements
   const currentElements = api.getSceneElements();
 
-  // Collect IDs of inserted elements for selection
-  const insertedIds = new Set(positionedElements.map((el) => el.id));
+  // Build selection state
+  const selectedElementIds = Object.fromEntries(
+    positionedElements.map((el) => [el.id, true])
+  );
+  const selectedGroupIds = newGroupId ? { [newGroupId]: true } : {};
 
   // Update scene with new elements appended
   api.updateScene({
     elements: [...currentElements, ...positionedElements],
     appState: {
-      selectedElementIds: Object.fromEntries(
-        positionedElements.map((el) => [el.id, true])
-      ),
+      selectedElementIds,
+      selectedGroupIds,
     },
     captureUpdate: CaptureUpdateAction.IMMEDIATELY,
   });

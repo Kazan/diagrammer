@@ -26,10 +26,10 @@ export interface LibraryMeta {
 /**
  * Auto-discover library files at build time.
  * Only captures paths/URLs, content is NOT loaded.
- * Files are in public/libs/ and served at /libs/ at runtime.
+ * Files are in src/libs/ and Vite serves them as assets.
  */
 const libraryAssets = import.meta.glob<string>(
-  "/libs/*.excalidrawlib",
+  "@/libs/*.excalidrawlib",
   { query: "?url", import: "default", eager: true }
 );
 

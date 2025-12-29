@@ -192,6 +192,14 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
     return baseIds.filter((groupId) => rest.every((el) => (el.groupIds ?? []).includes(groupId)));
   }, [elements]);
 
+  const selectedGroupIds = api?.getAppState().selectedGroupIds ?? {};
+  const groupedSelectionIds = useMemo(() => {
+    const activeGroupIds = Object.keys(selectedGroupIds).filter(Boolean);
+    if (activeGroupIds.length) return activeGroupIds;
+    return sharedGroupIds;
+  }, [selectedGroupIds, sharedGroupIds]);
+  const isGroupedSelection = groupedSelectionIds.length > 0;
+
   // Close flyouts that are not applicable
   const hasImage = elements.some((el) => el.type === "image");
   const hasLinearElements = elements.some((el) => el.type === "arrow" || el.type === "line");
@@ -225,14 +233,6 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
   const showTextColorButton = selectionComposition.hasDirectText || selectionComposition.hasContainersWithText;
   const showFillColorButton = hasFillCapable && !hasImage && !isFrameOnly;
   const hasAnyPropertyButtons = showStrokeColorButton || showFillColorButton || hasStyleControls || hasArrowControls || hasTextControls || (showTextColorButton && !hasImage);
-
-  const selectedGroupIds = api?.getAppState().selectedGroupIds ?? {};
-  const groupedSelectionIds = useMemo(() => {
-    const activeGroupIds = Object.keys(selectedGroupIds).filter(Boolean);
-    if (activeGroupIds.length) return activeGroupIds;
-    return sharedGroupIds;
-  }, [selectedGroupIds, sharedGroupIds]);
-  const isGroupedSelection = groupedSelectionIds.length > 0;
 
   // Handlers
   const applyToSelection = (mutate: (el: ExcalidrawElement) => ExcalidrawElement) => {
