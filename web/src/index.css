@@ -449,6 +449,61 @@ body {
 }
 
 /*
+  Context menu customization: hide actions not relevant for Diagrammer UX.
+  We hide layer ordering, linking, duplicate, and delete actions.
+  Separator handling uses :has() and adjacent sibling selectors.
+*/
+
+/* Layer ordering actions */
+.excalidraw .context-menu li[data-testid="sendBackward"],
+.excalidraw .context-menu li[data-testid="bringForward"],
+.excalidraw .context-menu li[data-testid="sendToBack"],
+.excalidraw .context-menu li[data-testid="bringToFront"] {
+  display: none !important;
+}
+
+/* Link actions */
+.excalidraw .context-menu li[data-testid="hyperlink"],
+.excalidraw .context-menu li[data-testid="copyElementLink"] {
+  display: none !important;
+}
+
+/* Duplicate and Delete actions */
+.excalidraw .context-menu li[data-testid="duplicateSelection"],
+.excalidraw .context-menu li[data-testid="deleteSelectedElements"] {
+  display: none !important;
+}
+
+/*
+  Hide separator before the layer ordering group (after flipVertical).
+*/
+.excalidraw .context-menu li[data-testid="flipVertical"] + hr.context-menu-item-separator:has(+ li[data-testid="sendBackward"]) {
+  display: none !important;
+}
+
+/*
+  Hide separator after the layer ordering group (before duplicateSelection).
+*/
+.excalidraw .context-menu li[data-testid="bringToFront"] + hr.context-menu-item-separator {
+  display: none !important;
+}
+
+/*
+  Hide separator before delete (after pasteStyles).
+*/
+.excalidraw .context-menu li[data-testid="pasteStyles"] + hr.context-menu-item-separator:has(+ li[data-testid="deleteSelectedElements"]) {
+  display: none !important;
+}
+
+/*
+  Hide separator after toggleElementLock when hyperlink is hidden.
+  This cleans up the trailing separator at the end of the menu.
+*/
+.excalidraw .context-menu li[data-testid="toggleElementLock"] + hr.context-menu-item-separator {
+  display: none !important;
+}
+
+/*
   Excalidraw v0.18.0 does not currently expose supported APIs to hide the
   built-in toolbar or the element properties panel. We therefore hide these
   via stable, version-pinned class names.
