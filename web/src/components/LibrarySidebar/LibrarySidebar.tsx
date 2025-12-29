@@ -12,11 +12,14 @@ import { LibraryTrigger } from "./LibraryTrigger";
 interface LibrarySidebarProps {
   excalidrawAPI: ExcalidrawImperativeAPI | null;
   config?: LibrarySidebarConfig;
+  /** External signal to close the sidebar */
+  closeSignal?: number;
 }
 
 export function LibrarySidebar({
   excalidrawAPI,
   config = {},
+  closeSignal,
 }: LibrarySidebarProps) {
   const { columns = 4, itemSize = 64 } = config;
 
@@ -51,6 +54,14 @@ export function LibrarySidebar({
     isSearching,
     clearSearch,
   } = useLibrarySearch(libraries);
+
+  // Close sidebar when external signal changes
+  useEffect(() => {
+    if (closeSignal !== undefined && closeSignal > 0 && isOpen) {
+      setIsOpen(false);
+      clearSearch();
+    }
+  }, [closeSignal]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Handle item insertion
   const handleItemClick = useCallback(

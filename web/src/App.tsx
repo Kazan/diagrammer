@@ -60,6 +60,7 @@ export default function App() {
   const [hasSceneContent, setHasSceneContent] = useState(false);
   const [selectionInfo, setSelectionInfo] = useState<SelectionInfo | null>(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [canvasClickSignal, setCanvasClickSignal] = useState(0);
   const HIDE_DEFAULT_PROPS_FLYOUT = false;
   const openFileResolveRef = useRef<((handles: NativeFileHandle[]) => void) | null>(null);
   const openFileRejectRef = useRef<((reason: any) => void) | null>(null);
@@ -576,6 +577,20 @@ export default function App() {
     setShowClearConfirm(false);
   }, []);
 
+  // Close flyouts and library sidebar when clicking on empty canvas space
+  const handleCanvasPointerDown = useCallback(
+    (
+      _activeTool: { type: string },
+      pointerDownState: { hit?: { element?: unknown } }
+    ) => {
+      // Only close if clicking on empty space (no element hit)
+      if (!pointerDownState.hit?.element) {
+        setCanvasClickSignal((prev) => prev + 1);
+      }
+    },
+    []
+  );
+
   const handleSelectTool = (tool: ToolType) => {
     if (tool === "image") {
       setActiveTool("image");
@@ -612,6 +627,7 @@ export default function App() {
           objectsSnapModeEnabled
           UIOptions={excalidrawUIOptions}
           handleKeyboardGlobally={false}
+          onPointerDown={handleCanvasPointerDown}
           excalidrawAPI={(api) => {
             apiRef.current = api;
             setApi(api);
@@ -631,8 +647,8 @@ export default function App() {
           </WelcomeScreen>
         </Excalidraw>
       </div>
-      <SelectionPropertiesRail selection={selectionInfo} api={api} onStyleCapture={captureStyleChange} />
-      <LibrarySidebar excalidrawAPI={api} />
+      <SelectionPropertiesRail selection={selectionInfo} api={api} onStyleCapture={captureStyleChange} closeSignal={canvasClickSignal} />
+      <LibrarySidebar excalidrawAPI={api} closeSignal={canvasClickSignal} />
       <ChromeOverlay
         fileName={currentFileName}
         isDirty={isDirty}
