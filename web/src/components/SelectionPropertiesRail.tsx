@@ -308,6 +308,21 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
       return true;
     });
 
+    // Collect frame IDs from selected frames
+    const selectedFrameIds = new Set<string>();
+    for (const el of sourceElements) {
+      if (el.type === "frame" || el.type === "magicframe") {
+        selectedFrameIds.add(el.id);
+      }
+    }
+
+    // Find all elements contained in selected frames
+    const frameChildElements = scene.filter((el) => {
+      if (el.isDeleted) return false;
+      const frameId = (el as { frameId?: string | null }).frameId;
+      return frameId && selectedFrameIds.has(frameId);
+    });
+
     const boundTextIds = new Set<string>();
     for (const el of sourceElements) {
       if (el.boundElements) {
@@ -316,8 +331,22 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
         }
       }
     }
+    // Also collect bound text from frame children
+    for (const el of frameChildElements) {
+      if (el.boundElements) {
+        for (const bound of el.boundElements) {
+          boundTextIds.add(bound.id);
+        }
+      }
+    }
     const boundTextElements = scene.filter((el) => boundTextIds.has(el.id));
     const duplicationSource: ExcalidrawElement[] = [...sourceElements];
+    // Add frame children that aren't already in source
+    for (const frameChild of frameChildElements) {
+      if (!duplicationSource.some((el) => el.id === frameChild.id)) {
+        duplicationSource.push(frameChild as ExcalidrawElement);
+      }
+    }
     for (const boundText of boundTextElements) {
       if (!duplicationSource.some((el) => el.id === boundText.id)) {
         duplicationSource.push(boundText as ExcalidrawElement);
@@ -365,10 +394,15 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
 
         const mappedContainer = "containerId" in clone && clone.containerId ? idMap.get(clone.containerId) : null;
 
+        // Remap frameId for elements inside frames
+        const sourceFrameId = (clone as { frameId?: string | null }).frameId;
+        const mappedFrameId = sourceFrameId ? idMap.get(sourceFrameId) : null;
+
         return {
           ...clone,
           ...(mappedBoundElements ? { boundElements: mappedBoundElements } : {}),
           ...(mappedContainer ? { containerId: mappedContainer } : {}),
+          ...(mappedFrameId ? { frameId: mappedFrameId } : {}),
         } as ExcalidrawElement;
       });
 
