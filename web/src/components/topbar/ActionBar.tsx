@@ -13,6 +13,8 @@ import { ButtonGroup, ButtonGroupSeparator } from "@/components/ui/button-group"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
 export type ActionBarProps = {
+  /** Whether the native bridge is available (Android WebView) */
+  nativePresent?: boolean;
   /** Whether the current file can be saved (has a known location) */
   canSave: boolean;
   /** Whether the scene currently has any visible elements */
@@ -56,6 +58,7 @@ export type ActionBarProps = {
  * Used on the right side of the TopBar.
  */
 export function ActionBar({
+  nativePresent = true,
   canSave,
   hasSceneContent,
   onOpen,
@@ -108,7 +111,7 @@ export function ActionBar({
             </Tooltip>
           )}
 
-          {showSave && canSave && (
+          {showSave && canSave && nativePresent && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -133,13 +136,13 @@ export function ActionBar({
                   size="sm"
                   className={chromeButtonTone}
                   onClick={onSaveAs}
-                  disabled={!isDirty}
+                  disabled={nativePresent ? !isDirty : !hasSceneContent}
                 >
                   <SaveAllIcon />
-                  <span className="hidden sm:inline">Save As</span>
+                  <span className="hidden sm:inline">{nativePresent ? "Save As" : "Save to…"}</span>
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Save to new location</TooltipContent>
+              <TooltipContent>{nativePresent ? "Save to new location" : "Download scene file"}</TooltipContent>
             </Tooltip>
           )}
 

@@ -70,6 +70,7 @@ export function ChromeOverlay({
         fileName={fileName}
         isDirty={isDirty}
         lastSaved={lastSaved}
+        nativePresent={nativePresent}
         canSave={canSave}
         hasSceneContent={hasSceneContent}
         onOpen={onOpen}

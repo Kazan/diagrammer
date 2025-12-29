@@ -5,6 +5,8 @@ import type { NativeBridge } from "../native-bridge";
 
 type MinimalElementBounds = { x: number; y: number; width: number; height: number };
 
+type DownloadDataUrlFn = (dataUrl: string, filename: string, mimeType: string) => void;
+
 const computeSceneBounds = (elements: ReadonlyArray<MinimalElementBounds>) => {
   if (!elements.length) {
     return null;
@@ -75,6 +77,8 @@ export function useExportActions(
   nativeBridge: NativeBridge | undefined,
   setStatus: (status: { text: string; tone: "ok" | "warn" | "err" }) => void,
   setExporting: (mode: "png" | "svg" | null) => void,
+  downloadDataUrl?: DownloadDataUrlFn,
+  currentFileName?: string,
 ) {
   const blobToDataUrl = useCallback((blob: Blob) => {
     return new Promise<string>((resolve, reject) => {
@@ -99,7 +103,8 @@ export function useExportActions(
       setStatus({ text: "Canvas not ready", tone: "warn" });
       return;
     }
-    if (!nativeBridge?.exportPng) {
+    // Allow export if native bridge is available OR if we have a browser fallback
+    if (!nativeBridge?.exportPng && !downloadDataUrl) {
       setStatus({ text: "PNG export unavailable", tone: "warn" });
       return;
     }
@@ -139,20 +144,27 @@ export function useExportActions(
           megapixels: Number(((pngDims.width * pngDims.height) / 1_000_000).toFixed(2)),
         })}`,
       );
-      nativeBridge.exportPng(dataUrl);
+      // Prefer native bridge, fall back to browser download
+      if (nativeBridge?.exportPng) {
+        nativeBridge.exportPng(dataUrl);
+      } else if (downloadDataUrl) {
+        const filename = `${currentFileName || "diagram"}.png`;
+        downloadDataUrl(dataUrl, filename, "image/png");
+      }
     } catch (err) {
       setStatus({ text: `PNG export failed: ${String(err)}`, tone: "err" });
     } finally {
       setExporting(null);
     }
-  }, [api, blobToDataUrl, nativeBridge, setExporting, setStatus]);
+  }, [api, blobToDataUrl, measureDataUrlImage, nativeBridge, setExporting, setStatus, downloadDataUrl, currentFileName]);
 
   const handleExportSvg = useCallback(async () => {
     if (!api) {
       setStatus({ text: "Canvas not ready", tone: "warn" });
       return;
     }
-    if (!nativeBridge?.exportSvg) {
+    // Allow export if native bridge is available OR if we have a browser fallback
+    if (!nativeBridge?.exportSvg && !downloadDataUrl) {
       setStatus({ text: "SVG export unavailable", tone: "warn" });
       return;
     }
@@ -182,13 +194,19 @@ export function useExportActions(
           dataUrlLength: dataUrl.length,
         })}`,
       );
-      nativeBridge.exportSvg(dataUrl);
+      // Prefer native bridge, fall back to browser download
+      if (nativeBridge?.exportSvg) {
+        nativeBridge.exportSvg(dataUrl);
+      } else if (downloadDataUrl) {
+        const filename = `${currentFileName || "diagram"}.svg`;
+        downloadDataUrl(dataUrl, filename, "image/svg+xml");
+      }
     } catch (err) {
       setStatus({ text: `SVG export failed: ${String(err)}`, tone: "err" });
     } finally {
       setExporting(null);
     }
-  }, [api, nativeBridge, setExporting, setStatus]);
+  }, [api, nativeBridge, setExporting, setStatus, downloadDataUrl, currentFileName]);
 
   return { handleExportPng, handleExportSvg } as const;
 }

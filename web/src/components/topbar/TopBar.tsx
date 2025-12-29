@@ -36,6 +36,7 @@ export function TopBar({
   isDirty,
   lastSaved,
   // ActionBar props
+  nativePresent,
   canSave,
   hasSceneContent,
   onOpen,
@@ -72,6 +73,7 @@ export function TopBar({
       </div>
 
       <ActionBar
+        nativePresent={nativePresent}
         canSave={canSave}
         hasSceneContent={hasSceneContent}
         onOpen={onOpen}
