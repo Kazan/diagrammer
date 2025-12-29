@@ -161,6 +161,11 @@ body {
   --rails-divider-width: 2px;
   --rails-divider-color: rgba(15, 23, 42, 0.22);
 
+  /* Library Panel Layout */
+  --library-panel-width: 388px;
+  --library-item-size: 64px;
+  --library-columns: 5;
+
   /* Z-index scale - toolbars and flyouts on top of everything */
   --z-canvas: 1;
   --z-chrome: 30;

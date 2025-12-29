@@ -51,6 +51,8 @@ export type NativeBridge = {
   getCurrentFileName?: () => string | null;
   exportPng?: (dataUrl: string) => void;
   exportSvg?: (dataUrl: string) => void;
+  // Library loading for bundled assets
+  loadLibraryAsset?: (assetPath: string) => Promise<string | null>;
 };
 
 export type NativeBridgeCallbacks = {
