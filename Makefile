@@ -3,11 +3,29 @@ APP_ID ?= com.example.diagrammerapp
 SDKMANAGER ?= sdkmanager
 AVDMANAGER ?= avdmanager
 
+# Read device ID from .adb_device file if it exists and is not empty
+ADB_DEVICE_FILE := .adb_device
+ADB_DEVICE_ID := $(shell cat $(ADB_DEVICE_FILE) 2>/dev/null | tr -d '[:space:]')
+ADB_DEVICE_FLAG := $(if $(ADB_DEVICE_ID),-s $(ADB_DEVICE_ID),)
+
+# Helper to check device configuration
+define check_device
+	@if [ -z "$(ADB_DEVICE_ID)" ]; then \
+		echo ""; \
+		echo "⚠️  No device configured. Contents of .adb_device.dist:"; \
+		echo ""; \
+		cat .adb_device.dist; \
+		echo ""; \
+		exit 1; \
+	fi
+endef
+
 .PHONY: e2e-load-scene
 start:
-	$(ADB) shell am force-stop $(APP_ID)
-	$(ADB) shell pm clear $(APP_ID)
-	$(ADB) shell am start -S -W -n $(APP_ID)/.MainActivity
+	$(call check_device)
+	$(ADB) $(ADB_DEVICE_FLAG) shell am force-stop $(APP_ID)
+	$(ADB) $(ADB_DEVICE_FLAG) shell pm clear $(APP_ID)
+	$(ADB) $(ADB_DEVICE_FLAG) shell am start -S -W -n $(APP_ID)/.MainActivity
 WEB_DIR := web
 WEB_PORT ?= 5173
 AVD_NAME ?= tablet_eink_android_36
@@ -28,9 +46,10 @@ web:
 run: install start
 
 install:
+	$(call check_device)
 	$(MAKE) deps
 	cd $(WEB_DIR) && npm run build -- --mode development
-	adb wait-for-device
+	$(ADB) $(ADB_DEVICE_FLAG) wait-for-device
 	./gradlew installDebug
 
 apk:
@@ -43,7 +62,8 @@ emu:
 	@emulator -avd $(AVD_NAME) &
 
 stop-emulator:
-	$(ADB) emu kill
+	$(call check_device)
+	$(ADB) $(ADB_DEVICE_FLAG) emu kill
 
 create-emulator:
 	$(SDKMANAGER) --install $(AVD_PACKAGE)
@@ -60,4 +80,5 @@ ci:
 	./gradlew assembleDebug
 
 logs:
-	@adb logcat -s DiagrammerWebView NativeBridge
+	$(call check_device)
+	@$(ADB) $(ADB_DEVICE_FLAG) logcat -s DiagrammerWebView NativeBridge
