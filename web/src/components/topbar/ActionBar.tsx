@@ -136,7 +136,7 @@ export function ActionBar({
                   size="sm"
                   className={chromeButtonTone}
                   onClick={onSaveAs}
-                  disabled={nativePresent ? !isDirty : !hasSceneContent}
+                  disabled={!hasSceneContent}
                 >
                   <SaveAllIcon />
                   <span className="hidden sm:inline">{nativePresent ? "Save As" : "Save to…"}</span>
