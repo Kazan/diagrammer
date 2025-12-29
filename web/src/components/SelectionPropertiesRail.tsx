@@ -52,6 +52,8 @@ type Props = {
     key: K,
     value: ExplicitStyleDefaults[K],
   ) => void;
+  /** External signal to close all open flyouts */
+  closeSignal?: number;
 };
 
 const DEFAULT_STROKE = "#0f172a";
@@ -83,11 +85,18 @@ function getCommonValue<T>(
   return first;
 }
 
-export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyleCapture }: Props) {
+export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyleCapture, closeSignal }: Props) {
   const elements = selection?.elements ?? [];
 
   // All hooks must be called unconditionally, before any early return
   const [openKind, setOpenKind] = useState<PropertyKind | null>(null);
+
+  // Close flyouts when external signal changes
+  useEffect(() => {
+    if (closeSignal !== undefined && closeSignal > 0) {
+      setOpenKind(null);
+    }
+  }, [closeSignal]);
 
   const selectedIds = useMemo(
     () => new Set(elements.map((el) => el.id)),
