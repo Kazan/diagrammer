@@ -36,7 +36,7 @@ function detectEinkDevice(): boolean {
 }
 
 // Apply e-ink class to document if detected
-// This enables CSS optimizations for e-ink displays (no shadows, reduced animations)
+// This enables CSS optimizations for e-ink displays (disables backdrop blur)
 if (detectEinkDevice()) {
   document.documentElement.classList.add("eink-device");
   console.info("[Diagrammer] E-ink device detected, applying optimizations");
