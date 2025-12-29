@@ -4,7 +4,6 @@ package com.example.diagrammerapp
 
 import android.annotation.SuppressLint
 import android.app.Activity
-import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -73,13 +72,6 @@ class MainActivity : ComponentActivity() {
         OpenSceneDocumentContract(::pickerInitialUri)
     ) { uri ->
         nativeBridge?.completeDocumentLoad(uri)
-        enterImmersive()
-    }
-
-    private val overwriteDocumentLauncher = registerForActivityResult(
-        OverwriteDocumentContract(::pickerInitialUri)
-    ) { uri ->
-        nativeBridge?.completeDocumentSave(uri)
         enterImmersive()
     }
 
@@ -222,19 +214,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun promptSaveTargetChoice(suggestedName: String) {
-        AlertDialog.Builder(this)
-            .setTitle("Save scene")
-            .setMessage("Create a new file or overwrite an existing one. Overwrite will replace the selected file's contents.")
-            .setPositiveButton("Overwrite existing") { _, _ ->
-                exitImmersive()
-                overwriteDocumentLauncher.launch(SAVE_MIME_TYPES)
-            }
-            .setNegativeButton("Create new") { _, _ ->
-                exitImmersive()
-                createDocumentLauncher.launch(suggestedName)
-            }
-            .setOnCancelListener { enterImmersive() }
-            .show()
+        // Launch the document picker directly. Android's CreateDocument picker allows
+        // users to either type a new filename or select an existing file to overwrite
+        // (with Android's built-in overwrite confirmation).
+        exitImmersive()
+        createDocumentLauncher.launch(suggestedName)
     }
 
     // No upfront directory grant; rely on user-selected locations via picker.
@@ -330,34 +314,5 @@ private class OpenSceneDocumentContract(
     }
 }
 
-/**
- * Contract for opening an existing document with write permissions for overwriting.
- * This is different from OpenDocument because we explicitly need write access.
- */
-private class OverwriteDocumentContract(
-    private val initialUriProvider: () -> Uri?
-) : ActivityResultContract<Array<String>, Uri?>() {
-    override fun createIntent(context: Context, input: Array<String>): Intent {
-        return Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = "*/*"
-            putExtra(Intent.EXTRA_MIME_TYPES, input)
-            putExtra(DocumentsContract.EXTRA_INITIAL_URI, initialUriProvider())
-            // Explicitly request both read and write permissions
-            addFlags(
-                Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
-                    Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
-            )
-        }
-    }
-
-    override fun parseResult(resultCode: Int, intent: Intent?): Uri? {
-        if (resultCode != android.app.Activity.RESULT_OK) return null
-        return intent?.data
-    }
-}
-
 
 private const val KEY_LAST_PICKER_URI = "last_picker_uri"
-private val SAVE_MIME_TYPES = arrayOf("application/json", "application/octet-stream", "*/*")

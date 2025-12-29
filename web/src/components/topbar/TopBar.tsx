@@ -36,6 +36,7 @@ export function TopBar({
   isDirty,
   lastSaved,
   // ActionBar props
+  nativePresent,
   canSave,
   hasSceneContent,
   onOpen,
@@ -68,10 +69,11 @@ export function TopBar({
       aria-label="File toolbar"
     >
       <div className="pointer-events-auto">
-        <FileStatus fileName={fileName} isDirty={isDirty} lastSaved={lastSaved} />
+        <FileStatus fileName={fileName} isDirty={isDirty} lastSaved={lastSaved} nativePresent={nativePresent} />
       </div>
 
       <ActionBar
+        nativePresent={nativePresent}
         canSave={canSave}
         hasSceneContent={hasSceneContent}
         onOpen={onOpen}

@@ -26,6 +26,7 @@ import { useSceneHistory } from "./hooks/useSceneHistory";
 import { useZoomControls } from "./hooks/useZoomControls";
 import { useImageInsertion } from "./hooks/useImageInsertion";
 import { useExplicitStyleDefaults } from "./hooks/useExplicitStyleDefaults";
+import { useWebFallbackActions } from "./hooks/useWebFallbackActions";
 import type { NativeFileHandle } from "./native-bridge";
 import { loadLocalSceneEntries, persistLocalSceneEntries, type LocalSceneEntry } from "./local-scenes";
 
@@ -132,6 +133,25 @@ export default function App() {
   });
 
   const { captureStyleChange } = useExplicitStyleDefaults({ api });
+
+  const {
+    fileInputRef: sceneFileInputRef,
+    openFileWithBrowser,
+    handleFileInputChange: handleSceneFileInputChange,
+    saveSceneWithPicker,
+    downloadScene,
+    downloadDataUrl,
+  } = useWebFallbackActions({
+    api,
+    setStatus,
+    setCurrentFileName,
+    setIsDirty,
+    setHasSceneContent,
+    suppressNextDirtyRef,
+    prevSceneSigRef,
+    prevNonEmptySceneRef,
+    resetHistoryFromCurrentScene,
+  });
 
   useEffect(() => {
     // Preserve localStorage for browser fallback; clear only in native contexts.
@@ -278,28 +298,14 @@ export default function App() {
         return;
       }
 
-      try {
-        const name = window.prompt("Save local scene as", currentFileName || "Untitled")?.trim();
-        if (!name) {
-          setStatus({ text: "Save cancelled", tone: "warn" });
-          return;
-        }
-        const entries = loadLocalEntries();
-        const nextEntries = entries.filter((e) => e.name !== name);
-        nextEntries.push({ name, scene: envelope.json, updated: Date.now() });
-        persistLocalEntries(nextEntries);
-        window.localStorage.setItem(LOCAL_SCENE_KEY, envelope.json);
-        setStatus({ text: `Saved ${name} locally`, tone: "ok" });
-        setIsDirty(false);
-        setCurrentFileName(name);
-      } catch (_err) {
-        setStatus({ text: "Save failed (storage)", tone: "err" });
-      }
+      // Browser fallback: download the scene file
+      console.log("[save] falling back to browser download");
+      downloadScene(envelope.json, currentFileName || "Untitled");
     } catch (err) {
       console.error("[save] failed:", err);
       setStatus({ text: `Save failed: ${String(err)}`, tone: "err" });
     }
-  }, [LOCAL_SCENE_KEY, api, buildSceneEnvelope, currentFileName, hasCurrentFileRef, loadLocalEntries, nativeBridge, persistLocalEntries, setCurrentFileName, setIsDirty, setStatus]);
+  }, [api, buildSceneEnvelope, currentFileName, downloadScene, hasCurrentFileRef, nativeBridge, setStatus]);
 
   const handleSaveNow = useCallback(() => {
     void performSave();
@@ -329,24 +335,17 @@ export default function App() {
         return;
       }
 
-      const name = window.prompt("Save local scene as", currentFileName || "Untitled")?.trim();
-      if (!name) {
-        setStatus({ text: "Save cancelled", tone: "warn" });
-        return;
+      // Browser fallback: use File System Access API or download
+      console.log("[saveToDocument] falling back to browser file picker");
+      const savedName = await saveSceneWithPicker(envelope.json, currentFileName || "Untitled");
+      if (savedName) {
+        setCurrentFileName(savedName);
       }
-      const entries = loadLocalEntries();
-      const nextEntries = entries.filter((e) => e.name !== name);
-      nextEntries.push({ name, scene: envelope.json, updated: Date.now() });
-      persistLocalEntries(nextEntries);
-      window.localStorage.setItem(LOCAL_SCENE_KEY, envelope.json);
-      setStatus({ text: `Saved ${name} locally`, tone: "ok" });
-      setIsDirty(false);
-      setCurrentFileName(name);
     } catch (err) {
       console.error("[saveToDocument] failed:", err);
       setStatus({ text: `Save failed: ${String(err)}`, tone: "err" });
     }
-  }, [LOCAL_SCENE_KEY, api, buildSceneEnvelope, currentFileName, hasCurrentFileRef, loadLocalEntries, nativeBridge, persistLocalEntries, setCurrentFileName, setIsDirty, setStatus]);
+  }, [api, buildSceneEnvelope, currentFileName, hasCurrentFileRef, nativeBridge, saveSceneWithPicker, setCurrentFileName, setStatus]);
 
   const handleCopySource = useCallback(async () => {
     if (!api) {
@@ -384,7 +383,7 @@ export default function App() {
   }, [api, buildSceneEnvelope, currentFileName, setStatus]);
 
   const handleOpenFromOverlay = useCallback(() => {
-    // Prefer native picker when available; otherwise use local storage fallback.
+    // Prefer native picker when available; otherwise use browser file picker fallback.
     if (nativePresent) {
       const opened = handleOpenWithNativePicker();
       if (!opened) {
@@ -395,11 +394,9 @@ export default function App() {
       }
       return;
     }
-    const localOpened = handleOpenLocalFallback();
-    if (!localOpened) {
-      setStatus({ text: "No local scenes found", tone: "warn" });
-    }
-  }, [handleOpenLocalFallback, handleOpenWithNativePicker, nativePresent, setStatus]);
+    // When no native bridge, use browser file upload
+    openFileWithBrowser();
+  }, [handleOpenLocalFallback, handleOpenWithNativePicker, nativePresent, openFileWithBrowser, setStatus]);
 
   const handleSelectionChange = useCallback(
     ({ elements, viewportBounds }: { elements: ExcalidrawElement[]; viewportBounds: SelectionInfo["viewportBounds"] }) => {
@@ -548,6 +545,9 @@ export default function App() {
     nativeBridge,
     setStatus,
     setExporting,
+    // Pass browser fallback for when native bridge is unavailable
+    nativePresent ? undefined : downloadDataUrl,
+    currentFileName,
   );
 
   const handleClear = useCallback(() => {
@@ -594,6 +594,15 @@ export default function App() {
         style={{ display: "none" }}
         onChange={handleImageInputChange}
         aria-label="Insert image"
+      />
+      {/* Hidden file input for browser-based scene file upload (fallback when native bridge unavailable) */}
+      <input
+        ref={sceneFileInputRef}
+        type="file"
+        accept=".excalidraw,application/json"
+        style={{ display: "none" }}
+        onChange={handleSceneFileInputChange}
+        aria-label="Open scene file"
       />
       <div className="excalidraw-container">
         <Excalidraw
