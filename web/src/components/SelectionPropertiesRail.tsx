@@ -205,14 +205,17 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
   if (!elements.length) return null;
 
   const isMultiSelect = elements.length > 1;
+  const isFrameOnly = elements.length === 1 && (elements[0].type === "frame" || elements[0].type === "magicframe");
   const hasFillCapable = elements.some((el) => (!LINE_LIKE_TYPES.has(el.type) && el.type !== "text") || isClosedPolyline(el));
-  const hasStyleControls = elements.some((el) => el.type !== "text" && el.type !== "image");
+  const hasStyleControls = elements.some((el) => el.type !== "text" && el.type !== "image" && el.type !== "frame" && el.type !== "magicframe");
   const hasArrowControls = elements.some((el) => el.type === "arrow" || el.type === "line");
   const hasTextControls = elements.some((el) =>
     el.type === "text" || el.boundElements?.some((b) => b.type === "text")
   );
-  const showStrokeColorButton = !selectionComposition.isTextOnly;
+  const showStrokeColorButton = !selectionComposition.isTextOnly && !isFrameOnly;
   const showTextColorButton = selectionComposition.hasDirectText || selectionComposition.hasContainersWithText;
+  const showFillColorButton = hasFillCapable && !hasImage && !isFrameOnly;
+  const hasAnyPropertyButtons = showStrokeColorButton || showFillColorButton || hasStyleControls || hasArrowControls || hasTextControls || (showTextColorButton && !hasImage);
 
   // Handlers
   const applyToSelection = (mutate: (el: ExcalidrawElement) => ExcalidrawElement) => {
@@ -551,8 +554,7 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
 
   return (
     <ToolRail position="right" showDivider aria-label="Selection properties">
-      {/* Property buttons with popovers */}
-      <RailSection columns={1}>
+      {/* Property buttons with popovers */}      {hasAnyPropertyButtons && (      <RailSection columns={1}>
         {/* Stroke color */}
         {showStrokeColorButton && !hasImage && (
           <RailPopoverButton
@@ -588,7 +590,7 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
         )}
 
         {/* Fill color */}
-        {hasFillCapable && !hasImage && (
+        {showFillColorButton && (
           <RailPopoverButton
             open={openKind === "background"}
             onOpenChange={(open) => setOpenKind(open ? "background" : null)}
@@ -698,8 +700,9 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
           </RailPopoverButton>
         )}
       </RailSection>
+      )}
 
-      <RailSeparator />
+      {hasAnyPropertyButtons && <RailSeparator />}
 
       {/* Action buttons */}
       <RailSection columns={1}>
