@@ -456,7 +456,10 @@ export default function App() {
 
   useEffect(() => {
     if (!status) return undefined;
-    const id = window.setTimeout(() => setStatus(null), 2400);
+    // Use longer timeout for eInk devices (slow screen refresh)
+    const isEink = document.documentElement.classList.contains("eink-device");
+    const timeout = isEink ? 6000 : 2400;
+    const id = window.setTimeout(() => setStatus(null), timeout);
     return () => window.clearTimeout(id);
   }, [status]);
 
