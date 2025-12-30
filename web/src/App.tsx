@@ -56,6 +56,7 @@ export default function App() {
   const [exporting, setExporting] = useState<"png" | "svg" | null>(null);
   const [activeTool, setActiveTool] = useState<ToolType>("selection");
   const [arrowType, setArrowType] = useState<ArrowType>("sharp");
+  const [isToolLocked, setIsToolLocked] = useState(false);
   const [currentFileName, setCurrentFileName] = useState(initialStoredName || "Unsaved");
   const [isDirty, setIsDirty] = useState(false);
   const [hasSceneContent, setHasSceneContent] = useState(false);
@@ -595,6 +596,7 @@ export default function App() {
   const handleSelectTool = (tool: ToolType) => {
     if (tool === "image") {
       setActiveTool("image");
+      setIsToolLocked(false);
       startImageInsertion();
       return;
     }
@@ -607,8 +609,16 @@ export default function App() {
       });
       return;
     }
+    // Clear lock when switching to a different tool
+    setIsToolLocked(false);
     setActiveTool(tool);
-    apiRef.current?.setActiveTool({ type: tool });
+    apiRef.current?.setActiveTool({ type: tool, locked: false });
+  };
+
+  const handleLockTool = (tool: ToolType) => {
+    setActiveTool(tool);
+    setIsToolLocked(true);
+    apiRef.current?.setActiveTool({ type: tool, locked: true });
   };
 
   return (
@@ -666,7 +676,9 @@ export default function App() {
         hasSceneContent={hasSceneContent}
         activeTool={activeTool}
         arrowType={arrowType}
+        isToolLocked={isToolLocked}
         onSelectTool={handleSelectTool}
+        onLockTool={handleLockTool}
         nativePresent={nativePresent}
         lastSaved={lastSaved}
         status={status}

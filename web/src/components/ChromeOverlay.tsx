@@ -10,7 +10,9 @@ type Props = {
   isDirty: boolean;
   activeTool: ToolType;
   arrowType?: ArrowType;
+  isToolLocked?: boolean;
   onSelectTool: (tool: ToolType) => void;
+  onLockTool?: (tool: ToolType) => void;
   nativePresent: boolean;
   lastSaved: Date | null;
   status: StatusMessage | null;
@@ -41,7 +43,9 @@ export function ChromeOverlay({
   isDirty,
   activeTool,
   arrowType,
+  isToolLocked,
   onSelectTool,
+  onLockTool,
   nativePresent,
   lastSaved,
   status,
@@ -98,7 +102,13 @@ export function ChromeOverlay({
         </div>
       ) : null}
 
-      <CustomToolbar activeTool={activeTool} arrowType={arrowType} onSelect={onSelectTool} />
+      <CustomToolbar
+        activeTool={activeTool}
+        arrowType={arrowType}
+        isToolLocked={isToolLocked}
+        onSelect={onSelectTool}
+        onLockTool={onLockTool}
+      />
       <NativeStatus present={nativePresent} lastSaved={lastSaved} status={status} />
       <ZoomControls
         zoom={zoom}

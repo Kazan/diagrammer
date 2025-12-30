@@ -1,4 +1,4 @@
-import type React from "react";
+import { useRef, useCallback } from "react";
 import {
   MousePointer2,
   Hand,
@@ -39,10 +39,23 @@ export type ToolType =
 
 export type ArrowType = "sharp" | "round" | "elbow";
 
+/** Tools that can be locked (drawing tools) */
+const LOCKABLE_TOOLS: Set<ToolType> = new Set([
+  "rectangle",
+  "diamond",
+  "ellipse",
+  "arrow",
+  "line",
+  "freedraw",
+  "text",
+]);
+
 type Props = {
   activeTool: ToolType;
   arrowType?: ArrowType;
+  isToolLocked?: boolean;
   onSelect: (tool: ToolType) => void;
+  onLockTool?: (tool: ToolType) => void;
 };
 
 /**
@@ -106,15 +119,59 @@ const TOOL_SECTIONS: ToolSection[] = [
   },
 ];
 
-export function CustomToolbar({ activeTool, arrowType = "sharp", onSelect }: Props) {
+export function CustomToolbar({
+  activeTool,
+  arrowType = "sharp",
+  isToolLocked = false,
+  onSelect,
+  onLockTool,
+}: Props) {
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressTriggeredRef = useRef(false);
+  const LONG_PRESS_DURATION = 500; // ms
+
   // Determine the icon for the arrow tool based on current arrow type
   const getArrowIcon = () => (arrowType === "elbow" ? ElbowArrowIcon : ArrowUpRight);
   const getArrowLabel = () => (arrowType === "elbow" ? "Elbow Arrow" : "Arrow");
 
-  const handleToolClick = (toolId: ToolType) => {
-    // Always call onSelect - let parent decide what to do (e.g., toggle arrow type)
-    onSelect(toolId);
-  };
+  const clearLongPressTimer = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
+
+  const handlePointerDown = useCallback(
+    (toolId: ToolType) => {
+      if (!LOCKABLE_TOOLS.has(toolId) || !onLockTool) return;
+
+      longPressTriggeredRef.current = false;
+      longPressTimerRef.current = setTimeout(() => {
+        longPressTriggeredRef.current = true;
+        onLockTool(toolId);
+      }, LONG_PRESS_DURATION);
+    },
+    [onLockTool]
+  );
+
+  const handlePointerUp = useCallback(
+    (toolId: ToolType) => {
+      clearLongPressTimer();
+      // If long press was triggered, don't fire regular click
+      if (longPressTriggeredRef.current) {
+        longPressTriggeredRef.current = false;
+        return;
+      }
+      // Regular tap - select tool
+      onSelect(toolId);
+    },
+    [clearLongPressTimer, onSelect]
+  );
+
+  const handlePointerLeave = useCallback(() => {
+    clearLongPressTimer();
+    longPressTriggeredRef.current = false;
+  }, [clearLongPressTimer]);
 
   return (
     <ToolRail position="left" aria-label="Drawing tools">
@@ -125,13 +182,20 @@ export function CustomToolbar({ activeTool, arrowType = "sharp", onSelect }: Pro
               // Use dynamic icon for arrow tool
               const Icon = tool.id === "arrow" ? getArrowIcon() : tool.Icon;
               const label = tool.id === "arrow" ? getArrowLabel() : tool.label;
+              const isActive = activeTool === tool.id;
+              const showLocked = isActive && isToolLocked && LOCKABLE_TOOLS.has(tool.id);
 
               return (
                 <RailToggleItem
                   key={tool.id}
                   value={tool.id}
-                  aria-label={label}
-                  onClick={() => handleToolClick(tool.id)}
+                  aria-label={showLocked ? `${label} (locked)` : label}
+                  data-locked={showLocked || undefined}
+                  className={showLocked ? "ring-2 ring-[hsl(var(--accent))] ring-offset-1 ring-offset-[var(--btn-pressed-bg)]" : undefined}
+                  onPointerDown={() => handlePointerDown(tool.id)}
+                  onPointerUp={() => handlePointerUp(tool.id)}
+                  onPointerLeave={handlePointerLeave}
+                  onPointerCancel={handlePointerLeave}
                 >
                   <Icon aria-hidden="true" />
                 </RailToggleItem>
