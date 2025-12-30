@@ -209,6 +209,28 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
   }, [selectedGroupIds, sharedGroupIds]);
   const isGroupedSelection = groupedSelectionIds.length > 0;
 
+  // Determine if ungroup should be available:
+  // - All selected elements share exactly one outermost group (single group selected), OR
+  // - All selected elements are themselves groups (each element has groupIds and represents a distinct group)
+  const canUngroup = useMemo(() => {
+    if (!elements.length) return false;
+
+    // Case 1: All elements share a common outermost groupId (they form a single group)
+    // This is true when sharedGroupIds has at least one entry
+    if (sharedGroupIds.length > 0) return true;
+
+    // Case 2: Every element has at least one groupId (each is part of some group)
+    // This allows ungrouping when selecting multiple distinct groups
+    const allHaveGroups = elements.every((el) => (el.groupIds ?? []).length > 0);
+    if (allHaveGroups && elements.length > 1) {
+      // Check if they're actually distinct groups (not sharing the same group)
+      // If they shared a group, sharedGroupIds would be non-empty
+      return true;
+    }
+
+    return false;
+  }, [elements, sharedGroupIds]);
+
   // Close flyouts that are not applicable
   const hasImage = elements.some((el) => el.type === "image");
   const hasLinearElements = elements.some((el) => el.type === "arrow" || el.type === "line");
@@ -261,13 +283,16 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
   const handleUngroupSelection = () => {
     if (!api || !elements.length) return;
     const now = Date.now();
-    const groupsToRemove = groupedSelectionIds;
-    if (!groupsToRemove.length) return;
 
+    // Only remove one level of grouping at a time
+    // For each element, remove only its outermost groupId
     const nextElements = api.getSceneElements().map((el) => {
       if (!selectedIds.has(el.id)) return el;
-      const nextGroupIds = (el.groupIds ?? []).filter((groupId) => !groupsToRemove.includes(groupId));
-      if (nextGroupIds.length === (el.groupIds ?? []).length) return el;
+      const currentGroupIds = el.groupIds ?? [];
+      if (currentGroupIds.length === 0) return el;
+
+      // Remove the last (outermost) groupId only
+      const nextGroupIds = currentGroupIds.slice(0, -1);
       return stampVersion({ ...el, groupIds: nextGroupIds }, now);
     });
 
@@ -739,10 +764,9 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
         <div className="flex flex-col gap-2">
           <div className="text-[13px] font-bold text-slate-900">Actions</div>
           <div className="grid grid-cols-1 gap-2" role="group" aria-label="Grouping">
-            {isGroupedSelection ? (
+            <ArrangeTile Icon={GroupIcon} label="Group selection" testId="arrange-group" onClick={handleGroupSelection} />
+            {canUngroup && (
               <ArrangeTile Icon={Ungroup} label="Ungroup selection" testId="arrange-ungroup" onClick={handleUngroupSelection} />
-            ) : (
-              <ArrangeTile Icon={GroupIcon} label="Group selection" testId="arrange-group" onClick={handleGroupSelection} />
             )}
           </div>
         </div>
