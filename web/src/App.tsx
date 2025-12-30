@@ -10,7 +10,7 @@ import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import "@excalidraw/excalidraw/index.css";
 import { ChromeOverlay } from "./components/ChromeOverlay";
-import { type ToolType } from "./components/CustomToolbar";
+import { type ToolType, type ArrowType } from "./components/CustomToolbar";
 import { SelectionPropertiesRail } from "./components/SelectionPropertiesRail";
 import type { SelectionInfo } from "./components/SelectionFlyout";
 import { type StatusMessage } from "./components/NativeStatus";
@@ -55,6 +55,7 @@ export default function App() {
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [exporting, setExporting] = useState<"png" | "svg" | null>(null);
   const [activeTool, setActiveTool] = useState<ToolType>("selection");
+  const [arrowType, setArrowType] = useState<ArrowType>("sharp");
   const [currentFileName, setCurrentFileName] = useState(initialStoredName || "Unsaved");
   const [isDirty, setIsDirty] = useState(false);
   const [hasSceneContent, setHasSceneContent] = useState(false);
@@ -597,6 +598,15 @@ export default function App() {
       startImageInsertion();
       return;
     }
+    // Toggle arrow type when tapping arrow while already active
+    if (tool === "arrow" && activeTool === "arrow") {
+      const nextArrowType: ArrowType = arrowType === "elbow" ? "sharp" : "elbow";
+      setArrowType(nextArrowType);
+      apiRef.current?.updateScene({
+        appState: { currentItemArrowType: nextArrowType },
+      });
+      return;
+    }
     setActiveTool(tool);
     apiRef.current?.setActiveTool({ type: tool });
   };
@@ -655,6 +665,7 @@ export default function App() {
         canSave={hasCurrentFileRef.current}
         hasSceneContent={hasSceneContent}
         activeTool={activeTool}
+        arrowType={arrowType}
         onSelectTool={handleSelectTool}
         nativePresent={nativePresent}
         lastSaved={lastSaved}
