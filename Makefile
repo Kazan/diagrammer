@@ -44,7 +44,7 @@ run:
 	cd $(WEB_DIR) && npm run build -- --mode development
 	$(ADB) -s emulator-5554 wait-for-device
 	$(ADB) -s emulator-5554 uninstall $(APP_ID) || true
-	./gradlew installDebug -PandroidSerial=emulator-5554
+	ANDROID_SERIAL=emulator-5554 ./gradlew installDebug
 	$(ADB) -s emulator-5554 shell am start -S -W -n $(APP_ID)/.MainActivity
 
 # Deploy debug build to configured device
@@ -54,7 +54,7 @@ debug:
 	cd $(WEB_DIR) && npm run build -- --mode development
 	$(ADB) $(ADB_DEVICE_FLAG) wait-for-device
 	$(ADB) $(ADB_DEVICE_FLAG) uninstall $(APP_ID) || true
-	./gradlew installDebug -PandroidSerial=$(ADB_DEVICE_ID)
+	ANDROID_SERIAL=$(ADB_DEVICE_ID) ./gradlew installDebug
 	$(ADB) $(ADB_DEVICE_FLAG) shell am start -S -W -n $(APP_ID)/.MainActivity
 
 # Deploy production build to configured device
@@ -64,7 +64,7 @@ deploy:
 	cd $(WEB_DIR) && npm run build
 	$(ADB) $(ADB_DEVICE_FLAG) wait-for-device
 	$(ADB) $(ADB_DEVICE_FLAG) uninstall $(APP_ID) || true
-	./gradlew installRelease -PandroidSerial=$(ADB_DEVICE_ID)
+	ANDROID_SERIAL=$(ADB_DEVICE_ID) ./gradlew installRelease
 	$(ADB) $(ADB_DEVICE_FLAG) shell am start -S -W -n $(APP_ID)/.MainActivity
 
 apk:

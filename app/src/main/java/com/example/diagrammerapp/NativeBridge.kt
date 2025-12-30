@@ -53,8 +53,52 @@ internal class NativeBridge(
     init {
         val storedUri = prefs.getString("current_uri", null)
         val storedName = prefs.getString("current_name", null)
-        currentDocumentUri = storedUri?.let { Uri.parse(it) }
-        currentDocumentName = storedName
+        // Only restore URI if we still have permission to access it
+        val parsedUri = storedUri?.let { Uri.parse(it) }
+        if (parsedUri != null && hasUriPermission(parsedUri)) {
+            currentDocumentUri = parsedUri
+            currentDocumentName = storedName
+            Log.d("NativeBridge", "init: restored uri=$parsedUri, name=$storedName")
+        } else if (parsedUri != null) {
+            Log.w("NativeBridge", "init: stored uri no longer accessible, clearing: $parsedUri")
+            persistCurrentFile(null, null)
+        }
+    }
+
+    /**
+     * Check if we have persistable read/write permission for a URI.
+     * This is critical on Boox e-ink devices where permissions are strictly enforced.
+     */
+    private fun hasUriPermission(uri: Uri): Boolean {
+        return try {
+            val permissions = context.contentResolver.persistedUriPermissions
+            permissions.any { perm ->
+                perm.uri == uri && perm.isReadPermission && perm.isWritePermission
+            }
+        } catch (e: Exception) {
+            Log.w("NativeBridge", "hasUriPermission: check failed for $uri: ${e.message}")
+            false
+        }
+    }
+
+    /**
+     * Verify we can actually write to a URI by checking permissions and attempting
+     * to open it. Returns true if writable, false otherwise.
+     */
+    private fun canWriteToUri(uri: Uri): Boolean {
+        // First check if we have persisted permission
+        if (!hasUriPermission(uri)) {
+            Log.w("NativeBridge", "canWriteToUri: no persisted permission for $uri")
+            return false
+        }
+        // Try to verify we can actually open it for writing
+        return try {
+            context.contentResolver.openOutputStream(uri, "wa")?.close()
+            true
+        } catch (e: Exception) {
+            Log.w("NativeBridge", "canWriteToUri: cannot open $uri for write: ${e.message}")
+            false
+        }
     }
 
     private fun getDisplayName(uri: Uri): String? {
@@ -252,7 +296,8 @@ internal class NativeBridge(
             // Try write modes in order of preference:
             // 1. "wt" (write-truncate) - most compatible with SAF
             // 2. "w" (write) - fallback
-            // 3. default mode - last resort
+            // 3. "rwt" (read-write-truncate) - for some Boox devices
+            // 4. default mode - last resort
             val stream = runCatching {
                 context.contentResolver.openOutputStream(uri, "wt")
             }.onFailure {
@@ -262,13 +307,31 @@ internal class NativeBridge(
             }.onFailure {
                 Log.w("NativeBridge", "$source: 'w' mode failed: ${it.message}")
             }.getOrNull() ?: runCatching {
+                // Some Boox devices need "rwt" mode for proper truncation
+                context.contentResolver.openOutputStream(uri, "rwt")
+            }.onFailure {
+                Log.w("NativeBridge", "$source: 'rwt' mode failed: ${it.message}")
+            }.getOrNull() ?: runCatching {
                 context.contentResolver.openOutputStream(uri)
             }.onFailure {
                 Log.e("NativeBridge", "$source: default mode failed: ${it.message}")
             }.getOrNull()
 
             if (stream == null) {
-                error("No output stream available for $uri - check storage permissions")
+                // Check if this is a permission issue
+                val hasPermission = hasUriPermission(uri)
+                val errorMsg = if (!hasPermission) {
+                    "No output stream available for $uri - storage permissions expired. Please use Save As to select a new location."
+                } else {
+                    "No output stream available for $uri - check storage permissions"
+                }
+                // Clear the current document if permission was lost
+                if (!hasPermission && currentDocumentUri == uri) {
+                    currentDocumentUri = null
+                    currentDocumentName = null
+                    persistCurrentFile(null, null)
+                }
+                error(errorMsg)
             }
 
             stream.use {
@@ -318,7 +381,18 @@ internal class NativeBridge(
     fun persistSceneToCurrentDocument(envelopeJson: String) {
         val target = currentDocumentUri
         if (target == null) {
-            notifyJs("onSaveComplete", false, "No current file", null)
+            Log.w("NativeBridge", "persistSceneToCurrentDocument: no current file, prompting picker")
+            notifyJs("onSaveComplete", false, "No current file - use Save As", null)
+            return
+        }
+        // Verify permission before attempting write (critical for Boox e-ink devices)
+        if (!hasUriPermission(target)) {
+            Log.w("NativeBridge", "persistSceneToCurrentDocument: permission lost for $target")
+            // Clear the stored URI since permission is gone
+            currentDocumentUri = null
+            currentDocumentName = null
+            persistCurrentFile(null, null)
+            notifyJs("onSaveComplete", false, "File permission expired - use Save As to select a new location", null)
             return
         }
         ioScope.launch {
@@ -357,7 +431,17 @@ internal class NativeBridge(
     fun saveSceneToCurrentDocument(json: String) {
         val target = currentDocumentUri
         if (target == null) {
-            notifyJs("onSaveComplete", false, "No current file", null)
+            Log.w("NativeBridge", "saveSceneToCurrentDocument: no current file")
+            notifyJs("onSaveComplete", false, "No current file - use Save As", null)
+            return
+        }
+        // Verify permission before attempting write (critical for Boox e-ink devices)
+        if (!hasUriPermission(target)) {
+            Log.w("NativeBridge", "saveSceneToCurrentDocument: permission lost for $target")
+            currentDocumentUri = null
+            currentDocumentName = null
+            persistCurrentFile(null, null)
+            notifyJs("onSaveComplete", false, "File permission expired - use Save As to select a new location", null)
             return
         }
         ioScope.launch {
