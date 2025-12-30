@@ -28,6 +28,7 @@ import { useZoomControls } from "./hooks/useZoomControls";
 import { useImageInsertion } from "./hooks/useImageInsertion";
 import { useExplicitStyleDefaults } from "./hooks/useExplicitStyleDefaults";
 import { useWebFallbackActions } from "./hooks/useWebFallbackActions";
+import { useMultiPointFinalize } from "./hooks/useMultiPointFinalize";
 import type { NativeFileHandle } from "./native-bridge";
 import { loadLocalSceneEntries, persistLocalSceneEntries, type LocalSceneEntry } from "./local-scenes";
 
@@ -128,6 +129,8 @@ export default function App() {
     apiRef,
     setStatus,
   });
+
+  const { isDrawingMultiPoint, finalizeMultiPoint } = useMultiPointFinalize(api);
 
   const { imageInputRef, handleImageInputChange, startImageInsertion } = useImageInsertion({
     api,
@@ -700,6 +703,8 @@ export default function App() {
         onZoomToContent={handleZoomToContent}
         onUndo={handleUndo}
         canUndo={canUndo}
+        isDrawingMultiPoint={isDrawingMultiPoint}
+        onFinalizeMultiPoint={finalizeMultiPoint}
       />
     </div>
   );
