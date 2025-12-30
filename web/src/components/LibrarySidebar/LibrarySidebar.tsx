@@ -135,8 +135,16 @@ export function LibrarySidebar({
     (elements: readonly ExcalidrawElement[]) => {
       if (elements.length === 0) return;
       personalLibrary.addItem(elements);
+
+      // Deselect elements on canvas so the preview disappears
+      if (excalidrawAPI) {
+        excalidrawAPI.updateScene({
+          appState: { selectedElementIds: {} },
+        });
+      }
+      setSelectedElements([]);
     },
-    [personalLibrary]
+    [personalLibrary, excalidrawAPI]
   );
 
   // Toggle sidebar
