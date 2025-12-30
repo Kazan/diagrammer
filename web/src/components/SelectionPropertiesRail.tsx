@@ -763,7 +763,7 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
       {isMultiSelect && (
         <div className="flex flex-col gap-2">
           <div className="text-[13px] font-bold text-slate-900">Actions</div>
-          <div className="grid grid-cols-1 gap-2" role="group" aria-label="Grouping">
+          <div className="grid grid-cols-2 gap-2" role="group" aria-label="Grouping">
             <ArrangeTile Icon={GroupIcon} label="Group selection" testId="arrange-group" onClick={handleGroupSelection} />
             {canUngroup && (
               <ArrangeTile Icon={Ungroup} label="Ungroup selection" testId="arrange-ungroup" onClick={handleUngroupSelection} />
