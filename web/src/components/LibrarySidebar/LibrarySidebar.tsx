@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { XIcon, SearchIcon } from "lucide-react";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import { cn } from "@/lib/utils";
 import type { LibraryItem, LibrarySidebarConfig, LibraryCategory } from "./types";
 import { loadAllLibraries } from "./loader";
@@ -8,6 +9,8 @@ import { useLibrarySearch } from "./useLibrarySearch";
 import { insertLibraryItem } from "./insertLibraryItem";
 import { LibrarySection } from "./LibrarySection";
 import { LibraryTrigger } from "./LibraryTrigger";
+import { PersonalLibrarySection } from "./PersonalLibrarySection";
+import { usePersonalLibrary } from "./usePersonalLibrary";
 
 interface LibrarySidebarProps {
   excalidrawAPI: ExcalidrawImperativeAPI | null;
@@ -34,6 +37,42 @@ export function LibrarySidebar({
       return null;
     }
   });
+
+  // Personal library hook
+  const personalLibrary = usePersonalLibrary();
+
+  // Track selected elements from the canvas
+  const [selectedElements, setSelectedElements] = useState<readonly ExcalidrawElement[]>([]);
+
+  // Update selected elements when sidebar opens or API changes
+  useEffect(() => {
+    if (!excalidrawAPI || !isOpen) {
+      setSelectedElements([]);
+      return;
+    }
+
+    // Get initial selection
+    const appState = excalidrawAPI.getAppState();
+    const elements = excalidrawAPI.getSceneElements();
+    const selected = elements.filter(
+      (el) => appState.selectedElementIds[el.id] && !el.isDeleted
+    );
+    setSelectedElements(selected);
+
+    // Subscribe to state changes to track selection
+    // We re-check on each re-render cycle when open
+    const interval = setInterval(() => {
+      if (!excalidrawAPI) return;
+      const currentAppState = excalidrawAPI.getAppState();
+      const currentElements = excalidrawAPI.getSceneElements();
+      const currentSelected = currentElements.filter(
+        (el) => currentAppState.selectedElementIds[el.id] && !el.isDeleted
+      );
+      setSelectedElements(currentSelected);
+    }, 200);
+
+    return () => clearInterval(interval);
+  }, [excalidrawAPI, isOpen]);
 
   // Persist last expanded section
   const handleSectionToggle = useCallback((categoryId: string, isExpanded: boolean) => {
@@ -91,6 +130,23 @@ export function LibrarySidebar({
     [excalidrawAPI]
   );
 
+  // Handle adding selection to personal library
+  const handleAddToPersonalLibrary = useCallback(
+    (elements: readonly ExcalidrawElement[]) => {
+      if (elements.length === 0) return;
+      personalLibrary.addItem(elements);
+
+      // Deselect elements on canvas so the preview disappears
+      if (excalidrawAPI) {
+        excalidrawAPI.updateScene({
+          appState: { selectedElementIds: {} },
+        });
+      }
+      setSelectedElements([]);
+    },
+    [personalLibrary, excalidrawAPI]
+  );
+
   // Toggle sidebar
   const toggleSidebar = useCallback(() => {
     setIsOpen((prev) => !prev);
@@ -130,7 +186,7 @@ export function LibrarySidebar({
         {/* Header */}
         <div className="flex items-center justify-between gap-3 p-4 border-b border-[var(--flyout-item-border)]">
           <h2 className="text-base font-semibold text-[var(--flyout-text)]">
-            Library
+            Libraries
           </h2>
           <button
             type="button"
@@ -207,7 +263,7 @@ export function LibrarySidebar({
                 Retry
               </button>
             </div>
-          ) : filteredLibraries.length === 0 ? (
+          ) : filteredLibraries.length === 0 && personalLibrary.isEmpty && selectedElements.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <div className="text-[var(--muted-text)] text-sm">
                 {isSearching ? "No items found" : "No libraries available"}
@@ -224,6 +280,19 @@ export function LibrarySidebar({
             </div>
           ) : (
             <div className="space-y-2">
+              {/* Personal Library section - always at top */}
+              <PersonalLibrarySection
+                items={personalLibrary.items}
+                columns={columns}
+                itemSize={itemSize}
+                onItemClick={handleItemClick}
+                onAddItem={handleAddToPersonalLibrary}
+                onRemoveItem={personalLibrary.removeItem}
+                selectedElements={selectedElements}
+                defaultOpen={lastExpandedId === "personal" || selectedElements.length > 0}
+                onToggle={(isExpanded) => handleSectionToggle("personal", isExpanded)}
+              />
+              {/* Other library sections */}
               {filteredLibraries.map((category) => (
                 <LibrarySection
                   key={category.id}

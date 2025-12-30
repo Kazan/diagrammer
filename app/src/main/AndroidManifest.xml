@@ -9,6 +9,16 @@
         android:maxSdkVersion="29"
         tools:ignore="ScopedStorage" />
 
+    <!--
+        MANAGE_EXTERNAL_STORAGE is NOT requested by default, but declaring it allows
+        users on devices like Boox Nova (Android 11) to manually grant "All files access"
+        through Settings > Apps > Diagrammer > Permissions if they experience persistent
+        storage issues with the standard SAF (Storage Access Framework) picker.
+        This is optional and the app works fine without it using the document picker.
+    -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
+
     <application
         android:name=".DiagrammerApp"
         android:allowBackup="true"
