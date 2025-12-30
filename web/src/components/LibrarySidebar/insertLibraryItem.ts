@@ -25,6 +25,35 @@ const CaptureUpdateAction = {
 };
 
 /**
+ * Groups elements together so they act as one unit when inserted.
+ * If already a single element or already grouped, returns as-is.
+ */
+function groupElementsIfNeeded(elements: ExcalidrawElement[]): ExcalidrawElement[] {
+  if (elements.length <= 1) return elements;
+
+  // Check if all elements already share a common groupId
+  const existingGroupIds = elements
+    .flatMap((el) => el.groupIds || [])
+    .filter((id, i, arr) => arr.indexOf(id) === i);
+
+  // If there's already a common group that contains all elements, no need to add another
+  const allShareGroup = existingGroupIds.some((gid) =>
+    elements.every((el) => el.groupIds?.includes(gid))
+  );
+
+  if (allShareGroup) {
+    return elements;
+  }
+
+  // Create a new group ID and add it to all elements
+  const newGroupId = randomId();
+  return elements.map((el) => ({
+    ...el,
+    groupIds: [...(el.groupIds || []), newGroupId],
+  })) as ExcalidrawElement[];
+}
+
+/**
  * Regenerates IDs for elements and updates internal references.
  * Returns new elements with fresh IDs while preserving internal relationships.
  * Uses restoreElements to ensure all element properties are properly normalized.
@@ -180,7 +209,7 @@ function getViewportCenter(api: ExcalidrawImperativeAPI): { x: number; y: number
  * Each insertion creates a completely new instance with fresh IDs.
  * - Deep clones elements to ensure complete isolation
  * - Regenerates all IDs (element IDs, group IDs, etc.)
- * - Preserves original grouping from the library item (no artificial wrapping)
+ * - Groups elements together if not already grouped (so they move as a unit)
  * - Offsets to viewport center
  * - Captures update for undo/redo
  * - Selects inserted elements
@@ -194,8 +223,11 @@ export function insertLibraryItem(
   // Clone elements with regenerated IDs - each insertion is a new instance
   const clonedElements = cloneElementsWithNewIds(elements);
 
+  // Group elements if they're not already grouped (so they act as a single unit)
+  const groupedElements = groupElementsIfNeeded(clonedElements);
+
   // Calculate bounding box of cloned elements
-  const bbox = getBoundingBox(clonedElements);
+  const bbox = getBoundingBox(groupedElements);
 
   // Get viewport center
   const viewportCenter = getViewportCenter(api);
@@ -205,7 +237,7 @@ export function insertLibraryItem(
   const offsetY = viewportCenter.y - (bbox.minY + bbox.height / 2);
 
   // Apply offset to all elements (create new objects to avoid mutation)
-  const positionedElements = clonedElements.map((el) => ({
+  const positionedElements = groupedElements.map((el) => ({
     ...el,
     x: el.x + offsetX,
     y: el.y + offsetY,

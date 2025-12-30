@@ -209,6 +209,61 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
   }, [selectedGroupIds, sharedGroupIds]);
   const isGroupedSelection = groupedSelectionIds.length > 0;
 
+  // Count alignment units: groups count as 1 unit, ungrouped elements count as 1 each
+  // Show align buttons only when there are 2+ units to align
+  const alignmentUnitCount = useMemo(() => {
+    if (elements.length <= 1) return elements.length;
+
+    // Find all group IDs and count how many selected elements are in each
+    const groupIdToCount = new Map<string, number>();
+
+    for (const el of elements) {
+      const groupIds = el.groupIds ?? [];
+      for (const gid of groupIds) {
+        // Count how many selected elements share this group
+        const groupMembers = elements.filter((e) => (e.groupIds ?? []).includes(gid));
+        if (groupMembers.length > 1) {
+          // This group has multiple selected members
+          groupIdToCount.set(gid, groupMembers.length);
+        }
+      }
+    }
+
+    // For each element, find its outermost group that contains other selected elements
+    // Elements with the same outermost group are in the same alignment unit
+    const elementToOutermostGroup = new Map<string, string | null>();
+
+    for (const el of elements) {
+      const groupIds = el.groupIds ?? [];
+      // groupIds are ordered innermost to outermost, so iterate to find the outermost shared group
+      let outermostSharedGroup: string | null = null;
+      for (const gid of groupIds) {
+        if ((groupIdToCount.get(gid) ?? 0) > 1) {
+          outermostSharedGroup = gid; // Keep updating - last one found is outermost
+        }
+      }
+      elementToOutermostGroup.set(el.id, outermostSharedGroup);
+    }
+
+    // Count distinct alignment units
+    const distinctGroups = new Set<string>();
+    let ungroupedCount = 0;
+
+    for (const el of elements) {
+      const outermostGroup = elementToOutermostGroup.get(el.id);
+      if (outermostGroup) {
+        distinctGroups.add(outermostGroup);
+      } else {
+        ungroupedCount++;
+      }
+    }
+
+    // Total units = number of distinct outermost groups + number of ungrouped elements
+    return distinctGroups.size + ungroupedCount;
+  }, [elements]);
+
+  const canAlign = alignmentUnitCount >= 2;
+
   // Determine if ungroup should be available:
   // - All selected elements share exactly one outermost group (single group selected), OR
   // - All selected elements are themselves groups (each element has groupIds and represents a distinct group)
@@ -744,7 +799,8 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
         </div>
       </div>
 
-      {isMultiSelect && (
+      {/* Show align buttons only when there are 2+ alignment units to align */}
+      {canAlign && (
         <div className="flex flex-col gap-2">
           <div className="text-[13px] font-bold text-slate-900">Align</div>
           <div className="grid grid-cols-3 gap-2" role="group" aria-label="Horizontal align">
@@ -760,11 +816,15 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
         </div>
       )}
 
-      {isMultiSelect && (
+      {/* Show Actions section when there's something to group or ungroup */}
+      {(canAlign || canUngroup) && (
         <div className="flex flex-col gap-2">
           <div className="text-[13px] font-bold text-slate-900">Actions</div>
           <div className="grid grid-cols-2 gap-2" role="group" aria-label="Grouping">
-            <ArrangeTile Icon={GroupIcon} label="Group selection" testId="arrange-group" onClick={handleGroupSelection} />
+            {/* Show Group button only when there are 2+ units that can be grouped */}
+            {canAlign && (
+              <ArrangeTile Icon={GroupIcon} label="Group selection" testId="arrange-group" onClick={handleGroupSelection} />
+            )}
             {canUngroup && (
               <ArrangeTile Icon={Ungroup} label="Ungroup selection" testId="arrange-ungroup" onClick={handleUngroupSelection} />
             )}
