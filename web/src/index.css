@@ -1310,18 +1310,13 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 10px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(10px);
 }
 
 .zoom-controls__btn {
   appearance: none;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(12, 17, 32, 0.5);
-  color: var(--text);
+  border: 1px solid var(--btn-border);
+  background: var(--btn-bg);
+  color: var(--btn-border);
   padding: 8px 10px;
   border-radius: 10px;
   cursor: pointer;
@@ -1336,30 +1331,32 @@ body {
 }
 
 .zoom-controls__btn:hover {
-  background: rgba(12, 17, 32, 0.65);
-  border-color: rgba(255, 255, 255, 0.22);
+  background: var(--btn-hover-bg);
+  border-color: var(--btn-hover-border);
+  color: var(--btn-hover-border);
   transform: translateY(-1px);
 }
 
 .zoom-controls__btn:disabled {
-  background: rgba(12, 17, 32, 0.35);
-  border-color: rgba(255, 255, 255, 0.12);
-  color: rgba(255, 255, 255, 0.55);
+  background: var(--btn-bg);
+  border-color: var(--btn-border);
+  color: var(--btn-border);
   cursor: not-allowed;
   transform: none;
-  opacity: 0.7;
+  opacity: 0.5;
 }
 
 .zoom-controls__btn:disabled:hover {
-  background: rgba(12, 17, 32, 0.35);
-  border-color: rgba(255, 255, 255, 0.12);
+  background: var(--btn-bg);
+  border-color: var(--btn-border);
   transform: none;
 }
 
 /* Active/pressed state for better feedback on eInk and touch devices */
 .zoom-controls__btn:active:not(:disabled) {
-  background: rgba(63, 207, 142, 0.25);
-  border-color: rgba(63, 207, 142, 0.5);
+  background: var(--btn-pressed-bg);
+  border-color: var(--btn-pressed-border);
+  color: var(--btn-pressed-text);
   transform: scale(0.95);
   transition: none;
 }

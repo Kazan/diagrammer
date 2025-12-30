@@ -1,4 +1,4 @@
-import { CustomToolbar, type ToolType } from "./CustomToolbar";
+import { CustomToolbar, type ToolType, type ArrowType } from "./CustomToolbar";
 import { NativeStatus, type StatusMessage } from "./NativeStatus";
 import { ZoomControls } from "./ZoomControls";
 import { TopBar } from "./topbar";
@@ -9,7 +9,10 @@ type Props = {
   fileName: string;
   isDirty: boolean;
   activeTool: ToolType;
+  arrowType?: ArrowType;
+  isToolLocked?: boolean;
   onSelectTool: (tool: ToolType) => void;
+  onLockTool?: (tool: ToolType) => void;
   nativePresent: boolean;
   lastSaved: Date | null;
   status: StatusMessage | null;
@@ -39,7 +42,10 @@ export function ChromeOverlay({
   fileName,
   isDirty,
   activeTool,
+  arrowType,
+  isToolLocked,
   onSelectTool,
+  onLockTool,
   nativePresent,
   lastSaved,
   status,
@@ -96,7 +102,13 @@ export function ChromeOverlay({
         </div>
       ) : null}
 
-      <CustomToolbar activeTool={activeTool} onSelect={onSelectTool} />
+      <CustomToolbar
+        activeTool={activeTool}
+        arrowType={arrowType}
+        isToolLocked={isToolLocked}
+        onSelect={onSelectTool}
+        onLockTool={onLockTool}
+      />
       <NativeStatus present={nativePresent} lastSaved={lastSaved} status={status} />
       <ZoomControls
         zoom={zoom}
