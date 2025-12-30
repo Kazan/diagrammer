@@ -307,18 +307,127 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
     const now = Date.now();
     const randomNonce = () => Math.floor(Math.random() * 1_000_000_000);
 
-    const nextElements = api.getSceneElements().map((el) => {
-      if (!selectedIds.has(el.id)) return { ...el };
-      const base = { version: el.version + 1, versionNonce: randomNonce(), updated: now };
-      switch (action) {
-        case "left": return { ...el, x: minX, ...base };
-        case "right": return { ...el, x: maxX - el.width, ...base };
-        case "centerX": return { ...el, x: minX + (width - el.width) / 2, ...base };
-        case "top": return { ...el, y: minY, ...base };
-        case "bottom": return { ...el, y: maxY - el.height, ...base };
-        case "centerY": return { ...el, y: minY + (height - el.height) / 2, ...base };
-        default: return { ...el, ...base };
+    // Build alignment units: groups are treated as single units
+    // An alignment unit is either:
+    // 1. A group of elements that share a common groupId (the outermost one within selection)
+    // 2. An individual element that isn't grouped with other selected elements
+
+    // Find all group IDs present in the selection
+    const groupIdToElements = new Map<string, ExcalidrawElement[]>();
+    const ungroupedElements: ExcalidrawElement[] = [];
+
+    for (const el of elements) {
+      const groupIds = el.groupIds ?? [];
+      if (groupIds.length > 0) {
+        // Find the outermost group that contains multiple selected elements
+        let assignedGroup: string | null = null;
+        for (const gid of groupIds) {
+          const groupMembers = elements.filter(
+            (e) => (e.groupIds ?? []).includes(gid)
+          );
+          if (groupMembers.length > 1) {
+            // This group has multiple selected members - use the outermost such group
+            assignedGroup = gid;
+          }
+        }
+        if (assignedGroup) {
+          if (!groupIdToElements.has(assignedGroup)) {
+            groupIdToElements.set(assignedGroup, []);
+          }
+          groupIdToElements.get(assignedGroup)!.push(el);
+        } else {
+          // Element has groupIds but none of them contain other selected elements
+          ungroupedElements.push(el);
+        }
+      } else {
+        ungroupedElements.push(el);
       }
+    }
+
+    // Build alignment units with their bounds
+    type AlignmentUnit = {
+      elements: ExcalidrawElement[];
+      bounds: { minX: number; minY: number; maxX: number; maxY: number; width: number; height: number };
+    };
+
+    const alignmentUnits: AlignmentUnit[] = [];
+
+    // Add grouped units
+    for (const [, groupElements] of groupIdToElements) {
+      // Deduplicate elements that might be in nested groups
+      const uniqueIds = new Set<string>();
+      const uniqueElements = groupElements.filter((el) => {
+        if (uniqueIds.has(el.id)) return false;
+        uniqueIds.add(el.id);
+        return true;
+      });
+
+      let gMinX = Infinity, gMinY = Infinity, gMaxX = -Infinity, gMaxY = -Infinity;
+      for (const el of uniqueElements) {
+        gMinX = Math.min(gMinX, el.x);
+        gMinY = Math.min(gMinY, el.y);
+        gMaxX = Math.max(gMaxX, el.x + el.width);
+        gMaxY = Math.max(gMaxY, el.y + el.height);
+      }
+      alignmentUnits.push({
+        elements: uniqueElements,
+        bounds: { minX: gMinX, minY: gMinY, maxX: gMaxX, maxY: gMaxY, width: gMaxX - gMinX, height: gMaxY - gMinY },
+      });
+    }
+
+    // Add ungrouped elements as individual units
+    for (const el of ungroupedElements) {
+      // Skip if already included in a group
+      const alreadyIncluded = alignmentUnits.some((unit) =>
+        unit.elements.some((e) => e.id === el.id)
+      );
+      if (alreadyIncluded) continue;
+
+      alignmentUnits.push({
+        elements: [el],
+        bounds: { minX: el.x, minY: el.y, maxX: el.x + el.width, maxY: el.y + el.height, width: el.width, height: el.height },
+      });
+    }
+
+    // Calculate the delta for each unit based on alignment action
+    const unitDeltas = new Map<string, { dx: number; dy: number }>();
+
+    for (const unit of alignmentUnits) {
+      const ub = unit.bounds;
+      let dx = 0, dy = 0;
+
+      switch (action) {
+        case "left":
+          dx = minX - ub.minX;
+          break;
+        case "right":
+          dx = maxX - ub.maxX;
+          break;
+        case "centerX":
+          dx = (minX + width / 2) - (ub.minX + ub.width / 2);
+          break;
+        case "top":
+          dy = minY - ub.minY;
+          break;
+        case "bottom":
+          dy = maxY - ub.maxY;
+          break;
+        case "centerY":
+          dy = (minY + height / 2) - (ub.minY + ub.height / 2);
+          break;
+      }
+
+      for (const el of unit.elements) {
+        unitDeltas.set(el.id, { dx, dy });
+      }
+    }
+
+    // Apply deltas to all selected elements
+    const nextElements = api.getSceneElements().map((el) => {
+      const delta = unitDeltas.get(el.id);
+      if (!delta) return el;
+      const base = { version: el.version + 1, versionNonce: randomNonce(), updated: now };
+      return { ...el, x: el.x + delta.dx, y: el.y + delta.dy, ...base };
     });
 
     api.updateScene({ elements: nextElements, captureUpdate: CaptureUpdateAction.IMMEDIATELY });
