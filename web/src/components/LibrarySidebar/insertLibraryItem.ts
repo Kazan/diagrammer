@@ -4,7 +4,18 @@ import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 
 /** Generate a random ID for elements (compatible with Excalidraw format) */
 function randomId(): string {
+  // Use crypto.randomUUID for better uniqueness, fallback to Math.random
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID().replace(/-/g, "").slice(0, 20);
+  }
   return Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
+}
+
+/**
+ * Deep clones an element to ensure complete isolation from source.
+ */
+function deepCloneElement(el: ExcalidrawElement): ExcalidrawElement {
+  return JSON.parse(JSON.stringify(el)) as ExcalidrawElement;
 }
 
 // Import CaptureUpdateAction from Excalidraw for undo/redo support
@@ -14,23 +25,26 @@ const CaptureUpdateAction = {
 };
 
 /**
- * Regenerates IDs for elements and updates group references.
+ * Regenerates IDs for elements and updates internal references.
  * Returns new elements with fresh IDs while preserving internal relationships.
  * Uses restoreElements to ensure all element properties are properly normalized.
  */
 function cloneElementsWithNewIds(
   elements: readonly ExcalidrawElement[]
-): { cloned: ExcalidrawElement[]; groupIdMap: Map<string, string> } {
+): ExcalidrawElement[] {
+  // Deep clone first to ensure complete isolation from cached source
+  const deepCloned = elements.map(deepCloneElement);
+
   const idMap = new Map<string, string>();
   const groupIdMap = new Map<string, string>();
 
   // First pass: generate new IDs for elements
-  for (const el of elements) {
+  for (const el of deepCloned) {
     idMap.set(el.id, randomId());
   }
 
   // Collect all existing group IDs and generate new ones
-  for (const el of elements) {
+  for (const el of deepCloned) {
     if (el.groupIds) {
       for (const gid of el.groupIds) {
         if (!groupIdMap.has(gid)) {
@@ -40,12 +54,12 @@ function cloneElementsWithNewIds(
     }
   }
 
-  // Second pass: clone elements with new IDs and update references
-  const rawCloned = elements.map((el) => {
+  // Second pass: update IDs and references in place (already deep cloned)
+  const rawCloned = deepCloned.map((el) => {
     const newId = idMap.get(el.id)!;
 
-    // Update groupIds if present
-    const newGroupIds = el.groupIds?.map((gid: string) => groupIdMap.get(gid) ?? gid);
+    // Update groupIds - preserve original grouping structure with new IDs
+    const newGroupIds = el.groupIds?.map((gid: string) => groupIdMap.get(gid) ?? gid) ?? [];
 
     // Handle bound elements - convert old boundElementIds format to new boundElements format
     // and update IDs for both formats
@@ -81,46 +95,33 @@ function cloneElementsWithNewIds(
         ? idMap.get(el.frameId as string) ?? el.frameId
         : null;
 
-    // Build the cloned element, explicitly setting properties to avoid undefined values
-    const clonedEl: Record<string, unknown> = {
+    // Build the cloned element with new values
+    return {
       ...el,
       id: newId,
-      groupIds: newGroupIds ?? [],
+      groupIds: newGroupIds,
       boundElements: newBoundElements,
+      containerId,
+      frameId,
       seed: Math.floor(Math.random() * 2147483647),
       version: 1,
       versionNonce: Math.floor(Math.random() * 2147483647),
-    };
-
-    // Only include containerId/frameId if they have actual values
-    if (containerId != null) {
-      clonedEl.containerId = containerId;
-    } else if ("containerId" in clonedEl) {
-      clonedEl.containerId = null;
-    }
-
-    if (frameId != null) {
-      clonedEl.frameId = frameId;
-    } else if ("frameId" in clonedEl) {
-      clonedEl.frameId = null;
-    }
-
-    // Remove deprecated boundElementIds property if present
-    if ("boundElementIds" in clonedEl) {
-      delete clonedEl.boundElementIds;
-    }
-
-    return clonedEl as ExcalidrawElement;
+    } as ExcalidrawElement;
   });
+
+  // Remove deprecated boundElementIds property if present
+  for (const el of rawCloned) {
+    if ("boundElementIds" in el) {
+      delete (el as Record<string, unknown>).boundElementIds;
+    }
+  }
 
   // Use restoreElements to normalize all element properties and repair bindings
   // This ensures text elements have proper originalText, dimensions are correct, etc.
-  const cloned = restoreElements(rawCloned, null, {
+  return restoreElements(rawCloned, null, {
     refreshDimensions: true,
     repairBindings: true,
   });
-
-  return { cloned, groupIdMap };
 }
 
 /**
@@ -175,22 +176,11 @@ function getViewportCenter(api: ExcalidrawImperativeAPI): { x: number; y: number
 }
 
 /**
- * Checks if all elements already share a common group.
- */
-function elementsShareGroup(elements: readonly ExcalidrawElement[]): boolean {
-  if (elements.length <= 1) return true;
-  const [first, ...rest] = elements;
-  const firstGroups = first.groupIds ?? [];
-  if (!firstGroups.length) return false;
-  return firstGroups.some((gid) =>
-    rest.every((el) => (el.groupIds ?? []).includes(gid))
-  );
-}
-
-/**
  * Inserts library item elements into the Excalidraw scene.
- * - Clones elements with new IDs
- * - Groups elements if they don't already share a group
+ * Each insertion creates a completely new instance with fresh IDs.
+ * - Deep clones elements to ensure complete isolation
+ * - Regenerates all IDs (element IDs, group IDs, etc.)
+ * - Preserves original grouping from the library item (no artificial wrapping)
  * - Offsets to viewport center
  * - Captures update for undo/redo
  * - Selects inserted elements
@@ -201,22 +191,11 @@ export function insertLibraryItem(
 ): void {
   if (!api || elements.length === 0) return;
 
-  // Clone elements with regenerated IDs
-  const { cloned: clonedElements } = cloneElementsWithNewIds(elements);
-
-  // If multiple elements and they don't already share a group, group them
-  let finalElements = clonedElements;
-  let newGroupId: string | null = null;
-  if (clonedElements.length > 1 && !elementsShareGroup(clonedElements)) {
-    newGroupId = randomId();
-    finalElements = clonedElements.map((el) => ({
-      ...el,
-      groupIds: [...el.groupIds, newGroupId!],
-    }));
-  }
+  // Clone elements with regenerated IDs - each insertion is a new instance
+  const clonedElements = cloneElementsWithNewIds(elements);
 
   // Calculate bounding box of cloned elements
-  const bbox = getBoundingBox(finalElements);
+  const bbox = getBoundingBox(clonedElements);
 
   // Get viewport center
   const viewportCenter = getViewportCenter(api);
@@ -225,8 +204,8 @@ export function insertLibraryItem(
   const offsetX = viewportCenter.x - (bbox.minX + bbox.width / 2);
   const offsetY = viewportCenter.y - (bbox.minY + bbox.height / 2);
 
-  // Apply offset to all elements
-  const positionedElements = finalElements.map((el) => ({
+  // Apply offset to all elements (create new objects to avoid mutation)
+  const positionedElements = clonedElements.map((el) => ({
     ...el,
     x: el.x + offsetX,
     y: el.y + offsetY,
@@ -235,14 +214,10 @@ export function insertLibraryItem(
   // Get current scene elements
   const currentElements = api.getSceneElements();
 
-  // Build selection state
+  // Build selection state - select all inserted elements
   const selectedElementIds: Record<string, true> = {};
   for (const el of positionedElements) {
     selectedElementIds[el.id] = true;
-  }
-  const selectedGroupIds: Record<string, true> = {};
-  if (newGroupId) {
-    selectedGroupIds[newGroupId] = true;
   }
 
   // Update scene with new elements appended
@@ -251,7 +226,7 @@ export function insertLibraryItem(
     appState: {
       ...api.getAppState(),
       selectedElementIds,
-      selectedGroupIds,
+      selectedGroupIds: {},
     },
     captureUpdate: CaptureUpdateAction.IMMEDIATELY,
   });
