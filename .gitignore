@@ -1,6 +1,5 @@
 .idea/
 keystore/
-.idea/
 .gradle/
 local.properties
 *.iml

@@ -1,6 +1,6 @@
 @file:Suppress("DEPRECATION")
 
-package com.example.diagrammerapp
+package com.kazan.diagrammer
 
 import android.annotation.SuppressLint
 import android.app.Activity
@@ -28,9 +28,9 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.webkit.WebViewAssetLoader
-import com.example.diagrammerapp.databinding.ActivityMainBinding
-import com.example.diagrammerapp.di.IoDispatcher
-import com.example.diagrammerapp.di.MainHandler
+import com.kazan.diagrammer.databinding.ActivityMainBinding
+import com.kazan.diagrammer.di.IoDispatcher
+import com.kazan.diagrammer.di.MainHandler
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineDispatcher

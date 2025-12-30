@@ -1,4 +1,4 @@
-package com.example.diagrammerapp.di
+package com.kazan.diagrammer.di
 
 import android.os.Handler
 import android.os.Looper

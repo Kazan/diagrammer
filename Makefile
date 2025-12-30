@@ -1,5 +1,5 @@
 ADB ?= adb
-APP_ID ?= com.example.diagrammerapp
+APP_ID ?= com.kazan.diagrammer
 SDKMANAGER ?= sdkmanager
 AVDMANAGER ?= avdmanager
 
