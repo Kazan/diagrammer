@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { LibraryIcon } from "lucide-react";
+import { Shapes } from "lucide-react";
 
 interface LibraryTriggerProps {
   onClick: () => void;
@@ -25,12 +25,11 @@ export function LibraryTrigger({ onClick, isOpen }: LibraryTriggerProps) {
         isOpen && "bg-[var(--btn-pressed-bg)] text-[var(--btn-pressed-text)]"
       )}
       style={{
-        // Center vertically within the area below the top bar
-        top: "calc(var(--tool-rail-top) + (100vh - var(--tool-rail-top)) / 2)",
+        top: "50%",
         transform: "translateY(-50%)",
       }}
     >
-      <LibraryIcon className="size-5" />
+      <Shapes className="size-5" />
     </button>
   );
 }

@@ -27,6 +27,25 @@ export function LibrarySidebar({
   const [libraries, setLibraries] = useState<LibraryCategory[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [lastExpandedId, setLastExpandedId] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem("diagrammer.lastLibrarySection");
+    } catch {
+      return null;
+    }
+  });
+
+  // Persist last expanded section
+  const handleSectionToggle = useCallback((categoryId: string, isExpanded: boolean) => {
+    if (isExpanded) {
+      setLastExpandedId(categoryId);
+      try {
+        localStorage.setItem("diagrammer.lastLibrarySection", categoryId);
+      } catch {
+        // Ignore storage errors
+      }
+    }
+  }, []);
 
   // Load libraries lazily when sidebar first opens
   useEffect(() => {
@@ -96,13 +115,13 @@ export function LibrarySidebar({
         className={cn(
           "fixed right-0 z-[var(--z-chrome)]",
           "flex flex-col",
-          "bg-[var(--flyout-bg)] border-l border-[var(--flyout-border)]",
+          "bg-[var(--flyout-bg)] border border-r-0 border-[var(--flyout-border)] rounded-l-2xl",
           "transition-transform duration-200 ease-out",
           isOpen ? "translate-x-0" : "translate-x-full"
         )}
         style={{
-          top: "var(--tool-rail-top)",
-          height: "calc(100vh - var(--tool-rail-top))",
+          top: 76,
+          height: "calc(100vh - 92px)",
           width: panelWidth,
           ["--library-panel-width" as string]: `${panelWidth}px`,
         }}
@@ -205,7 +224,7 @@ export function LibrarySidebar({
             </div>
           ) : (
             <div className="space-y-2">
-              {filteredLibraries.map((category, index) => (
+              {filteredLibraries.map((category) => (
                 <LibrarySection
                   key={category.id}
                   category={category}
@@ -213,7 +232,8 @@ export function LibrarySidebar({
                   itemSize={itemSize}
                   onItemClick={handleItemClick}
                   forceExpanded={autoExpandedIds.has(category.id)}
-                  defaultOpen={index === 0}
+                  defaultOpen={category.id === lastExpandedId}
+                  onToggle={(isExpanded) => handleSectionToggle(category.id, isExpanded)}
                 />
               ))}
             </div>

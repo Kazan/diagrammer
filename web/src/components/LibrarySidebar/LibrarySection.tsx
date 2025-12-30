@@ -16,6 +16,7 @@ interface LibrarySectionProps {
   onItemClick: (item: LibraryItem) => void;
   forceExpanded?: boolean;
   defaultOpen?: boolean;
+  onToggle?: (isExpanded: boolean) => void;
 }
 
 export function LibrarySection({
@@ -25,6 +26,7 @@ export function LibrarySection({
   onItemClick,
   forceExpanded = false,
   defaultOpen = false,
+  onToggle,
 }: LibrarySectionProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
@@ -35,14 +37,20 @@ export function LibrarySection({
     }
   }, [forceExpanded]);
 
+  const handleOpenChange = (open: boolean) => {
+    setIsOpen(open);
+    onToggle?.(open);
+  };
+
   return (
-    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+    <Collapsible open={isOpen} onOpenChange={handleOpenChange}>
       <CollapsibleTrigger
         className={cn(
           "flex w-full items-center justify-between gap-2 py-2 px-1",
           "text-sm font-semibold text-[var(--section-title)]",
           "hover:bg-[var(--tile-hover-bg)] rounded-md transition-colors",
-          "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--accent-color)]"
+          "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--accent-color)]",
+          "sticky top-0 z-10 bg-[var(--flyout-bg)]"
         )}
       >
         <span className="truncate">{category.name}</span>
