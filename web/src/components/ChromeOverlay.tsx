@@ -3,7 +3,7 @@ import { NativeStatus, type StatusMessage } from "./NativeStatus";
 import { ZoomControls } from "./ZoomControls";
 import { TopBar } from "./topbar";
 import { Button } from "@/components/ui/button";
-import { EraserIcon } from "lucide-react";
+import { EraserIcon, CheckIcon } from "lucide-react";
 
 type Props = {
   fileName: string;
@@ -36,6 +36,10 @@ type Props = {
   onZoomToContent: () => void;
   onUndo: () => void;
   canUndo: boolean;
+  /** True when user is drawing a multi-point line/arrow (tap-tap mode) */
+  isDrawingMultiPoint?: boolean;
+  /** Callback to finalize/cancel multi-point drawing (like pressing ESC) */
+  onFinalizeMultiPoint?: () => void;
 };
 
 export function ChromeOverlay({
@@ -69,6 +73,8 @@ export function ChromeOverlay({
   onZoomToContent,
   onUndo,
   canUndo,
+  isDrawingMultiPoint,
+  onFinalizeMultiPoint,
 }: Props) {
   return (
     <>
@@ -109,6 +115,25 @@ export function ChromeOverlay({
         onSelect={onSelectTool}
         onLockTool={onLockTool}
       />
+
+      {/* Floating "Done" button when drawing multi-point lines/arrows (tap-tap mode) */}
+      {isDrawingMultiPoint && onFinalizeMultiPoint ? (
+        <div
+          className="fixed z-30 pointer-events-auto"
+          style={{ bottom: 100, left: "50%", transform: "translateX(-50%)" }}
+        >
+          <Button
+            variant="default"
+            size="lg"
+            className="h-12 px-6 text-base font-medium bg-blue-600 hover:bg-blue-700 text-white border-0 shadow-lg"
+            onClick={onFinalizeMultiPoint}
+          >
+            <CheckIcon className="mr-2 size-5" />
+            Done
+          </Button>
+        </div>
+      ) : null}
+
       <NativeStatus present={nativePresent} lastSaved={lastSaved} status={status} />
       <ZoomControls
         zoom={zoom}
