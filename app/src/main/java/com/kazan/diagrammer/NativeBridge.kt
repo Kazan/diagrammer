@@ -1,4 +1,4 @@
-package com.example.diagrammerapp
+package com.kazan.diagrammer
 
 import android.content.ContentValues
 import android.content.Context
