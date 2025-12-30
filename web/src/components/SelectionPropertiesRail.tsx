@@ -928,17 +928,15 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
 
       {/* Action buttons */}
       <RailSection columns={1}>
-        {isMultiSelect && (
-          <RailPopoverButton
-            open={openKind === "arrange"}
-            onOpenChange={(open) => setOpenKind(open ? "arrange" : null)}
-            aria-label="Layers and alignment"
-            contentClassName="min-w-[232px]"
-            content={arrangeFlyoutContent}
-          >
-            <LayersIcon size={18} aria-hidden="true" />
-          </RailPopoverButton>
-        )}
+        <RailPopoverButton
+          open={openKind === "arrange"}
+          onOpenChange={(open) => setOpenKind(open ? "arrange" : null)}
+          aria-label="Layers and alignment"
+          contentClassName="min-w-[232px]"
+          content={arrangeFlyoutContent}
+        >
+          <LayersIcon size={18} aria-hidden="true" />
+        </RailPopoverButton>
 
         <RailButton onClick={duplicateSelection} aria-label="Duplicate selection">
           <Copy size={18} aria-hidden="true" />
