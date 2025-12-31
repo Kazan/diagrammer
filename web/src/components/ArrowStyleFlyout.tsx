@@ -1,5 +1,5 @@
 import { useMemo, useCallback } from "react";
-import type { ExcalidrawElement, ExcalidrawLinearElement, ExcalidrawArrowElement } from "@excalidraw/excalidraw/element/types";
+import type { ExcalidrawElement, ExcalidrawArrowElement } from "@excalidraw/excalidraw/element/types";
 import type { ExplicitStyleDefaults } from "@/hooks/useExplicitStyleDefaults";
 
 /**
@@ -10,7 +10,7 @@ import type { ExplicitStyleDefaults } from "@/hooks/useExplicitStyleDefaults";
  * - "dot": circle dot
  * - "triangle": filled triangle
  */
-type ArrowheadType = ExcalidrawLinearElement["startArrowhead"];
+type ArrowheadType = ExcalidrawArrowElement["startArrowhead"];
 
 type Props = {
   elements: ReadonlyArray<ExcalidrawElement>;
@@ -157,43 +157,27 @@ function LineStyleIcon({ elbowed }: { elbowed: boolean }) {
 }
 
 export function ArrowStyleFlyout({ elements, onUpdate, onStyleCapture }: Props) {
-  // Filter to only linear elements (lines/arrows)
-  const linearElements = useMemo(
-    () => elements.filter((el): el is ExcalidrawLinearElement =>
-      el.type === "arrow" || el.type === "line"
-    ),
-    [elements],
-  );
-
-  // Filter to only arrow elements (elbowed is only for arrows)
-  const arrowElements = useMemo(
-    () => elements.filter((el): el is ExcalidrawArrowElement =>
-      el.type === "arrow"
-    ),
-    [elements],
-  );
+  // Cast elements to arrows - the parent only renders this for arrow selections
+  const arrowElements = elements as ReadonlyArray<ExcalidrawArrowElement>;
 
   const startArrowhead = useMemo(
-    () => getCommonValue(linearElements, (el) => (el as ExcalidrawLinearElement).startArrowhead),
-    [linearElements],
+    () => getCommonValue(arrowElements, (el) => el.startArrowhead),
+    [arrowElements],
   );
 
   const endArrowhead = useMemo(
-    () => getCommonValue(linearElements, (el) => (el as ExcalidrawLinearElement).endArrowhead),
-    [linearElements],
+    () => getCommonValue(arrowElements, (el) => el.endArrowhead),
+    [arrowElements],
   );
 
   const elbowed = useMemo(
-    () => getCommonValue(arrowElements, (el) => (el as ExcalidrawArrowElement).elbowed ?? false),
+    () => getCommonValue(arrowElements, (el) => el.elbowed ?? false),
     [arrowElements],
   );
 
   const handleStartArrowheadChange = useCallback(
     (value: ArrowheadType) => {
-      onUpdate((el) => {
-        if (el.type !== "arrow" && el.type !== "line") return el;
-        return { ...el, startArrowhead: value };
-      });
+      onUpdate((el) => ({ ...el, startArrowhead: value }));
       onStyleCapture?.("startArrowhead", value);
     },
     [onUpdate, onStyleCapture],
@@ -201,10 +185,7 @@ export function ArrowStyleFlyout({ elements, onUpdate, onStyleCapture }: Props) 
 
   const handleEndArrowheadChange = useCallback(
     (value: ArrowheadType) => {
-      onUpdate((el) => {
-        if (el.type !== "arrow" && el.type !== "line") return el;
-        return { ...el, endArrowhead: value };
-      });
+      onUpdate((el) => ({ ...el, endArrowhead: value }));
       onStyleCapture?.("endArrowhead", value);
     },
     [onUpdate, onStyleCapture],
@@ -212,20 +193,11 @@ export function ArrowStyleFlyout({ elements, onUpdate, onStyleCapture }: Props) 
 
   const handleElbowedChange = useCallback(
     (value: boolean) => {
-      onUpdate((el) => {
-        if (el.type !== "arrow") return el;
-        return { ...el, elbowed: value };
-      });
+      onUpdate((el) => ({ ...el, elbowed: value }));
       onStyleCapture?.("elbowed", value);
     },
     [onUpdate, onStyleCapture],
   );
-
-  if (!linearElements.length) {
-    return null;
-  }
-
-  const hasArrows = arrowElements.length > 0;
 
   return (
     <div className="props-flyout" role="dialog" aria-label="Arrow style options">
@@ -265,31 +237,29 @@ export function ArrowStyleFlyout({ elements, onUpdate, onStyleCapture }: Props) 
         </div>
       </div>
 
-      {hasArrows && (
-        <div className="props-section">
-          <div className="props-section__title">Line style</div>
-          <div className="props-grid props-grid--two">
-            <button
-              type="button"
-              className={`props-tile${elbowed === false ? " is-active" : ""}`}
-              onClick={() => handleElbowedChange(false)}
-              aria-pressed={elbowed === false}
-              aria-label="Straight line"
-            >
-              <LineStyleIcon elbowed={false} />
-            </button>
-            <button
-              type="button"
-              className={`props-tile${elbowed === true ? " is-active" : ""}`}
-              onClick={() => handleElbowedChange(true)}
-              aria-pressed={elbowed === true}
-              aria-label="Elbowed line"
-            >
-              <LineStyleIcon elbowed />
-            </button>
-          </div>
+      <div className="props-section">
+        <div className="props-section__title">Line style</div>
+        <div className="props-grid props-grid--two">
+          <button
+            type="button"
+            className={`props-tile${elbowed === false ? " is-active" : ""}`}
+            onClick={() => handleElbowedChange(false)}
+            aria-pressed={elbowed === false}
+            aria-label="Straight line"
+          >
+            <LineStyleIcon elbowed={false} />
+          </button>
+          <button
+            type="button"
+            className={`props-tile${elbowed === true ? " is-active" : ""}`}
+            onClick={() => handleElbowedChange(true)}
+            aria-pressed={elbowed === true}
+            aria-label="Elbowed line"
+          >
+            <LineStyleIcon elbowed />
+          </button>
         </div>
-      )}
+      </div>
     </div>
   );
 }
