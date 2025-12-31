@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ChevronDownIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import { ChevronDownIcon, PlusIcon, Trash2Icon, CheckIcon } from "lucide-react";
 import {
   Collapsible,
   CollapsibleContent,
@@ -8,7 +8,6 @@ import {
 import { cn } from "@/lib/utils";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import type { LibraryItem } from "./types";
-import { LibraryThumbnail } from "./LibraryThumbnail";
 import { useLibraryItemSvg } from "./useLibraryItemSvg";
 
 interface PersonalLibrarySectionProps {
@@ -16,9 +15,11 @@ interface PersonalLibrarySectionProps {
   columns?: number;
   itemSize?: number;
   onItemClick: (item: LibraryItem) => void;
-  onAddItem: (elements: readonly ExcalidrawElement[]) => void;
+  onAddItem: (elements: readonly ExcalidrawElement[]) => boolean;
   onRemoveItem: (itemId: string) => void;
   selectedElements: readonly ExcalidrawElement[];
+  /** Check if elements already exist in the library */
+  hasItem?: (elements: readonly ExcalidrawElement[]) => boolean;
   forceExpanded?: boolean;
   defaultOpen?: boolean;
   onToggle?: (isExpanded: boolean) => void;
@@ -26,15 +27,18 @@ interface PersonalLibrarySectionProps {
 
 /**
  * Thumbnail preview for current selection with add button overlay.
+ * Shows a checkmark if the item already exists in the library.
  */
 function SelectionPreview({
   elements,
   size,
   onAdd,
+  alreadyExists,
 }: {
   elements: readonly ExcalidrawElement[];
   size: number;
   onAdd: () => void;
+  alreadyExists: boolean;
 }) {
   const previewId = `selection-preview-${elements.map((e) => e.id).join("-").slice(0, 50)}`;
   const { svg, isPending } = useLibraryItemSvg(previewId, elements);
@@ -42,15 +46,18 @@ function SelectionPreview({
   return (
     <button
       type="button"
-      onClick={onAdd}
-      title="Add selection to personal library"
+      onClick={alreadyExists ? undefined : onAdd}
+      disabled={alreadyExists}
+      title={alreadyExists ? "Already in library" : "Add selection to personal library"}
       className={cn(
         "group relative flex items-center justify-center",
-        "rounded-lg border-2 border-dashed border-[hsl(var(--accent))]",
-        "bg-[hsla(var(--accent),0.08)] hover:bg-[hsla(var(--accent),0.15)]",
+        "rounded-lg border-2",
+        alreadyExists
+          ? "border-solid border-[var(--tile-border)] bg-[var(--tile-bg)] cursor-default"
+          : "border-dashed border-[hsl(var(--accent))] bg-[hsla(var(--accent),0.08)] hover:bg-[hsla(var(--accent),0.15)] cursor-pointer",
         "transition-colors duration-100",
         "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-color)]",
-        "cursor-pointer overflow-hidden"
+        "overflow-hidden"
       )}
       style={{
         width: size,
@@ -66,14 +73,23 @@ function SelectionPreview({
         </div>
       ) : (
         <div
-          className="w-full h-full p-1.5 flex items-center justify-center [&>svg]:max-w-full [&>svg]:max-h-full [&>svg]:w-auto [&>svg]:h-auto opacity-60 group-hover:opacity-80"
+          className={cn(
+            "w-full h-full p-1.5 flex items-center justify-center [&>svg]:max-w-full [&>svg]:max-h-full [&>svg]:w-auto [&>svg]:h-auto",
+            alreadyExists ? "opacity-50" : "opacity-60 group-hover:opacity-80"
+          )}
           dangerouslySetInnerHTML={{ __html: svg }}
         />
       )}
-      {/* Add icon overlay */}
-      <div className="absolute inset-0 flex items-center justify-center bg-[hsla(var(--accent),0.1)] opacity-0 group-hover:opacity-100 transition-opacity">
-        <PlusIcon className="size-6 text-[hsl(var(--accent))]" />
-      </div>
+      {/* Overlay icon */}
+      {alreadyExists ? (
+        <div className="absolute inset-0 flex items-center justify-center bg-[hsla(var(--accent),0.05)]">
+          <CheckIcon className="size-5 text-[var(--muted-text)]" />
+        </div>
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center bg-[hsla(var(--accent),0.1)] opacity-0 group-hover:opacity-100 transition-opacity">
+          <PlusIcon className="size-6 text-[hsl(var(--accent))]" />
+        </div>
+      )}
     </button>
   );
 }
@@ -160,12 +176,14 @@ export function PersonalLibrarySection({
   onAddItem,
   onRemoveItem,
   selectedElements,
+  hasItem,
   forceExpanded = false,
   defaultOpen = false,
   onToggle,
 }: PersonalLibrarySectionProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const hasSelection = selectedElements.length > 0;
+  const selectionExists = hasSelection && hasItem?.(selectedElements);
   const totalCount = items.length + (hasSelection ? 1 : 0);
 
   // Auto-expand when search matches or when there's a selection
@@ -228,6 +246,7 @@ export function PersonalLibrarySection({
                 elements={selectedElements}
                 size={itemSize}
                 onAdd={handleAddSelection}
+                alreadyExists={selectionExists ?? false}
               />
             )}
             {/* Saved personal items */}

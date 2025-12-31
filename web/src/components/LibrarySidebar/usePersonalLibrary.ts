@@ -9,6 +9,54 @@ function randomId(): string {
 }
 
 /**
+ * Create a fingerprint for an element based on its visual properties.
+ * Ignores IDs, timestamps, and position (we normalize position).
+ */
+function elementFingerprint(el: ExcalidrawElement): string {
+  // Extract relevant visual properties (exclude id, seed, version, versionNonce, updated, etc.)
+  const props = {
+    type: el.type,
+    width: Math.round(el.width),
+    height: Math.round(el.height),
+    angle: el.angle,
+    strokeColor: el.strokeColor,
+    backgroundColor: el.backgroundColor,
+    fillStyle: el.fillStyle,
+    strokeWidth: el.strokeWidth,
+    strokeStyle: el.strokeStyle,
+    roughness: el.roughness,
+    opacity: el.opacity,
+    // Type-specific properties
+    ...(el.type === "text" && { text: (el as { text?: string }).text, fontSize: (el as { fontSize?: number }).fontSize }),
+    ...(el.type === "line" || el.type === "arrow" ? { points: (el as { points?: readonly (readonly [number, number])[] }).points } : {}),
+  };
+  return JSON.stringify(props);
+}
+
+/**
+ * Create a fingerprint for a group of elements.
+ * Normalizes positions relative to the bounding box origin.
+ */
+function elementsFingerprint(elements: readonly ExcalidrawElement[]): string {
+  if (elements.length === 0) return "";
+
+  // Find bounding box to normalize positions
+  const minX = Math.min(...elements.map((el) => el.x));
+  const minY = Math.min(...elements.map((el) => el.y));
+
+  // Create fingerprints with normalized positions, sorted for consistency
+  const fingerprints = elements
+    .map((el) => {
+      const relX = Math.round(el.x - minX);
+      const relY = Math.round(el.y - minY);
+      return `${relX},${relY}:${elementFingerprint(el)}`;
+    })
+    .sort();
+
+  return fingerprints.join("|");
+}
+
+/**
  * Group elements together so they act as one unit when reinserted.
  * If already a single element or already grouped, returns as-is.
  */
@@ -63,27 +111,59 @@ export function usePersonalLibrary() {
     }
   }, [items]);
 
-  const addItem = useCallback((elements: readonly ExcalidrawElement[]) => {
-    const id = `personal-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  /**
+   * Check if elements already exist in the library (by visual fingerprint).
+   */
+  const hasItem = useCallback(
+    (elements: readonly ExcalidrawElement[]): boolean => {
+      if (elements.length === 0) return false;
+      const fingerprint = elementsFingerprint(elements);
+      return items.some((item) => elementsFingerprint(item.elements) === fingerprint);
+    },
+    [items]
+  );
 
-    // Try to extract a name from text elements
-    const textEl = elements.find((el) => el.type === "text") as { text?: string } | undefined;
-    const baseName = textEl?.text?.slice(0, 30);
+  /**
+   * Add elements to the library. Returns false if duplicate detected.
+   */
+  const addItem = useCallback(
+    (elements: readonly ExcalidrawElement[]): boolean => {
+      if (elements.length === 0) return false;
 
-    // Group elements so they come as one unit when reinserted
-    const groupedElements = groupElements(elements);
+      const fingerprint = elementsFingerprint(elements);
 
-    setItems((prev) => {
-      const name = baseName || `Item ${prev.length + 1}`;
-      const newItem: LibraryItem = {
-        id,
-        name,
-        elements: groupedElements,
-        libraryId: "personal",
-      };
-      return [newItem, ...prev];
-    });
-  }, []);
+      // Check for duplicate
+      const isDuplicate = items.some(
+        (item) => elementsFingerprint(item.elements) === fingerprint
+      );
+      if (isDuplicate) {
+        return false;
+      }
+
+      const id = `personal-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
+      // Try to extract a name from text elements
+      const textEl = elements.find((el) => el.type === "text") as { text?: string } | undefined;
+      const baseName = textEl?.text?.slice(0, 30);
+
+      // Group elements so they come as one unit when reinserted
+      const groupedElements = groupElements(elements);
+
+      setItems((prev) => {
+        const name = baseName || `Item ${prev.length + 1}`;
+        const newItem: LibraryItem = {
+          id,
+          name,
+          elements: groupedElements,
+          libraryId: "personal",
+        };
+        return [newItem, ...prev];
+      });
+
+      return true;
+    },
+    [items]
+  );
 
   const removeItem = useCallback((itemId: string) => {
     setItems((prev) => prev.filter((item) => item.id !== itemId));
@@ -98,6 +178,7 @@ export function usePersonalLibrary() {
     addItem,
     removeItem,
     clearAll,
+    hasItem,
     isEmpty: items.length === 0,
   };
 }

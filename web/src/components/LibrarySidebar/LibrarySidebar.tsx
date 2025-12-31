@@ -132,17 +132,21 @@ export function LibrarySidebar({
 
   // Handle adding selection to personal library
   const handleAddToPersonalLibrary = useCallback(
-    (elements: readonly ExcalidrawElement[]) => {
-      if (elements.length === 0) return;
-      personalLibrary.addItem(elements);
+    (elements: readonly ExcalidrawElement[]): boolean => {
+      if (elements.length === 0) return false;
+      const added = personalLibrary.addItem(elements);
 
-      // Deselect elements on canvas so the preview disappears
-      if (excalidrawAPI) {
-        excalidrawAPI.updateScene({
-          appState: { selectedElementIds: {} },
-        });
+      if (added) {
+        // Deselect elements on canvas so the preview disappears
+        if (excalidrawAPI) {
+          excalidrawAPI.updateScene({
+            appState: { selectedElementIds: {} },
+          });
+        }
+        setSelectedElements([]);
       }
-      setSelectedElements([]);
+
+      return added;
     },
     [personalLibrary, excalidrawAPI]
   );
@@ -263,6 +267,7 @@ export function LibrarySidebar({
                 onAddItem={handleAddToPersonalLibrary}
                 onRemoveItem={personalLibrary.removeItem}
                 selectedElements={selectedElements}
+                hasItem={personalLibrary.hasItem}
                 defaultOpen={lastExpandedId === "personal" || selectedElements.length > 0}
                 onToggle={(isExpanded) => handleSectionToggle("personal", isExpanded)}
               />
