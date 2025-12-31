@@ -11,14 +11,14 @@
         android:layout_height="match_parent"
         android:scrollbars="none" />
 
-    <!-- Native status badge - renders on top of WebView -->
+    <!-- Native status badge - renders on top of WebView, shows build label (tag or git hash) -->
     <com.google.android.material.chip.Chip
         android:id="@+id/nativeStatusChip"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|center_horizontal"
         android:layout_marginBottom="16dp"
-        android:text="Native"
+        android:text=""
         android:textColor="#16a34a"
         android:textSize="11sp"
         android:visibility="gone"

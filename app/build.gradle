@@ -5,6 +5,47 @@ plugins {
     id "com.google.devtools.ksp"
 }
 
+// Get git version info for BuildConfig injection
+def getGitHash = { ->
+    def stdout = new ByteArrayOutputStream()
+    try {
+        exec {
+            commandLine 'git', 'rev-parse', '--short=7', 'HEAD'
+            standardOutput = stdout
+            errorOutput = new ByteArrayOutputStream()
+        }
+        return stdout.toString().trim()
+    } catch (Exception e) {
+        return "unknown"
+    }
+}
+
+def getGitTag = { ->
+    // First check if BUILD_VERSION env var is set (from GitHub Actions release)
+    def envVersion = System.getenv("BUILD_VERSION")
+    if (envVersion != null && !envVersion.isEmpty()) {
+        return envVersion
+    }
+    // Otherwise try to get tag from git
+    def stdout = new ByteArrayOutputStream()
+    try {
+        exec {
+            commandLine 'git', 'describe', '--tags', '--exact-match', 'HEAD'
+            standardOutput = stdout
+            errorOutput = new ByteArrayOutputStream()
+        }
+        return stdout.toString().trim()
+    } catch (Exception e) {
+        // Not on a tag, return empty
+        return ""
+    }
+}
+
+def gitHash = getGitHash()
+def gitTag = getGitTag()
+// Use tag if available, otherwise use hash
+def buildLabel = gitTag.isEmpty() ? gitHash : gitTag
+
 android {
     namespace "com.kazan.diagrammer"
     compileSdk 35
@@ -15,6 +56,11 @@ android {
         targetSdk 35
         versionCode 1
         versionName "1.0.0"
+
+        // Inject git version info into BuildConfig
+        buildConfigField "String", "GIT_HASH", "\"${gitHash}\""
+        buildConfigField "String", "GIT_TAG", "\"${gitTag}\""
+        buildConfigField "String", "BUILD_LABEL", "\"${buildLabel}\""
 
         vectorDrawables {
             useSupportLibrary true

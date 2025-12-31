@@ -12,6 +12,8 @@ declare global {
      */
     __NATIVE_PRESENT__?: boolean;
     __NATIVE_APP_VERSION__?: string;
+    __NATIVE_BUILD_LABEL__?: string;
+    __NATIVE_GIT_HASH__?: string;
     __NATIVE_PLATFORM__?: "android" | string;
 
     /**

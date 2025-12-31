@@ -45,6 +45,8 @@ jobs:
 
       - name: Build debug APK (uses development web bundle)
         run: ./gradlew assembleDebug
+        env:
+          BUILD_VERSION: ${{ github.event.release.tag_name }}
 
       - name: Upload APKs to GitHub Release
         uses: softprops/action-gh-release@v1

@@ -252,6 +252,8 @@ class MainActivity : ComponentActivity() {
                 """
                 window.__NATIVE_PRESENT__ = true;
                 window.__NATIVE_APP_VERSION__ = '${BuildConfig.VERSION_NAME}';
+                window.__NATIVE_BUILD_LABEL__ = '${BuildConfig.BUILD_LABEL}';
+                window.__NATIVE_GIT_HASH__ = '${BuildConfig.GIT_HASH}';
                 window.__NATIVE_PLATFORM__ = 'android';
                 """.trimIndent(),
                 null
@@ -260,7 +262,8 @@ class MainActivity : ComponentActivity() {
 
         override fun onPageFinished(view: WebView?, url: String?) {
             super.onPageFinished(view, url)
-            // Show native status chip when page is ready
+            // Show native status chip with build label (tag or git hash)
+            binding.nativeStatusChip.text = BuildConfig.BUILD_LABEL
             binding.nativeStatusChip.visibility = View.VISIBLE
         }
 

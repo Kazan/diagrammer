@@ -31,6 +31,20 @@ export function getNativeAppVersion(): string | undefined {
   return typeof window !== "undefined" ? window.__NATIVE_APP_VERSION__ : undefined;
 }
 
+/**
+ * Get the native build label (tag or git hash) if running in native context.
+ */
+export function getNativeBuildLabel(): string | undefined {
+  return typeof window !== "undefined" ? window.__NATIVE_BUILD_LABEL__ : undefined;
+}
+
+/**
+ * Get the native git hash if running in native context.
+ */
+export function getNativeGitHash(): string | undefined {
+  return typeof window !== "undefined" ? window.__NATIVE_GIT_HASH__ : undefined;
+}
+
 export function useNativeBridge(handlers: Handlers) {
   const [nativeBridge, setNativeBridge] = useState<NativeBridge | undefined>();
   // Use injected __NATIVE_PRESENT__ for initial state (synchronous detection)
