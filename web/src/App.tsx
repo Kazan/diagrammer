@@ -12,6 +12,7 @@ import "@excalidraw/excalidraw/index.css";
 import { ChromeOverlay } from "./components/ChromeOverlay";
 import { type ToolType, type ArrowType } from "./components/CustomToolbar";
 import { SelectionPropertiesRail } from "./components/SelectionPropertiesRail";
+import { BottomLeftBar, BottomRightBar, ZoomControls, HistoryControls, UiScaleControls } from "./components/bottombar";
 import type { SelectionInfo } from "./components/SelectionFlyout";
 import { type StatusMessage } from "./components/NativeStatus";
 import { LibrarySidebar } from "./components/LibrarySidebar";
@@ -29,6 +30,7 @@ import { useImageInsertion } from "./hooks/useImageInsertion";
 import { useExplicitStyleDefaults } from "./hooks/useExplicitStyleDefaults";
 import { useWebFallbackActions } from "./hooks/useWebFallbackActions";
 import { useMultiPointFinalize } from "./hooks/useMultiPointFinalize";
+import { useUiScale } from "./hooks/useUiScale";
 import type { NativeFileHandle } from "./native-bridge";
 import { loadLocalSceneEntries, persistLocalSceneEntries, type LocalSceneEntry } from "./local-scenes";
 
@@ -41,6 +43,8 @@ import {
 import { resetSceneToDefaults } from "./scene-defaults";
 
 import { computeSceneSignature, stripExtension } from "./scene-utils";
+
+import { fitSceneToViewport } from "./scene-view";
 
 export default function App() {
   const LOCAL_SCENE_KEY = "diagrammer.localScene";
@@ -129,6 +133,8 @@ export default function App() {
     apiRef,
     setStatus,
   });
+
+  const { scale, handleScaleUp, handleScaleDown, handleReset: handleResetScale, minScale, maxScale } = useUiScale();
 
   const { isDrawingMultiPoint, finalizeMultiPoint } = useMultiPointFinalize(api);
 
@@ -253,7 +259,7 @@ export default function App() {
       applyRestoredScene(api, restored);
       const elements = api.getSceneElements();
       if (elements.length) {
-        api.scrollToContent(elements, { fitToViewport: true, animate: false });
+        fitSceneToViewport(api, elements, { animate: false });
       }
       prevSceneSigRef.current = computeSceneSignature(api.getSceneElements(), api.getAppState());
       const hasVisibleElements = elements.some((el) => !el.isDeleted);
@@ -696,16 +702,30 @@ export default function App() {
         onForceClear={handleForceClear}
         onCancelClear={handleCancelClear}
         exporting={exporting}
-        zoom={zoom}
-        onZoomIn={handleZoomIn}
-        onZoomOut={handleZoomOut}
-        onResetZoom={handleResetZoom}
-        onZoomToContent={handleZoomToContent}
-        onUndo={handleUndo}
-        canUndo={canUndo}
         isDrawingMultiPoint={isDrawingMultiPoint}
         onFinalizeMultiPoint={finalizeMultiPoint}
       />
+      <BottomLeftBar>
+        <ZoomControls
+          zoom={zoom}
+          onZoomIn={handleZoomIn}
+          onZoomOut={handleZoomOut}
+          onResetZoom={handleResetZoom}
+          onZoomToContent={handleZoomToContent}
+          disabled={!hasSceneContent}
+        />
+        <HistoryControls onUndo={handleUndo} canUndo={canUndo} />
+      </BottomLeftBar>
+      <BottomRightBar>
+        <UiScaleControls
+          scale={scale}
+          onScaleUp={handleScaleUp}
+          onScaleDown={handleScaleDown}
+          onReset={handleResetScale}
+          minScale={minScale}
+          maxScale={maxScale}
+        />
+      </BottomRightBar>
     </div>
   );
 }

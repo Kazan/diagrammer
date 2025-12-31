@@ -9,6 +9,7 @@ import {
 } from "../native-bridge";
 import { EMPTY_SCENE_SIG, computeSceneSignature, stripExtension } from "../scene-utils";
 import { applyRestoredScene, buildDefaultLocalAppStateOverrides, restoreSceneForApp } from "../excalidraw-restore";
+import { fitSceneToViewport } from "../scene-view";
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return Boolean(value && typeof value === "object");
@@ -203,7 +204,7 @@ export function useNativeMessageHandlers(deps: NativeMessageDeps) {
             const elements = api.getSceneElementsIncludingDeleted();
             const visible = api.getSceneElements();
             if (visible.length) {
-              api.scrollToContent(visible, { fitToViewport: false, animate: false });
+              fitSceneToViewport(api, visible, { animate: false });
             }
             prevSceneSigRef.current = computeSceneSignature(elements, api.getAppState());
             prevNonEmptySceneRef.current = visible.length > 0;

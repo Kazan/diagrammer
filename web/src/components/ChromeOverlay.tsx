@@ -1,6 +1,5 @@
 import { CustomToolbar, type ToolType, type ArrowType } from "./CustomToolbar";
 import { NativeStatus, type StatusMessage } from "./NativeStatus";
-import { ZoomControls } from "./ZoomControls";
 import { TopBar } from "./topbar";
 import { Button } from "@/components/ui/button";
 import { EraserIcon, CheckIcon } from "lucide-react";
@@ -29,13 +28,6 @@ type Props = {
   onForceClear: () => void;
   onCancelClear: () => void;
   exporting: "png" | "svg" | null;
-  zoom: { value: number };
-  onZoomIn: () => void;
-  onZoomOut: () => void;
-  onResetZoom: () => void;
-  onZoomToContent: () => void;
-  onUndo: () => void;
-  canUndo: boolean;
   /** True when user is drawing a multi-point line/arrow (tap-tap mode) */
   isDrawingMultiPoint?: boolean;
   /** Callback to finalize/cancel multi-point drawing (like pressing ESC) */
@@ -66,13 +58,6 @@ export function ChromeOverlay({
   onForceClear,
   onCancelClear,
   exporting,
-  zoom,
-  onZoomIn,
-  onZoomOut,
-  onResetZoom,
-  onZoomToContent,
-  onUndo,
-  canUndo,
   isDrawingMultiPoint,
   onFinalizeMultiPoint,
 }: Props) {
@@ -135,16 +120,6 @@ export function ChromeOverlay({
       ) : null}
 
       <NativeStatus present={nativePresent} lastSaved={lastSaved} status={status} />
-      <ZoomControls
-        zoom={zoom}
-        onZoomIn={onZoomIn}
-        onZoomOut={onZoomOut}
-        onResetZoom={onResetZoom}
-        onZoomToContent={onZoomToContent}
-        onUndo={onUndo}
-        canUndo={canUndo}
-        hasSceneContent={hasSceneContent}
-      />
 
       {showClearConfirm ? (
         <div

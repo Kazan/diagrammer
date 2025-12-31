@@ -166,8 +166,9 @@ export function LibrarySidebar({
       {/* Edge trigger button */}
       <LibraryTrigger onClick={toggleSidebar} isOpen={isOpen} />
 
-      {/* Sidebar panel */}
+      {/* Sidebar panel - no CSS transform scaling, dimensions adjusted for UI scale */}
       <div
+        data-slot="library-sidebar"
         className={cn(
           "fixed right-0 z-[var(--z-chrome)]",
           "flex flex-col",
@@ -177,7 +178,7 @@ export function LibrarySidebar({
         )}
         style={{
           top: 76,
-          height: "calc(100vh - 92px)",
+          bottom: 76,
           width: panelWidth,
           ["--library-panel-width" as string]: `${panelWidth}px`,
         }}

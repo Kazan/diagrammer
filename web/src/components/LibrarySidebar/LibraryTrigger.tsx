@@ -13,6 +13,7 @@ export function LibraryTrigger({ onClick, isOpen }: LibraryTriggerProps) {
       onClick={onClick}
       aria-expanded={isOpen}
       aria-label={isOpen ? "Close library sidebar" : "Open library sidebar"}
+      data-slot="library-trigger"
       className={cn(
         "fixed right-0 z-[var(--z-chrome)]",
         "flex items-center justify-center",
@@ -26,7 +27,7 @@ export function LibraryTrigger({ onClick, isOpen }: LibraryTriggerProps) {
       )}
       style={{
         top: "50%",
-        transform: "translateY(-50%)",
+        transformOrigin: "right center",
       }}
     >
       <Shapes className="size-5" />
