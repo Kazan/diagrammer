@@ -8,9 +8,33 @@ type Handlers = {
 
 const emptyCallbacks: NativeBridgeCallbacks = {};
 
+/**
+ * Check if we're running inside the native Android wrapper.
+ * This uses the injected `__NATIVE_PRESENT__` flag which is set
+ * by the Android WebViewClient before the page loads.
+ */
+export function isNativeContext(): boolean {
+  return typeof window !== "undefined" && window.__NATIVE_PRESENT__ === true;
+}
+
+/**
+ * Get the native platform if running in native context.
+ */
+export function getNativePlatform(): string | undefined {
+  return typeof window !== "undefined" ? window.__NATIVE_PLATFORM__ : undefined;
+}
+
+/**
+ * Get the native app version if running in native context.
+ */
+export function getNativeAppVersion(): string | undefined {
+  return typeof window !== "undefined" ? window.__NATIVE_APP_VERSION__ : undefined;
+}
+
 export function useNativeBridge(handlers: Handlers) {
   const [nativeBridge, setNativeBridge] = useState<NativeBridge | undefined>();
-  const [nativePresent, setNativePresent] = useState(false);
+  // Use injected __NATIVE_PRESENT__ for initial state (synchronous detection)
+  const [nativePresent, setNativePresent] = useState(() => isNativeContext());
 
   const callbacks = useMemo<NativeBridgeCallbacks>(() => {
     if (!handlers.onNativeMessage && !handlers.onSceneLoaded) return emptyCallbacks;
@@ -48,7 +72,8 @@ export function useNativeBridge(handlers: Handlers) {
   useEffect(() => {
     const bridge = window.NativeBridge;
     setNativeBridge(bridge);
-    setNativePresent(Boolean(bridge));
+    // Also verify with bridge presence (belt and suspenders)
+    setNativePresent(isNativeContext() || Boolean(bridge));
   }, []);
 
   useEffect(() => {

@@ -96,3 +96,7 @@ ci:
 logs:
 	$(call check_device)
 	@$(ADB) $(ADB_DEVICE_FLAG) logcat -s DiagrammerWebView NativeBridge
+
+dlogs:
+	$(call check_device)
+	@$(ADB) $(ADB_DEVICE_FLAG) logcat -s DiagrammerWebView
