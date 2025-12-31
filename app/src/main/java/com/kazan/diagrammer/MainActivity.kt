@@ -240,6 +240,33 @@ class MainActivity : ComponentActivity() {
             return !isAsset
         }
 
+        override fun onPageStarted(
+            view: WebView?,
+            url: String?,
+            favicon: android.graphics.Bitmap?
+        ) {
+            super.onPageStarted(view, url, favicon)
+            // Inject native state before React app mounts.
+            // This allows the web app to detect native context synchronously on startup.
+            view?.evaluateJavascript(
+                """
+                window.__NATIVE_PRESENT__ = true;
+                window.__NATIVE_APP_VERSION__ = '${BuildConfig.VERSION_NAME}';
+                window.__NATIVE_BUILD_LABEL__ = '${BuildConfig.BUILD_LABEL}';
+                window.__NATIVE_GIT_HASH__ = '${BuildConfig.GIT_HASH}';
+                window.__NATIVE_PLATFORM__ = 'android';
+                """.trimIndent(),
+                null
+            )
+        }
+
+        override fun onPageFinished(view: WebView?, url: String?) {
+            super.onPageFinished(view, url)
+            // Show native status chip with build label (tag or git hash)
+            binding.nativeStatusChip.text = BuildConfig.BUILD_LABEL
+            binding.nativeStatusChip.visibility = View.VISIBLE
+        }
+
         override fun onRenderProcessGone(
             view: WebView,
             detail: android.webkit.RenderProcessGoneDetail

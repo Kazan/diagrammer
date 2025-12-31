@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#000000">
@@ -9,5 +10,30 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:scrollbars="none" />
+
+    <!-- Native status badge - renders on top of WebView, shows build label (tag or git hash) -->
+    <com.google.android.material.chip.Chip
+        android:id="@+id/nativeStatusChip"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="16dp"
+        android:text=""
+        android:textColor="#16a34a"
+        android:textSize="11sp"
+        android:visibility="gone"
+        app:chipBackgroundColor="#dcfce7"
+        app:chipCornerRadius="6dp"
+        app:chipMinHeight="24dp"
+        app:chipMinTouchTargetSize="0dp"
+        app:chipStartPadding="8dp"
+        app:chipEndPadding="8dp"
+        app:chipIcon="@drawable/ic_native_connected"
+        app:chipIconSize="12dp"
+        app:chipIconTint="#16a34a"
+        app:chipStrokeColor="#bbf7d0"
+        app:chipStrokeWidth="1dp"
+        app:closeIconVisible="false"
+        app:ensureMinTouchTargetSize="false" />
 
 </FrameLayout>
