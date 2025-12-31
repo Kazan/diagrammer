@@ -196,10 +196,17 @@ body {
   Note: !important is needed to override animation fill-mode transforms.
 */
 
-/* Left-anchored elements (tools sidebar, selection properties) */
-[data-slot="tool-rail"] {
+/* Left tool rail - scales from its own top-left corner */
+[data-slot="tool-rail"][data-position="left"] {
   transform: scale(var(--ui-scale, 1)) !important;
   transform-origin: left top !important;
+}
+
+/* Right tool rail (selection properties) - scales from the left rail's origin
+   so both rails move together as a unit when scaling */
+[data-slot="tool-rail"][data-position="right"] {
+  transform: scale(var(--ui-scale, 1)) !important;
+  transform-origin: calc(-1 * var(--tool-rail-width) - var(--rails-gap)) top !important;
 }
 
 /* Bottom-left anchored (zoom/history controls) */
