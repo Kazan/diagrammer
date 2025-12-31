@@ -98,6 +98,9 @@
   --canvas-bg-grid: #ecececff;
   --canvas-bg-default: var(--canvas-bg-white);
 
+  /* UI Scale - controls the size of UI elements (buttons, toolbars, etc.) */
+  --ui-scale: 1;
+
   /* Legacy CSS variables - keep for existing styles */
   --bg: #060a18;
   --bg-2: #0c1226;
@@ -184,6 +187,37 @@ body {
   --toolbar-btn-active-bg: hsla(156, 64%, 48%, 0.15);
   --toolbar-btn-active-border: hsl(156, 64%, 48%);
   --toolbar-btn-active-text: hsl(156, 64%, 48%);
+}
+
+/*
+  UI Scale Application
+  These rules apply the --ui-scale CSS variable to key UI components.
+  The scale is controlled via UiScaleControls in the bottom-right corner.
+  Note: !important is needed to override animation fill-mode transforms.
+*/
+
+/* Left-anchored elements (tools sidebar, selection properties) */
+[data-slot="tool-rail"] {
+  transform: scale(var(--ui-scale, 1)) !important;
+  transform-origin: left top !important;
+}
+
+/* Bottom-left anchored (zoom/history controls) */
+.zoom-controls {
+  transform: scale(var(--ui-scale, 1)) !important;
+  transform-origin: left bottom !important;
+}
+
+/* Bottom-right anchored (UI scale controls) */
+.bottom-right-bar {
+  transform: scale(var(--ui-scale, 1)) !important;
+  transform-origin: right bottom !important;
+}
+
+/* Top-right anchored (file toolbar header) */
+header[role="banner"][aria-label="File toolbar"] {
+  transform: scale(var(--ui-scale, 1)) !important;
+  transform-origin: right top !important;
 }
 
 .chrome-overlay {
@@ -1389,6 +1423,75 @@ body {
   border-color: var(--btn-pressed-border);
   transform: scale(0.95);
   transition: none;
+}
+
+/* Bottom Right Bar - container for UI controls */
+.bottom-right-bar {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 35;
+  pointer-events: auto;
+}
+
+/* UI Scale Controls */
+.ui-scale-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  background: var(--btn-bg);
+  border: 1px solid var(--btn-border);
+  border-radius: 10px;
+}
+
+.ui-scale-controls__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted-text);
+  padding: 0 4px;
+}
+
+.ui-scale-controls__btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--btn-border);
+  padding: 4px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  min-height: 28px;
+  font-weight: 600;
+  font-size: 12px;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.ui-scale-controls__btn:hover {
+  background: var(--btn-hover-bg);
+  color: var(--btn-hover-text);
+}
+
+.ui-scale-controls__btn:disabled {
+  color: var(--btn-border);
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.ui-scale-controls__btn:active:not(:disabled) {
+  background: var(--btn-pressed-bg);
+  color: var(--btn-pressed-text);
+}
+
+.ui-scale-controls__btn--label {
+  min-width: 44px;
+  font-size: 11px;
 }
 
 @media (max-width: 768px) {

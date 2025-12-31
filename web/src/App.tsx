@@ -12,7 +12,7 @@ import "@excalidraw/excalidraw/index.css";
 import { ChromeOverlay } from "./components/ChromeOverlay";
 import { type ToolType, type ArrowType } from "./components/CustomToolbar";
 import { SelectionPropertiesRail } from "./components/SelectionPropertiesRail";
-import { BottomLeftBar, ZoomControls, HistoryControls } from "./components/bottombar";
+import { BottomLeftBar, BottomRightBar, ZoomControls, HistoryControls, UiScaleControls } from "./components/bottombar";
 import type { SelectionInfo } from "./components/SelectionFlyout";
 import { type StatusMessage } from "./components/NativeStatus";
 import { LibrarySidebar } from "./components/LibrarySidebar";
@@ -30,6 +30,7 @@ import { useImageInsertion } from "./hooks/useImageInsertion";
 import { useExplicitStyleDefaults } from "./hooks/useExplicitStyleDefaults";
 import { useWebFallbackActions } from "./hooks/useWebFallbackActions";
 import { useMultiPointFinalize } from "./hooks/useMultiPointFinalize";
+import { useUiScale } from "./hooks/useUiScale";
 import type { NativeFileHandle } from "./native-bridge";
 import { loadLocalSceneEntries, persistLocalSceneEntries, type LocalSceneEntry } from "./local-scenes";
 
@@ -132,6 +133,8 @@ export default function App() {
     apiRef,
     setStatus,
   });
+
+  const { scale, handleScaleUp, handleScaleDown, handleReset: handleResetScale, minScale, maxScale } = useUiScale();
 
   const { isDrawingMultiPoint, finalizeMultiPoint } = useMultiPointFinalize(api);
 
@@ -713,6 +716,16 @@ export default function App() {
         />
         <HistoryControls onUndo={handleUndo} canUndo={canUndo} />
       </BottomLeftBar>
+      <BottomRightBar>
+        <UiScaleControls
+          scale={scale}
+          onScaleUp={handleScaleUp}
+          onScaleDown={handleScaleDown}
+          onReset={handleResetScale}
+          minScale={minScale}
+          maxScale={maxScale}
+        />
+      </BottomRightBar>
     </div>
   );
 }

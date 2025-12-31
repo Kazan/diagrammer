@@ -24,16 +24,16 @@ export interface ViewportInsets {
 /**
  * Default insets based on the Diagrammer UI layout.
  * These values account for:
- * - Top: Header at top=16px with ~60px height
+ * - Top: Header at top=16px with ~48px height
  * - Left: Toolbar at left=16px with width=124px
- * - Bottom: Zoom controls with ~60px height
+ * - Bottom: Zoom controls with ~52px height
  * - Right: Minimal padding (library sidebar is optional)
  */
 export const DEFAULT_VIEWPORT_INSETS: ViewportInsets = {
-  top: 96,     // 16px offset + ~80px for header/status
+  top: 72,     // 16px offset + ~56px for header/status
   left: 156,   // 16px offset + 124px toolbar width + 16px gap
   right: 16,   // Minimal right padding
-  bottom: 80,  // 16px offset + ~60px for zoom controls
+  bottom: 68,  // 16px offset + ~52px for zoom controls
 };
 
 /**
@@ -44,7 +44,7 @@ export interface FitToViewportOptions {
   insets?: Partial<ViewportInsets>;
   /**
    * How much of the available viewport should be filled (0.1 to 1.0).
-   * Default is 0.85 (85% of available space).
+   * Default is 0.9 (90% of available space).
    */
   viewportFillFactor?: number;
   /** Minimum zoom level (default 0.1) */
@@ -107,7 +107,7 @@ export function calculateFitToViewport(
 ): { zoom: number; scrollX: number; scrollY: number } | null {
   const {
     insets = {},
-    viewportFillFactor = 0.85,
+    viewportFillFactor = 0.9,
     minZoom = 0.1,
     maxZoom = 1.0,
     contentPadding = 20,
