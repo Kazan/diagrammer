@@ -132,17 +132,21 @@ export function LibrarySidebar({
 
   // Handle adding selection to personal library
   const handleAddToPersonalLibrary = useCallback(
-    (elements: readonly ExcalidrawElement[]) => {
-      if (elements.length === 0) return;
-      personalLibrary.addItem(elements);
+    (elements: readonly ExcalidrawElement[]): boolean => {
+      if (elements.length === 0) return false;
+      const added = personalLibrary.addItem(elements);
 
-      // Deselect elements on canvas so the preview disappears
-      if (excalidrawAPI) {
-        excalidrawAPI.updateScene({
-          appState: { selectedElementIds: {} },
-        });
+      if (added) {
+        // Deselect elements on canvas so the preview disappears
+        if (excalidrawAPI) {
+          excalidrawAPI.updateScene({
+            appState: { selectedElementIds: {} },
+          });
+        }
+        setSelectedElements([]);
       }
-      setSelectedElements([]);
+
+      return added;
     },
     [personalLibrary, excalidrawAPI]
   );
@@ -151,12 +155,6 @@ export function LibrarySidebar({
   const toggleSidebar = useCallback(() => {
     setIsOpen((prev) => !prev);
   }, []);
-
-  // Close sidebar
-  const closeSidebar = useCallback(() => {
-    setIsOpen(false);
-    clearSearch();
-  }, [clearSearch]);
 
   // Calculate panel width based on grid configuration
   const panelWidth = columns * itemSize + (columns - 1) * 8 + 32; // grid + gaps + padding
@@ -184,27 +182,6 @@ export function LibrarySidebar({
         }}
         aria-hidden={!isOpen}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between gap-3 p-4 border-b border-[var(--flyout-item-border)]">
-          <h2 className="text-base font-semibold text-[var(--flyout-text)]">
-            Libraries
-          </h2>
-          <button
-            type="button"
-            onClick={closeSidebar}
-            aria-label="Close library sidebar"
-            className={cn(
-              "flex items-center justify-center size-8 rounded-md",
-              "text-[var(--muted-text)] hover:text-[var(--flyout-text)]",
-              "hover:bg-[var(--tile-hover-bg)]",
-              "transition-colors duration-100",
-              "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--accent-color)]"
-            )}
-          >
-            <XIcon className="size-5" />
-          </button>
-        </div>
-
         {/* Search */}
         <div className="px-4 py-3 border-b border-[var(--flyout-item-border)]">
           <div className="relative">
@@ -290,6 +267,7 @@ export function LibrarySidebar({
                 onAddItem={handleAddToPersonalLibrary}
                 onRemoveItem={personalLibrary.removeItem}
                 selectedElements={selectedElements}
+                matchingItemId={personalLibrary.findMatchingItemId(selectedElements)}
                 defaultOpen={lastExpandedId === "personal" || selectedElements.length > 0}
                 onToggle={(isExpanded) => handleSectionToggle("personal", isExpanded)}
               />
