@@ -12,7 +12,7 @@ import "@excalidraw/excalidraw/index.css";
 import { ChromeOverlay } from "./components/ChromeOverlay";
 import { type ToolType, type ArrowType } from "./components/CustomToolbar";
 import { SelectionPropertiesRail } from "./components/SelectionPropertiesRail";
-import { BottomLeftBar, BottomRightBar, ZoomControls, HistoryControls, UiScaleControls } from "./components/bottombar";
+import { BottomLeftBar, BottomRightBar, ZoomControls, HistoryControls, UiScaleControls, FocusModeToggle } from "./components/bottombar";
 import type { SelectionInfo } from "./components/SelectionFlyout";
 import { type StatusMessage } from "./components/NativeStatus";
 import { LibrarySidebar } from "./components/LibrarySidebar";
@@ -31,6 +31,7 @@ import { useExplicitStyleDefaults } from "./hooks/useExplicitStyleDefaults";
 import { useWebFallbackActions } from "./hooks/useWebFallbackActions";
 import { useMultiPointFinalize } from "./hooks/useMultiPointFinalize";
 import { useUiScale } from "./hooks/useUiScale";
+import { useFocusMode } from "./hooks/useFocusMode";
 import type { NativeFileHandle } from "./native-bridge";
 import { loadLocalSceneEntries, persistLocalSceneEntries, type LocalSceneEntry } from "./local-scenes";
 
@@ -135,6 +136,8 @@ export default function App() {
   });
 
   const { scale, handleScaleUp, handleScaleDown, handleReset: handleResetScale, minScale, maxScale } = useUiScale();
+
+  const { isFocusMode, toggleFocusMode } = useFocusMode();
 
   const { isDrawingMultiPoint, finalizeMultiPoint } = useMultiPointFinalize(api);
 
@@ -706,6 +709,7 @@ export default function App() {
         onFinalizeMultiPoint={finalizeMultiPoint}
       />
       <BottomLeftBar>
+        <FocusModeToggle isFocusMode={isFocusMode} onToggle={toggleFocusMode} />
         <ZoomControls
           zoom={zoom}
           onZoomIn={handleZoomIn}
