@@ -1689,3 +1689,33 @@ header[role="banner"][aria-label="File toolbar"] {
   }
 }
 
+/*
+  Focus Mode
+  When data-focus-mode="true" is set on <html>, all UI is hidden
+  except the focus mode toggle button itself. This allows users
+  to view just the drawing without any chrome/controls.
+*/
+:root[data-focus-mode="true"] [data-slot="tool-rail"],
+:root[data-focus-mode="true"] .selection-props-rail,
+:root[data-focus-mode="true"] header[role="banner"][aria-label="File toolbar"],
+:root[data-focus-mode="true"] [data-slot="library-trigger"],
+:root[data-focus-mode="true"] .library-sidebar,
+:root[data-focus-mode="true"] .native-status,
+:root[data-focus-mode="true"] .bottom-right-bar {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity 150ms ease-out;
+}
+
+/* Hide zoom/history controls but keep the focus mode toggle visible */
+:root[data-focus-mode="true"] .zoom-controls > *:not(:first-child) {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity 150ms ease-out;
+}
+
+/* Ensure the focus mode toggle stays visible and interactive */
+:root[data-focus-mode="true"] .zoom-controls {
+  pointer-events: auto !important;
+}
+
