@@ -616,6 +616,7 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
         })();
 
     const remapBoundIds = (elementsToRemap: ExcalidrawElement[]) => {
+      const randomId = () => Math.random().toString(36).slice(2, 10);
       const idMap = new Map<string, string>();
       duplicationSource.forEach((source, index) => {
         const clone = elementsToRemap[index];
@@ -623,6 +624,18 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
           idMap.set(source.id, clone.id);
         }
       });
+
+      // Build groupId map - collect all unique groupIds and generate new ones
+      const groupIdMap = new Map<string, string>();
+      for (const el of duplicationSource) {
+        if (el.groupIds) {
+          for (const gid of el.groupIds) {
+            if (!groupIdMap.has(gid)) {
+              groupIdMap.set(gid, randomId());
+            }
+          }
+        }
+      }
 
       const remapped = elementsToRemap.map((clone) => {
         const mappedBoundElements = clone.boundElements
@@ -638,11 +651,15 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
         const sourceFrameId = (clone as { frameId?: string | null }).frameId;
         const mappedFrameId = sourceFrameId ? idMap.get(sourceFrameId) : null;
 
+        // Remap groupIds so cloned groups are independent from originals
+        const mappedGroupIds = clone.groupIds?.map((gid) => groupIdMap.get(gid) ?? gid);
+
         return {
           ...clone,
           ...(mappedBoundElements ? { boundElements: mappedBoundElements } : {}),
           ...(mappedContainer ? { containerId: mappedContainer } : {}),
           ...(mappedFrameId ? { frameId: mappedFrameId } : {}),
+          ...(mappedGroupIds ? { groupIds: mappedGroupIds } : {}),
         } as ExcalidrawElement;
       });
 
