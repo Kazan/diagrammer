@@ -311,7 +311,7 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
   const isFrameOnly = elements.length === 1 && (elements[0].type === "frame" || elements[0].type === "magicframe");
   const hasFillCapable = elements.some((el) => (!LINE_LIKE_TYPES.has(el.type) && el.type !== "text") || isClosedPolyline(el));
   const hasStyleControls = elements.some((el) => el.type !== "text" && el.type !== "image" && el.type !== "frame" && el.type !== "magicframe");
-  const hasArrowControls = elements.some((el) => el.type === "arrow" || el.type === "line");
+  const hasArrowControls = elements.some((el) => el.type === "arrow");
   const hasTextControls = elements.some((el) =>
     el.type === "text" || el.boundElements?.some((b) => b.type === "text")
   );
