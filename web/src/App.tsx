@@ -12,6 +12,7 @@ import "@excalidraw/excalidraw/index.css";
 import { ChromeOverlay } from "./components/ChromeOverlay";
 import { type ToolType, type ArrowType } from "./components/CustomToolbar";
 import { SelectionPropertiesRail } from "./components/SelectionPropertiesRail";
+import { BottomLeftBar, ZoomControls, HistoryControls } from "./components/bottombar";
 import type { SelectionInfo } from "./components/SelectionFlyout";
 import { type StatusMessage } from "./components/NativeStatus";
 import { LibrarySidebar } from "./components/LibrarySidebar";
@@ -698,16 +699,20 @@ export default function App() {
         onForceClear={handleForceClear}
         onCancelClear={handleCancelClear}
         exporting={exporting}
-        zoom={zoom}
-        onZoomIn={handleZoomIn}
-        onZoomOut={handleZoomOut}
-        onResetZoom={handleResetZoom}
-        onZoomToContent={handleZoomToContent}
-        onUndo={handleUndo}
-        canUndo={canUndo}
         isDrawingMultiPoint={isDrawingMultiPoint}
         onFinalizeMultiPoint={finalizeMultiPoint}
       />
+      <BottomLeftBar>
+        <ZoomControls
+          zoom={zoom}
+          onZoomIn={handleZoomIn}
+          onZoomOut={handleZoomOut}
+          onResetZoom={handleResetZoom}
+          onZoomToContent={handleZoomToContent}
+          disabled={!hasSceneContent}
+        />
+        <HistoryControls onUndo={handleUndo} canUndo={canUndo} />
+      </BottomLeftBar>
     </div>
   );
 }
