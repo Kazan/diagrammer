@@ -497,8 +497,10 @@ internal class NativeBridge(
         val contentValues = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
             put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
-            put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/Diagrammer")
+            // RELATIVE_PATH and IS_PENDING require API 29 (Q) or higher.
+            // Both Boox Nova Air 2 (API 30) and Boox Air4c (API 32) support these.
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/Diagrammer")
                 put(MediaStore.MediaColumns.IS_PENDING, 1)
             }
         }
