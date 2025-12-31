@@ -6,6 +6,7 @@ import {
   restoreSceneForApp,
 } from "../excalidraw-restore";
 import { computeSceneSignature } from "../scene-utils";
+import { fitSceneToViewport } from "../scene-view";
 import type { StatusMessage } from "../components/NativeStatus";
 
 type WebFallbackParams = {
@@ -78,7 +79,7 @@ export function useWebFallbackActions({
 
         const elements = api.getSceneElements();
         if (elements.length) {
-          api.scrollToContent(elements, { fitToViewport: true, animate: false });
+          fitSceneToViewport(api, elements, { animate: false });
         }
 
         prevSceneSigRef.current = computeSceneSignature(

@@ -42,6 +42,8 @@ import { resetSceneToDefaults } from "./scene-defaults";
 
 import { computeSceneSignature, stripExtension } from "./scene-utils";
 
+import { fitSceneToViewport } from "./scene-view";
+
 export default function App() {
   const LOCAL_SCENE_KEY = "diagrammer.localScene";
   const LOCAL_FS_KEY = "diagrammer.localFs";
@@ -253,7 +255,7 @@ export default function App() {
       applyRestoredScene(api, restored);
       const elements = api.getSceneElements();
       if (elements.length) {
-        api.scrollToContent(elements, { fitToViewport: true, animate: false });
+        fitSceneToViewport(api, elements, { animate: false });
       }
       prevSceneSigRef.current = computeSceneSignature(api.getSceneElements(), api.getAppState());
       const hasVisibleElements = elements.some((el) => !el.isDeleted);

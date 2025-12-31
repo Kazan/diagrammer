@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type MutableRefObject } from "react";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import { buildDefaultLocalAppStateOverrides, restoreSceneForApp } from "../excalidraw-restore";
 import { computeSceneSignature } from "../scene-utils";
+import { fitSceneToViewport } from "../scene-view";
 
 export function useSceneHydration(options: {
   api: ExcalidrawImperativeAPI | null;
@@ -51,14 +52,16 @@ export function useSceneHydration(options: {
   const initialData = useMemo(() => {
     const localOverrides = buildDefaultLocalAppStateOverrides();
     const restored = restoreSceneForApp(startupRawScene, localOverrides);
-    const hasVisibleElements = restored.elements.some((el) => !el.isDeleted);
+    // Don't use scrollToContent here - we'll use fitSceneToViewport after API is ready
+    // to properly account for UI insets (header, toolbar, etc.)
     return {
       ...restored,
-      scrollToContent: hasVisibleElements,
+      scrollToContent: false,
     };
   }, [startupRawScene]);
 
   const [didAnnounceRestore, setDidAnnounceRestore] = useState(false);
+  const [didFitToViewport, setDidFitToViewport] = useState(false);
 
   useEffect(() => {
     if (!api) return;
@@ -66,7 +69,16 @@ export function useSceneHydration(options: {
     hydratedSceneRef.current = true;
     prevNonEmptySceneRef.current = elements.some((el) => !el.isDeleted);
     prevSceneSigRef.current = computeSceneSignature(elements, api.getAppState());
-  }, [api, hydratedSceneRef, prevNonEmptySceneRef, prevSceneSigRef]);
+
+    // Fit to viewport after hydration, accounting for UI chrome
+    if (!didFitToViewport && elements.some((el) => !el.isDeleted)) {
+      setDidFitToViewport(true);
+      // Use requestAnimationFrame to ensure DOM has settled
+      requestAnimationFrame(() => {
+        fitSceneToViewport(api, elements, { animate: false });
+      });
+    }
+  }, [api, didFitToViewport, hydratedSceneRef, prevNonEmptySceneRef, prevSceneSigRef]);
 
   useEffect(() => {
     if (!api || didAnnounceRestore) return;

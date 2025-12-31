@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
 import { CaptureUpdateAction } from "@excalidraw/excalidraw";
 import type { ExcalidrawImperativeAPI, NormalizedZoomValue } from "@excalidraw/excalidraw/types";
+import { fitSceneToViewport } from "../scene-view";
 
 export function useZoomControls(options: {
   api: ExcalidrawImperativeAPI | null;
@@ -89,7 +90,7 @@ export function useZoomControls(options: {
       setStatus({ text: "Nothing to focus", tone: "warn" });
       return;
     }
-    instance.scrollToContent(elements, { fitToViewport: true, animate: true });
+    fitSceneToViewport(instance, elements, { animate: true });
   }, [apiRef, setStatus]);
 
   return { zoom, handleZoomIn, handleZoomOut, handleResetZoom, handleZoomToContent } as const;
