@@ -267,7 +267,7 @@ export function LibrarySidebar({
                 onAddItem={handleAddToPersonalLibrary}
                 onRemoveItem={personalLibrary.removeItem}
                 selectedElements={selectedElements}
-                hasItem={personalLibrary.hasItem}
+                matchingItemId={personalLibrary.findMatchingItemId(selectedElements)}
                 defaultOpen={lastExpandedId === "personal" || selectedElements.length > 0}
                 onToggle={(isExpanded) => handleSectionToggle("personal", isExpanded)}
               />

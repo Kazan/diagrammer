@@ -124,6 +124,20 @@ export function usePersonalLibrary() {
   );
 
   /**
+   * Find the ID of a matching item in the library (by visual fingerprint).
+   * Returns null if no match found.
+   */
+  const findMatchingItemId = useCallback(
+    (elements: readonly ExcalidrawElement[]): string | null => {
+      if (elements.length === 0) return null;
+      const fingerprint = elementsFingerprint(elements);
+      const match = items.find((item) => elementsFingerprint(item.elements) === fingerprint);
+      return match?.id ?? null;
+    },
+    [items]
+  );
+
+  /**
    * Add elements to the library. Returns false if duplicate detected.
    */
   const addItem = useCallback(
@@ -179,6 +193,7 @@ export function usePersonalLibrary() {
     removeItem,
     clearAll,
     hasItem,
+    findMatchingItemId,
     isEmpty: items.length === 0,
   };
 }
