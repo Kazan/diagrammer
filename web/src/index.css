@@ -220,6 +220,12 @@ header[role="banner"][aria-label="File toolbar"] {
   transform-origin: right top !important;
 }
 
+/* Right-anchored elements (library trigger) */
+[data-slot="library-trigger"] {
+  transform: translateY(-50%) scale(var(--ui-scale, 1)) !important;
+  transform-origin: right center !important;
+}
+
 .chrome-overlay {
   position: fixed;
   top: 16px;
