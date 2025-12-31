@@ -520,9 +520,10 @@ header[role="banner"][aria-label="File toolbar"] {
   display: none !important;
 }
 
-/* Duplicate and Delete actions */
+/* Duplicate, Delete, and Add to Library actions */
 .excalidraw .context-menu li[data-testid="duplicateSelection"],
-.excalidraw .context-menu li[data-testid="deleteSelectedElements"] {
+.excalidraw .context-menu li[data-testid="deleteSelectedElements"],
+.excalidraw .context-menu li[data-testid="addToLibrary"] {
   display: none !important;
 }
 
