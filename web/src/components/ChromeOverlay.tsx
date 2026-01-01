@@ -1,8 +1,9 @@
 import { CustomToolbar, type ToolType, type ArrowType } from "./CustomToolbar";
 import { NativeStatus, type StatusMessage } from "./NativeStatus";
 import { TopBar } from "./topbar";
-import { Button } from "@/components/ui/button";
-import { EraserIcon, CheckIcon } from "lucide-react";
+import { StatusBanner } from "./StatusBanner";
+import { MultiPointDoneButton } from "./MultiPointDoneButton";
+import { ClearConfirmDialog } from "./ClearConfirmDialog";
 
 type Props = {
   fileName: string;
@@ -81,17 +82,7 @@ export function ChromeOverlay({
         showCopySource={false}
       />
 
-      {/* Status banner for transient messages */}
-      {status ? (
-        <div
-          className={`chrome-banner chrome-banner--${status.tone}`}
-          role="status"
-          aria-live="polite"
-          style={{ position: "fixed", top: 80, left: 16, right: 16, zIndex: 29 }}
-        >
-          {status.text}
-        </div>
-      ) : null}
+      <StatusBanner status={status} />
 
       <CustomToolbar
         activeTool={activeTool}
@@ -101,54 +92,17 @@ export function ChromeOverlay({
         onLockTool={onLockTool}
       />
 
-      {/* Floating "Done" button when drawing multi-point lines/arrows (tap-tap mode) */}
-      {isDrawingMultiPoint && onFinalizeMultiPoint ? (
-        <div
-          className="fixed z-30 pointer-events-auto"
-          style={{ bottom: 100, left: "50%", transform: "translateX(-50%)" }}
-        >
-          <Button
-            variant="default"
-            size="lg"
-            className="h-12 px-6 text-base font-medium bg-blue-600 hover:bg-blue-700 text-white border-0 shadow-lg"
-            onClick={onFinalizeMultiPoint}
-          >
-            <CheckIcon className="mr-2 size-5" />
-            Done
-          </Button>
-        </div>
-      ) : null}
+      {isDrawingMultiPoint && onFinalizeMultiPoint && (
+        <MultiPointDoneButton onFinalize={onFinalizeMultiPoint} />
+      )}
 
       <NativeStatus present={nativePresent} lastSaved={lastSaved} status={status} />
 
-      {showClearConfirm ? (
-        <div
-          className="fixed inset-0 z-40 pointer-events-auto flex items-start justify-end pt-20 pr-4"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Confirm clear"
-        >
-          <div className="absolute inset-0 bg-black/10" aria-hidden="true" onClick={onCancelClear} />
-          <div
-            className="relative w-72 rounded-md border border-slate-200 bg-white p-3 space-y-3"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="text-sm font-semibold text-slate-900">Clear canvas?</div>
-            <div className="text-xs text-slate-600">
-              You have unsaved changes. Choose Clear to wipe now, or tap outside to keep editing and save first.
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full justify-center h-9 bg-[var(--btn-bg)] text-[var(--btn-text)] border-[var(--btn-border)] hover:bg-[var(--btn-hover-bg)] hover:text-[var(--btn-hover-text)] hover:border-[var(--btn-hover-border)] active:bg-[var(--btn-pressed-bg)] active:text-[var(--btn-pressed-text)] active:border-[var(--btn-pressed-border)] shadow-none"
-              onClick={onForceClear}
-            >
-              <EraserIcon className="mr-1.5 size-4" />
-              Clear
-            </Button>
-          </div>
-        </div>
-      ) : null}
+      <ClearConfirmDialog
+        open={showClearConfirm}
+        onConfirm={onForceClear}
+        onCancel={onCancelClear}
+      />
     </>
   );
 }

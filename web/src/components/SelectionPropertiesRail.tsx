@@ -1,24 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import type React from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CaptureUpdateAction, convertToExcalidrawElements } from "@excalidraw/excalidraw";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import type { ExcalidrawElement, ExcalidrawTextElement } from "@excalidraw/excalidraw/element/types";
 import { moveAllLeft, moveAllRight, moveOneLeft, moveOneRight } from "../excalidraw-zindex";
 import {
-  AlignCenterVertical,
-  AlignEndVertical,
-  AlignStartVertical,
-  ArrowDown,
-  ArrowUp,
-  BringToFront,
   Copy,
-  Group as GroupIcon,
   Layers as LayersIcon,
   MoveRight,
-  Ungroup,
   PaintBucket,
   Palette,
-  SendToBack,
   SlidersHorizontal,
   Trash2,
   Type as TypeIcon,
@@ -30,6 +20,7 @@ import type { PaletteId } from "./ColorPicker";
 import { SelectionStyleFlyout } from "./SelectionStyleFlyout";
 import { ArrowStyleFlyout } from "./ArrowStyleFlyout";
 import { TextStyleFlyout } from "./TextStyleFlyout";
+import { ArrangeFlyout, type LayerAction, type AlignAction } from "./ArrangeFlyout";
 import type { ExplicitStyleDefaults } from "@/hooks/useExplicitStyleDefaults";
 import {
   ToolRail,
@@ -37,8 +28,6 @@ import {
   RailSeparator,
   RailButton,
   RailPopoverButton,
-  RailSwatch,
-  railButtonVariants,
 } from "@/components/ui/tool-rail";
 import { cn, shouldUseDarkForeground } from "@/lib/utils";
 
@@ -59,9 +48,6 @@ type Props = {
 const DEFAULT_STROKE = "#0f172a";
 const DEFAULT_FILL = "#b7f5c4";
 const LINE_LIKE_TYPES = new Set<ExcalidrawElement["type"]>(["line", "arrow"]);
-
-type LayerAction = "toFront" | "toBack" | "forward" | "backward";
-type AlignAction = "left" | "centerX" | "right" | "top" | "centerY" | "bottom";
 
 const isClosedPolyline = (el: ExcalidrawElement) => {
   if (el.type !== "line") return false;
@@ -764,93 +750,6 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
     // as a separate default since text elements inherit from strokeColor
   };
 
-  // Flyout button for arrange panel
-  const ArrangeTile = ({
-    Icon,
-    label,
-    onClick,
-    testId,
-    iconStyle,
-  }: {
-    Icon: React.ComponentType<{ size?: number | string; style?: React.CSSProperties }>;
-    label: string;
-    onClick: () => void;
-    testId: string;
-    iconStyle?: React.CSSProperties;
-  }) => {
-    const pointerActivatedRef = useRef(false);
-
-    return (
-      <RailButton
-        variant="flyout"
-        data-testid={testId}
-        onPointerDownCapture={(e) => { pointerActivatedRef.current = false; e.stopPropagation(); }}
-        onPointerUp={(e) => {
-          if (e.button !== 0) return;
-          pointerActivatedRef.current = true;
-          e.stopPropagation();
-          onClick();
-        }}
-        onClick={(e) => {
-          if (pointerActivatedRef.current) { pointerActivatedRef.current = false; return; }
-          e.stopPropagation();
-          onClick();
-        }}
-        aria-label={label}
-      >
-        <Icon size={18} aria-hidden="true" style={iconStyle} />
-      </RailButton>
-    );
-  };
-
-  // Arrange flyout content
-  const arrangeFlyoutContent = (
-    <div className="flex flex-col gap-3 text-slate-900">
-      <div className="flex flex-col gap-2">
-        <div className="text-[13px] font-bold text-slate-900">Layers</div>
-        <div className="grid grid-cols-4 gap-2" role="group" aria-label="Layer order">
-          <ArrangeTile Icon={SendToBack} label="Send to back" testId="arrange-layer-back" onClick={() => moveSelection("toBack")} />
-          <ArrangeTile Icon={ArrowDown} label="Move backward" testId="arrange-layer-backward" onClick={() => moveSelection("backward")} />
-          <ArrangeTile Icon={ArrowUp} label="Move forward" testId="arrange-layer-forward" onClick={() => moveSelection("forward")} />
-          <ArrangeTile Icon={BringToFront} label="Bring to front" testId="arrange-layer-front" onClick={() => moveSelection("toFront")} />
-        </div>
-      </div>
-
-      {/* Show align buttons only when there are 2+ alignment units to align */}
-      {canAlign && (
-        <div className="flex flex-col gap-2">
-          <div className="text-[13px] font-bold text-slate-900">Align</div>
-          <div className="grid grid-cols-3 gap-2" role="group" aria-label="Horizontal align">
-            <ArrangeTile Icon={AlignStartVertical} label="Align left" testId="arrange-align-left" onClick={() => alignSelection("left")} />
-            <ArrangeTile Icon={AlignCenterVertical} label="Align center (Y axis)" testId="arrange-align-center-x" onClick={() => alignSelection("centerX")} />
-            <ArrangeTile Icon={AlignEndVertical} label="Align right" testId="arrange-align-right" onClick={() => alignSelection("right")} />
-          </div>
-          <div className="grid grid-cols-3 gap-2" role="group" aria-label="Vertical align">
-            <ArrangeTile Icon={AlignStartVertical} label="Align top" testId="arrange-align-top" onClick={() => alignSelection("top")} iconStyle={{ transform: "rotate(90deg)" }} />
-            <ArrangeTile Icon={AlignCenterVertical} label="Align middle (X axis)" testId="arrange-align-center-y" onClick={() => alignSelection("centerY")} iconStyle={{ transform: "rotate(90deg)" }} />
-            <ArrangeTile Icon={AlignEndVertical} label="Align bottom" testId="arrange-align-bottom" onClick={() => alignSelection("bottom")} iconStyle={{ transform: "rotate(90deg)" }} />
-          </div>
-        </div>
-      )}
-
-      {/* Show Actions section when there's something to group or ungroup */}
-      {(canAlign || canUngroup) && (
-        <div className="flex flex-col gap-2">
-          <div className="text-[13px] font-bold text-slate-900">Actions</div>
-          <div className="grid grid-cols-2 gap-2" role="group" aria-label="Grouping">
-            {/* Show Group button only when there are 2+ units that can be grouped */}
-            {canAlign && (
-              <ArrangeTile Icon={GroupIcon} label="Group selection" testId="arrange-group" onClick={handleGroupSelection} />
-            )}
-            {canUngroup && (
-              <ArrangeTile Icon={Ungroup} label="Ungroup selection" testId="arrange-ungroup" onClick={handleUngroupSelection} />
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-
   return (
     <ToolRail position="right" showDivider aria-label="Selection properties">
       {/* Property buttons with popovers */}      {hasAnyPropertyButtons && (      <RailSection columns={1}>
@@ -1010,7 +909,16 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
           onOpenChange={(open) => setOpenKind(open ? "arrange" : null)}
           aria-label="Layers and alignment"
           contentClassName="min-w-[232px]"
-          content={arrangeFlyoutContent}
+          content={
+            <ArrangeFlyout
+              canAlign={canAlign}
+              canUngroup={canUngroup}
+              onLayerAction={moveSelection}
+              onAlignAction={alignSelection}
+              onGroup={handleGroupSelection}
+              onUngroup={handleUngroupSelection}
+            />
+          }
         >
           <LayersIcon size={18} aria-hidden="true" />
         </RailPopoverButton>
