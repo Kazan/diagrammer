@@ -528,12 +528,6 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
     if (!sourceElements.length) return;
     const scene = api.getSceneElements();
 
-    const canUseSkeletonDuplication = sourceElements.every((el) => {
-      if (el.type === "frame" || el.type === "magicframe") return false;
-      if (el.type === "image" && !el.fileId) return false;
-      return true;
-    });
-
     // Collect frame IDs from selected frames
     const selectedFrameIds = new Set<string>();
     for (const el of sourceElements) {
@@ -549,152 +543,150 @@ export function SelectionPropertiesRail({ selection, api, onRequestOpen, onStyle
       return frameId && selectedFrameIds.has(frameId);
     });
 
-    const boundTextIds = new Set<string>();
+    // Collect all bound element IDs (text labels, arrows, etc.)
+    const boundElementIds = new Set<string>();
     for (const el of sourceElements) {
       if (el.boundElements) {
         for (const bound of el.boundElements) {
-          boundTextIds.add(bound.id);
+          boundElementIds.add(bound.id);
         }
       }
     }
-    // Also collect bound text from frame children
     for (const el of frameChildElements) {
       if (el.boundElements) {
         for (const bound of el.boundElements) {
-          boundTextIds.add(bound.id);
+          boundElementIds.add(bound.id);
         }
       }
     }
-    const boundTextElements = scene.filter((el) => boundTextIds.has(el.id));
+
+    // Include connected arrows that have both endpoints in the selection
+    const sourceIds = new Set(sourceElements.map((el) => el.id));
+    frameChildElements.forEach((el) => sourceIds.add(el.id));
+
+    const connectedArrows = scene.filter((el) => {
+      if (el.isDeleted || el.type !== "arrow") return false;
+      const arrow = el as ExcalidrawElement & {
+        startBinding?: { elementId: string } | null;
+        endBinding?: { elementId: string } | null;
+      };
+      const startBound = arrow.startBinding?.elementId;
+      const endBound = arrow.endBinding?.elementId;
+      // Include arrow if both endpoints are in selection (or unbound)
+      const startInSelection = startBound ? sourceIds.has(startBound) : true;
+      const endInSelection = endBound ? sourceIds.has(endBound) : true;
+      const hasConnectionToSelection = (startBound && sourceIds.has(startBound)) || (endBound && sourceIds.has(endBound));
+      return hasConnectionToSelection && startInSelection && endInSelection;
+    });
+
+    for (const arrow of connectedArrows) {
+      boundElementIds.add(arrow.id);
+    }
+
+    // Build duplication source: selected + frame children + bound elements
+    const boundElements = scene.filter((el) => boundElementIds.has(el.id));
     const duplicationSource: ExcalidrawElement[] = [...sourceElements];
-    // Add frame children that aren't already in source
     for (const frameChild of frameChildElements) {
       if (!duplicationSource.some((el) => el.id === frameChild.id)) {
         duplicationSource.push(frameChild as ExcalidrawElement);
       }
     }
-    for (const boundText of boundTextElements) {
-      if (!duplicationSource.some((el) => el.id === boundText.id)) {
-        duplicationSource.push(boundText as ExcalidrawElement);
+    for (const boundEl of boundElements) {
+      if (!duplicationSource.some((el) => el.id === boundEl.id)) {
+        duplicationSource.push(boundEl as ExcalidrawElement);
       }
     }
 
-    const cloneOffset = { dx: 16, dy: 16 } as const;
+    const cloneOffset = 16;
+    const randomId = () => Math.random().toString(36).slice(2, 10);
+    const randomNonce = () => Math.floor(Math.random() * 1_000_000_000);
 
-    const clones: ExcalidrawElement[] = canUseSkeletonDuplication
-      ? convertToExcalidrawElements(
-          duplicationSource as unknown as NonNullable<Parameters<typeof convertToExcalidrawElements>[0]>,
-          { regenerateIds: true },
-        ).map((el) => ({ ...el, x: el.x + cloneOffset.dx, y: el.y + cloneOffset.dy }))
-      : (() => {
-          const randomId = () => Math.random().toString(36).slice(2, 10);
-          const randomNonce = () => Math.floor(Math.random() * 1_000_000_000);
-          return duplicationSource.map((el) => ({
-            ...el,
-            id: randomId(),
-            seed: randomNonce(),
-            version: 1,
-            versionNonce: randomNonce(),
-            isDeleted: false,
-            x: el.x + cloneOffset.dx,
-            y: el.y + cloneOffset.dy,
-          }));
-        })();
+    // Step 1: Create ID mapping BEFORE cloning
+    const idMap = new Map<string, string>();
+    const groupIdMap = new Map<string, string>();
 
-    const remapBoundIds = (elementsToRemap: ExcalidrawElement[]) => {
-      const randomId = () => Math.random().toString(36).slice(2, 10);
-      const idMap = new Map<string, string>();
-      duplicationSource.forEach((source, index) => {
-        const clone = elementsToRemap[index];
-        if (clone) {
-          idMap.set(source.id, clone.id);
-        }
-      });
-
-      // Build groupId map - collect all unique groupIds and generate new ones
-      const groupIdMap = new Map<string, string>();
-      for (const el of duplicationSource) {
-        if (el.groupIds) {
-          for (const gid of el.groupIds) {
-            if (!groupIdMap.has(gid)) {
-              groupIdMap.set(gid, randomId());
-            }
+    for (const el of duplicationSource) {
+      idMap.set(el.id, randomId());
+      if (el.groupIds) {
+        for (const gid of el.groupIds) {
+          if (!groupIdMap.has(gid)) {
+            groupIdMap.set(gid, randomId());
           }
         }
       }
+    }
 
-      const remapped = elementsToRemap.map((clone) => {
-        const mappedBoundElements = clone.boundElements
-          ? clone.boundElements.map((binding) => {
+    // Step 2: Clone elements with new IDs and remapped bindings
+    const clones: ExcalidrawElement[] = duplicationSource.map((el) => {
+      const newId = idMap.get(el.id)!;
+
+      // Remap boundElements
+      const mappedBoundElements = el.boundElements
+        ? el.boundElements
+            .map((binding) => {
               const mappedId = idMap.get(binding.id);
-              return mappedId ? { ...binding, id: mappedId } : binding;
+              return mappedId ? { ...binding, id: mappedId } : null;
             })
-          : clone.boundElements;
+            .filter((b): b is NonNullable<typeof b> => b !== null)
+        : null;
 
-        const mappedContainer = "containerId" in clone && clone.containerId ? idMap.get(clone.containerId) : null;
+      // Remap containerId (for bound text)
+      const containerId = "containerId" in el && el.containerId ? idMap.get(el.containerId) ?? null : null;
 
-        // Remap frameId for elements inside frames
-        const sourceFrameId = (clone as { frameId?: string | null }).frameId;
-        const mappedFrameId = sourceFrameId ? idMap.get(sourceFrameId) : null;
+      // Remap frameId
+      const frameId = (el as { frameId?: string | null }).frameId;
+      const mappedFrameId = frameId ? idMap.get(frameId) ?? null : null;
 
-        // Remap groupIds so cloned groups are independent from originals
-        const mappedGroupIds = clone.groupIds?.map((gid) => groupIdMap.get(gid) ?? gid);
+      // Remap groupIds
+      const mappedGroupIds = el.groupIds?.map((gid) => groupIdMap.get(gid) ?? gid);
 
-        return {
-          ...clone,
-          ...(mappedBoundElements ? { boundElements: mappedBoundElements } : {}),
-          ...(mappedContainer ? { containerId: mappedContainer } : {}),
-          ...(mappedFrameId ? { frameId: mappedFrameId } : {}),
-          ...(mappedGroupIds ? { groupIds: mappedGroupIds } : {}),
-        } as ExcalidrawElement;
-      });
+      // Remap arrow bindings
+      type ArrowBindings = {
+        startBinding?: { elementId: string; focus: number; gap: number; fixedPoint?: [number, number] } | null;
+        endBinding?: { elementId: string; focus: number; gap: number; fixedPoint?: [number, number] } | null;
+      };
+      const arrowEl = el as ExcalidrawElement & ArrowBindings;
+      let mappedStartBinding: ArrowBindings["startBinding"] = undefined;
+      let mappedEndBinding: ArrowBindings["endBinding"] = undefined;
 
-      return { remapped, idMap } as const;
-    };
+      if (arrowEl.startBinding?.elementId) {
+        const mappedId = idMap.get(arrowEl.startBinding.elementId);
+        mappedStartBinding = mappedId
+          ? { ...arrowEl.startBinding, elementId: mappedId }
+          : null; // Unbind if target not in duplication
+      }
 
-    const adjustBoundTextPositions = (
-      remapped: ExcalidrawElement[],
-      idMap: Map<string, string>,
-    ): ExcalidrawElement[] => {
-      const reverseIdMap = new Map<string, string>();
-      idMap.forEach((cloneId, sourceId) => reverseIdMap.set(cloneId, sourceId));
+      if (arrowEl.endBinding?.elementId) {
+        const mappedId = idMap.get(arrowEl.endBinding.elementId);
+        mappedEndBinding = mappedId
+          ? { ...arrowEl.endBinding, elementId: mappedId }
+          : null; // Unbind if target not in duplication
+      }
 
-      const cloneLookup = new Map(remapped.map((el) => [el.id, el]));
-      const sourceLookup = new Map(duplicationSource.map((el) => [el.id, el]));
+      return {
+        ...el,
+        id: newId,
+        seed: randomNonce(),
+        version: 1,
+        versionNonce: randomNonce(),
+        x: el.x + cloneOffset,
+        y: el.y + cloneOffset,
+        ...(mappedBoundElements !== null ? { boundElements: mappedBoundElements } : {}),
+        ...(containerId !== null || ("containerId" in el && el.containerId) ? { containerId } : {}),
+        ...(mappedFrameId !== null || frameId ? { frameId: mappedFrameId } : {}),
+        ...(mappedGroupIds ? { groupIds: mappedGroupIds } : {}),
+        ...(mappedStartBinding !== undefined ? { startBinding: mappedStartBinding } : {}),
+        ...(mappedEndBinding !== undefined ? { endBinding: mappedEndBinding } : {}),
+      } as ExcalidrawElement;
+    });
 
-      return remapped.map((el) => {
-        if (el.type !== "text") return el;
-        if (!("containerId" in el) || !el.containerId) return el;
-        const containerClone = cloneLookup.get(el.containerId);
-        if (!containerClone || !("width" in containerClone && "height" in containerClone)) return el;
-
-        const sourceId = reverseIdMap.get(el.id);
-        const sourceText = sourceId ? sourceLookup.get(sourceId) : null;
-        const textWidth = el.width;
-        const textHeight = el.height;
-
-        const newX = containerClone.x + (containerClone.width - textWidth) / 2;
-        const newY = containerClone.y + (containerClone.height - textHeight) / 2;
-
-        return {
-          ...el,
-          x: newX,
-          y: newY,
-          // Preserve any other properties; width/height come from cloned text
-        } as ExcalidrawElement;
-      });
-    };
-
-    const { remapped, idMap } = remapBoundIds(clones);
-    const clonesWithBoundFix = adjustBoundTextPositions(remapped, idMap);
-
-    const nextSelectedElementIds = clonesWithBoundFix.reduce<Record<string, true>>((acc, clone) => {
+    const nextSelectedElementIds = clones.reduce<Record<string, true>>((acc, clone) => {
       acc[clone.id] = true;
       return acc;
     }, {});
 
     api.updateScene({
-      elements: [...scene, ...clonesWithBoundFix],
+      elements: [...scene, ...clones],
       appState: { selectedElementIds: nextSelectedElementIds, selectedGroupIds: {} },
     });
   };
