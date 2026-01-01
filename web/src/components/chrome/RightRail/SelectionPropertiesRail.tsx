@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { CaptureUpdateAction, convertToExcalidrawElements } from "@excalidraw/excalidraw";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import type { ExcalidrawElement, ExcalidrawTextElement } from "@excalidraw/excalidraw/element/types";
-import { moveAllLeft, moveAllRight, moveOneLeft, moveOneRight } from "../excalidraw-zindex";
+import { moveAllLeft, moveAllRight, moveOneLeft, moveOneRight } from "@/excalidraw-zindex";
 import {
   Copy,
   Layers as LayersIcon,
@@ -15,8 +15,8 @@ import {
   ALargeSmall,
 } from "lucide-react";
 import type { SelectionInfo } from "./SelectionFlyout";
-import ColorPicker from "./ColorPicker";
-import type { PaletteId } from "./ColorPicker";
+import ColorPicker from "@/components/shared/ColorPicker";
+import type { PaletteId } from "@/components/shared/ColorPicker";
 import { SelectionStyleFlyout } from "./SelectionStyleFlyout";
 import { ArrowStyleFlyout } from "./ArrowStyleFlyout";
 import { TextStyleFlyout } from "./TextStyleFlyout";

@@ -119,7 +119,7 @@ const TOOL_SECTIONS: ToolSection[] = [
   },
 ];
 
-export function CustomToolbar({
+export function DrawingToolbar({
   activeTool,
   arrowType = "sharp",
   isToolLocked = false,

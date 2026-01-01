@@ -9,7 +9,7 @@ import {
   SendToBack,
   Ungroup,
 } from "lucide-react";
-import { ArrangeTile } from "./ArrangeTile";
+import { ArrangeTile } from "@/components/shared/ArrangeTile";
 
 export type LayerAction = "toFront" | "toBack" | "forward" | "backward";
 export type AlignAction = "left" | "centerX" | "right" | "top" | "centerY" | "bottom";
