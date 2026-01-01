@@ -10,7 +10,7 @@ import { CaptureUpdateAction } from "@excalidraw/excalidraw";
  * UI insets that reduce the available viewport area for scene content.
  * These values should match the actual UI chrome dimensions in CSS.
  */
-export interface ViewportInsets {
+interface ViewportInsets {
   /** Top inset (e.g., header height + padding) */
   top: number;
   /** Left inset (e.g., toolbar width + padding) */
@@ -29,7 +29,7 @@ export interface ViewportInsets {
  * - Bottom: Zoom controls with ~52px height
  * - Right: Minimal padding (library sidebar is optional)
  */
-export const DEFAULT_VIEWPORT_INSETS: ViewportInsets = {
+const DEFAULT_VIEWPORT_INSETS: ViewportInsets = {
   top: 72,     // 16px offset + ~56px for header/status
   left: 156,   // 16px offset + 124px toolbar width + 16px gap
   right: 16,   // Minimal right padding
@@ -39,7 +39,7 @@ export const DEFAULT_VIEWPORT_INSETS: ViewportInsets = {
 /**
  * Options for fitting content to viewport.
  */
-export interface FitToViewportOptions {
+interface FitToViewportOptions {
   /** Custom viewport insets (defaults to DEFAULT_VIEWPORT_INSETS) */
   insets?: Partial<ViewportInsets>;
   /**
@@ -100,7 +100,7 @@ function getBoundingBox(elements: readonly ExcalidrawElement[]): {
  * Calculates the zoom level and scroll position to fit elements within
  * the available viewport area (accounting for UI insets).
  */
-export function calculateFitToViewport(
+function calculateFitToViewport(
   api: ExcalidrawImperativeAPI,
   elements?: readonly ExcalidrawElement[],
   options: FitToViewportOptions = {}

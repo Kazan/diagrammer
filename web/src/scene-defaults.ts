@@ -5,7 +5,7 @@ import type { AppState, ExcalidrawImperativeAPI, NormalizedZoomValue } from "@ex
  * Canvas background color variants available in the app.
  * Values are read from CSS custom properties defined in index.css.
  */
-export type CanvasBackgroundVariant = "white" | "light" | "grid" | "default";
+type CanvasBackgroundVariant = "white" | "light" | "grid" | "default";
 
 const CSS_VAR_MAP: Record<CanvasBackgroundVariant, string> = {
   white: "--canvas-bg-white",
