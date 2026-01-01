@@ -12,5 +12,5 @@ local.properties
 *.aab
 captures/
 .externalNativeBuild/
-.DS_Store
 .adb_device
+.adb_device_*
