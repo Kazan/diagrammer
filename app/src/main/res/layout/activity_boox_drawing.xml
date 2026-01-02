@@ -165,7 +165,7 @@
                 android:layout_gravity="center"
                 android:stepSize="1"
                 android:valueFrom="1"
-                android:valueTo="20"
+                android:valueTo="50"
                 app:labelBehavior="gone"
                 app:thumbRadius="10dp"
                 app:trackHeight="6dp" />

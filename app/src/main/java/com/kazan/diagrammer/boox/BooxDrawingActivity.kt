@@ -67,6 +67,22 @@ class BooxDrawingActivity : AppCompatActivity() {
         const val STYLE_MARKER = 3
         const val STYLE_CHARCOAL = 4
 
+        // Stroke width range
+        const val MIN_STROKE_WIDTH = 1f
+        const val MAX_STROKE_WIDTH = 50f
+
+        /**
+         * Default stroke widths per brush type.
+         * These are tuned for natural-looking strokes with each brush.
+         */
+        val DEFAULT_STROKE_WIDTHS = mapOf(
+            STYLE_PENCIL to 3f,      // Thin, precise
+            STYLE_FOUNTAIN to 5f,    // Medium, calligraphy
+            STYLE_NEO_BRUSH to 8f,   // Broader, painterly
+            STYLE_MARKER to 15f,     // Wide highlighter
+            STYLE_CHARCOAL to 12f    // Thick, textured
+        )
+
         /**
          * Kaleido 3 color palette - 16 colors optimized for e-ink display.
          * These colors are specifically chosen for best rendering on Boox color e-ink.
@@ -135,7 +151,7 @@ class BooxDrawingActivity : AppCompatActivity() {
 
     // Current tool settings
     private var currentStyle = STYLE_FOUNTAIN
-    private var currentWidth = 3f
+    private var currentWidth = DEFAULT_STROKE_WIDTHS[STYLE_FOUNTAIN] ?: 5f
     private var currentColor = Color.BLACK
     private var hasDrawn = false
 
@@ -488,10 +504,16 @@ class BooxDrawingActivity : AppCompatActivity() {
      * With native EPD rendering enabled, the user already sees the stroke
      * on the e-ink display with ultra-low latency. Here we:
      * 1. Store the stroke data for later re-rendering if needed
-     * 2. Render the stroke to our bitmap (for accurate export)
-     * 3. Update the SurfaceView with our bitmap (backup display)
+     * 2. Render the stroke to our bitmap (for export)
      *
-     * The native EPD shows during drawing, our bitmap is the export source.
+     * IMPORTANT: We do NOT update the SurfaceView or force EPD refresh here.
+     * The native EPD preview remains visible, preserving the authentic brush
+     * appearance. The bitmap is built up silently for export.
+     *
+     * The SurfaceView/bitmap is only displayed when:
+     * - User clears the canvas
+     * - Notification panel closes (re-render)
+     * - Export happens
      */
     private fun onNativeStrokeComplete(points: List<BooxTouchPoint>) {
         Log.d(TAG, "onNativeStrokeComplete: Received ${points.size} points, style=$currentStyle, color=${Integer.toHexString(currentColor)}, width=$currentWidth")
@@ -509,16 +531,13 @@ class BooxDrawingActivity : AppCompatActivity() {
         )
         strokes.add(strokeData)
 
-        // Render this stroke to our bitmap (single source of truth)
+        // Render this stroke to our bitmap silently (for export)
+        // Do NOT display to surface - let native EPD preview persist
         val localCanvas = canvas ?: return
         BrushRenderer.renderStroke(localCanvas, strokeData)
 
-        // Display the updated bitmap on the SurfaceView
-        renderBitmapToSurface()
-
-        // Force EPD to refresh with the new bitmap content
-        // This is necessary since we disabled native EPD rendering
-        booxDrawingHelper?.forceEpdRefresh()
+        // Native EPD preview stays visible - no surface update or EPD refresh
+        Log.d(TAG, "onNativeStrokeComplete: Stroke added to bitmap, native EPD preserved")
     }
 
     /**
@@ -604,6 +623,9 @@ class BooxDrawingActivity : AppCompatActivity() {
      * The slider is rotated 90° to display vertically, filling the remaining sidebar height.
      */
     private fun initWidthSlider() {
+        // Set slider range
+        binding.sliderWidth.valueFrom = MIN_STROKE_WIDTH
+        binding.sliderWidth.valueTo = MAX_STROKE_WIDTH
         binding.sliderWidth.value = currentWidth
         binding.tvWidthValue.text = currentWidth.toInt().toString()
 
@@ -650,6 +672,10 @@ class BooxDrawingActivity : AppCompatActivity() {
         currentStyle = style
         binding.tvBrushName.text = name
 
+        // Set default width for this brush type
+        val defaultWidth = DEFAULT_STROKE_WIDTHS[style] ?: currentWidth
+        updateStrokeWidth(defaultWidth)
+
         // Update the stroke style on TouchHelper (no need to disable/enable)
         booxDrawingHelper?.setStrokeStyle(style)
 
@@ -663,6 +689,17 @@ class BooxDrawingActivity : AppCompatActivity() {
             updateBrushButtonStates()
             renderBitmapToSurface()
         }
+    }
+
+    /**
+     * Update the stroke width and sync UI.
+     */
+    private fun updateStrokeWidth(width: Float) {
+        currentWidth = width
+        paint.strokeWidth = width
+        binding.sliderWidth.value = width
+        binding.tvWidthValue.text = width.toInt().toString()
+        booxDrawingHelper?.setStrokeWidth(width)
     }
 
     /**
@@ -1344,8 +1381,8 @@ object BrushRenderer {
     }
 
     /**
-     * Charcoal: Use SDK NeoCharcoalPenV2 for textured charcoal strokes.
-     * Falls back to pressure-sensitive thick strokes if SDK rendering fails.
+     * Charcoal: Use SDK NeoCharcoalPen for textured charcoal strokes.
+     * This matches how notable app renders charcoal/pencil strokes.
      */
     private fun renderCharcoalStroke(canvas: Canvas, stroke: StrokeData) {
         val paint = createPaint(stroke.color)
@@ -1354,22 +1391,21 @@ object BrushRenderer {
         Log.d(TAG, "renderCharcoalStroke: Rendering ${sdkPoints.size} points with width=${stroke.width}")
 
         try {
-            // Try SDK's NeoCharcoalPenV2
-            val createArgs = com.onyx.android.sdk.data.note.ShapeCreateArgs()
-            val renderArgs = com.onyx.android.sdk.pen.PenRenderArgs()
-                .setCreateArgs(createArgs)
-                .setCanvas(canvas)
-                .setPenType(com.onyx.android.sdk.pen.NeoPenConfig.NEOPEN_PEN_TYPE_CHARCOAL)
-                .setColor(stroke.color)
-                .setErase(false)
-                .setPaint(paint)
-                .setStrokeWidth(stroke.width)
-                .setPoints(sdkPoints)
-
-            com.onyx.android.sdk.pen.NeoCharcoalPenV2.drawNormalStroke(renderArgs)
-            Log.d(TAG, "renderCharcoalStroke: SDK rendering succeeded")
+            // Use SDK's NeoCharcoalPen (not V2) - this is what notable uses
+            com.onyx.android.sdk.pen.NeoCharcoalPen.drawNormalStroke(
+                null,                                          // RenderContext (nullable)
+                canvas,
+                paint,
+                sdkPoints,
+                stroke.color,                                  // color as int
+                stroke.width,
+                com.onyx.android.sdk.data.note.ShapeCreateArgs(),
+                android.graphics.Matrix(),                     // identity matrix
+                false                                          // not erasing
+            )
+            Log.d(TAG, "renderCharcoalStroke: SDK NeoCharcoalPen rendering succeeded")
         } catch (e: Exception) {
-            Log.w(TAG, "renderCharcoalStroke: SDK failed (${e.message}), using charcoal fallback")
+            Log.w(TAG, "renderCharcoalStroke: SDK failed (${e.message}), using charcoal fallback", e)
             // Custom charcoal fallback - thick textured strokes
             renderCharcoalFallback(canvas, stroke)
         }
