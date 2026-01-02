@@ -14,6 +14,7 @@ import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import androidx.annotation.VisibleForTesting
+import com.kazan.diagrammer.boox.BooxDeviceUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.json.JSONArray
@@ -625,6 +626,114 @@ internal class NativeBridge(
 
     @JavascriptInterface
     fun getCurrentFileName(): String? = currentDocumentName
+
+    // ═══════════════════════════════════════════════════════════════
+    // Boox Native Drawing Integration
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * Returns whether the device supports full Boox native stylus drawing.
+     *
+     * This is called from JavaScript to conditionally show the "Native Draw" button.
+     * The capability is detected at app startup by checking for:
+     * - Onyx/Boox device manufacturer
+     * - Pen SDK classes (TouchHelper, RawInputCallback)
+     * - EPD Controller for direct e-ink access
+     */
+    @JavascriptInterface
+    fun hasFullBooxDrawingSupport(): Boolean {
+        val hasSupport = BooxDeviceUtils.hasFullBooxDrawingSupport
+        Log.d("NativeBridge", "hasFullBooxDrawingSupport: $hasSupport")
+        return hasSupport
+    }
+
+    /**
+     * Returns device info for debugging purposes.
+     * Called from JavaScript to log device capabilities.
+     */
+    @JavascriptInterface
+    fun getDeviceInfo(): String {
+        val info = JSONObject().apply {
+            put("device", BooxDeviceUtils.deviceModel)
+            put("androidApi", BooxDeviceUtils.androidApiLevel)
+            put("isOnyxDevice", BooxDeviceUtils.isOnyxDevice)
+            put("hasPenSdk", BooxDeviceUtils.hasPenSdk)
+            put("hasEpdController", BooxDeviceUtils.hasEpdController)
+            put("hasFullBooxDrawingSupport", BooxDeviceUtils.hasFullBooxDrawingSupport)
+        }
+        Log.d("NativeBridge", "getDeviceInfo: $info")
+        return info.toString()
+    }
+
+    /**
+     * Called from JavaScript to request opening the native drawing canvas.
+     * This triggers the MainActivity to launch BooxDrawingActivity.
+     */
+    @JavascriptInterface
+    fun openNativeDrawingCanvas() {
+        Log.i("NativeBridge", "openNativeDrawingCanvas: Request received from JavaScript")
+
+        if (!BooxDeviceUtils.hasFullBooxDrawingSupport) {
+            Log.w("NativeBridge", "openNativeDrawingCanvas: Device does not support native drawing")
+            notifyJs("onNativeDrawingComplete", false, "Device does not support native drawing", null)
+            return
+        }
+
+        mainHandler.post {
+            Log.d("NativeBridge", "openNativeDrawingCanvas: Dispatching to startNativeDrawing callback")
+            startNativeDrawing?.invoke()
+        }
+    }
+
+    /**
+     * Callback to launch the native drawing activity.
+     * Set by MainActivity during NativeBridge initialization.
+     */
+    var startNativeDrawing: (() -> Unit)? = null
+
+    /**
+     * Called by MainActivity when native drawing is complete.
+     * Passes the drawing as a base64 data URL to JavaScript for insertion into Excalidraw.
+     */
+    fun completeNativeDrawing(pngBytes: ByteArray, width: Int, height: Int) {
+        Log.i("NativeBridge", "completeNativeDrawing: Received ${pngBytes.size} bytes (${width}x$height)")
+
+        ioScope.launch {
+            try {
+                val base64 = Base64.encodeToString(pngBytes, Base64.NO_WRAP)
+                val dataUrl = "data:image/png;base64,$base64"
+
+                Log.d("NativeBridge", "completeNativeDrawing: Encoded to base64, length=${dataUrl.length}")
+
+                // Call the JavaScript function to insert the image
+                val script = """
+                    if (window.insertNativeDrawing) {
+                        window.insertNativeDrawing('$dataUrl', $width, $height);
+                    } else {
+                        console.error('insertNativeDrawing not found');
+                    }
+                """.trimIndent()
+
+                mainHandler.post {
+                    Log.d("NativeBridge", "completeNativeDrawing: Calling JavaScript insertNativeDrawing...")
+                    webView.evaluateJavascript(script) { result ->
+                        Log.d("NativeBridge", "completeNativeDrawing: JavaScript returned: $result")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("NativeBridge", "completeNativeDrawing: Failed to process drawing", e)
+                notifyJs("onNativeDrawingComplete", false, "Failed to process drawing: ${e.message}", null)
+            }
+        }
+    }
+
+    /**
+     * Called by MainActivity when native drawing is cancelled.
+     */
+    fun cancelNativeDrawing() {
+        Log.i("NativeBridge", "cancelNativeDrawing: Drawing was cancelled")
+        notifyJs("onNativeDrawingComplete", false, "Drawing cancelled", null)
+    }
 
     @VisibleForTesting
     internal fun setCurrentDocument(uri: Uri?, name: String?) {

@@ -11,6 +11,12 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // Boox/Onyx SDK repository for native stylus drawing
+        maven {
+            url = uri("https://repo.boox.com/repository/maven-public/")
+            // Allow insecure protocol as Boox repo may redirect
+            allowInsecureProtocol = true
+        }
     }
 }
 

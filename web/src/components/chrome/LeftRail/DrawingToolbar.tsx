@@ -13,6 +13,7 @@ import {
   Pencil,
   Type as TypeIcon,
   Image as ImageIcon,
+  PenTool,
 } from "lucide-react";
 import {
   ToolRail,
@@ -21,6 +22,7 @@ import {
   RailToggleGroup,
   RailToggleItem,
 } from "@/components/ui/tool-rail";
+import { Button } from "@/components/ui/button";
 
 export type ToolType =
   | "selection"
@@ -56,6 +58,12 @@ type Props = {
   isToolLocked?: boolean;
   onSelect: (tool: ToolType) => void;
   onLockTool?: (tool: ToolType) => void;
+  /** Whether Boox native stylus drawing is available */
+  hasNativeDrawing?: boolean;
+  /** Whether native drawing is currently in progress */
+  isNativeDrawing?: boolean;
+  /** Callback to open native drawing canvas */
+  onNativeDraw?: () => void;
 };
 
 /**
@@ -125,6 +133,9 @@ export function DrawingToolbar({
   isToolLocked = false,
   onSelect,
   onLockTool,
+  hasNativeDrawing = false,
+  isNativeDrawing = false,
+  onNativeDraw,
 }: Props) {
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressTriggeredRef = useRef(false);
@@ -173,6 +184,11 @@ export function DrawingToolbar({
     longPressTriggeredRef.current = false;
   }, [clearLongPressTimer]);
 
+  const handleNativeDrawClick = useCallback(() => {
+    console.log("[DrawingToolbar] Native Draw button clicked");
+    onNativeDraw?.();
+  }, [onNativeDraw]);
+
   return (
     <ToolRail position="left" aria-label="Drawing tools">
       <RailToggleGroup value={activeTool} onValueChange={onSelect}>
@@ -205,6 +221,27 @@ export function DrawingToolbar({
           </RailSection>
         ))}
       </RailToggleGroup>
+
+      {/* Native Boox stylus drawing button - only shown on supported devices */}
+      {hasNativeDrawing && (
+        <>
+          <RailSeparator colSpan={2} />
+          <RailSection columns={2} label="native">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleNativeDrawClick}
+              disabled={isNativeDrawing}
+              className="col-span-2 h-10 w-full gap-2 text-xs font-medium bg-[hsl(var(--accent)/0.1)] hover:bg-[hsl(var(--accent)/0.2)] border border-[hsl(var(--accent)/0.3)]"
+              aria-label="Native stylus drawing"
+              title="Draw with Boox native stylus (hardware accelerated)"
+            >
+              <PenTool size={16} aria-hidden="true" />
+              <span>Native Draw</span>
+            </Button>
+          </RailSection>
+        </>
+      )}
     </ToolRail>
   );
 }
