@@ -364,12 +364,13 @@ class BooxDrawingActivity : AppCompatActivity() {
      */
     private fun updateBrushButtonStates() {
         brushButtons.forEach { (style, button) ->
-            // Use tonal style for selected, outlined for unselected
-            if (style == currentStyle) {
-                // Use a light gray background for selected state
-                button.setBackgroundColor(Color.parseColor("#E8E8E8"))
+            val isSelected = style == currentStyle
+            if (isSelected) {
+                button.setBackgroundColor(Color.parseColor("#D0D0D0"))
+                button.strokeWidth = 0
             } else {
                 button.setBackgroundColor(Color.TRANSPARENT)
+                button.strokeWidth = (1 * resources.displayMetrics.density).toInt() // 1dp
             }
         }
     }

@@ -29,6 +29,11 @@ declare global {
     insertNativeDrawing?: (dataUrl: string, width: number, height: number) => void;
 
     /**
+     * Called by Android native layer when native drawing is cancelled.
+     */
+    cancelNativeDrawing?: () => void;
+
+    /**
      * Optional file picker APIs (overridden in Android WebView to route through the native bridge).
      * We intentionally keep these types broad because the browser versions (if present) return
      * platform file handles, while our native shim returns bridge-backed handles.

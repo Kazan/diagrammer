@@ -21,8 +21,8 @@ import {
   RailSeparator,
   RailToggleGroup,
   RailToggleItem,
+  RailButton,
 } from "@/components/ui/tool-rail";
-import { Button } from "@/components/ui/button";
 
 export type ToolType =
   | "selection"
@@ -227,18 +227,16 @@ export function DrawingToolbar({
         <>
           <RailSeparator colSpan={2} />
           <RailSection columns={2} label="native">
-            <Button
-              variant="ghost"
-              size="icon"
+            <RailButton
               onClick={handleNativeDrawClick}
               disabled={isNativeDrawing}
-              className="col-span-2 h-10 w-full gap-2 text-xs font-medium bg-[hsl(var(--accent)/0.1)] hover:bg-[hsl(var(--accent)/0.2)] border border-[hsl(var(--accent)/0.3)]"
+              pressed={isNativeDrawing}
+              className="col-span-2 w-full"
               aria-label="Native stylus drawing"
               title="Draw with Boox native stylus (hardware accelerated)"
             >
-              <PenTool size={16} aria-hidden="true" />
-              <span>Native Draw</span>
-            </Button>
+              <PenTool aria-hidden="true" />
+            </RailButton>
           </RailSection>
         </>
       )}

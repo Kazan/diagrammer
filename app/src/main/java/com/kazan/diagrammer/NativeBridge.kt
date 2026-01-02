@@ -732,6 +732,12 @@ internal class NativeBridge(
      */
     fun cancelNativeDrawing() {
         Log.i("NativeBridge", "cancelNativeDrawing: Drawing was cancelled")
+        mainHandler.post {
+            webView.evaluateJavascript(
+                "if (window.cancelNativeDrawing) { window.cancelNativeDrawing(); }",
+                null
+            )
+        }
         notifyJs("onNativeDrawingComplete", false, "Drawing cancelled", null)
     }
 

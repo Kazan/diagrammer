@@ -142,24 +142,30 @@ export function useNativeDrawing({ api, onInserted, setStatus }: UseNativeDrawin
     [api, onInserted, setStatus]
   );
 
-  // Register the global handler for the native bridge
+  /**
+   * Handle cancellation of native drawing.
+   * Called by the Android native layer via window.cancelNativeDrawing.
+   */
+  const cancelDrawing = useCallback(() => {
+    console.log("[NativeDrawing] cancelDrawing called");
+    setIsDrawing(false);
+    setStatus?.({ text: "Drawing cancelled", tone: "warn" });
+  }, [setStatus]);
+
+  // Register the global handlers for the native bridge
   useEffect(() => {
     if (!hasNativeDrawing) return;
 
     console.log("[NativeDrawing] Registering window.insertNativeDrawing handler");
     window.insertNativeDrawing = insertDrawing;
+    window.cancelNativeDrawing = cancelDrawing;
 
     return () => {
-      console.log("[NativeDrawing] Unregistering window.insertNativeDrawing handler");
+      console.log("[NativeDrawing] Unregistering native drawing handlers");
       delete window.insertNativeDrawing;
+      delete window.cancelNativeDrawing;
     };
-  }, [hasNativeDrawing, insertDrawing]);
-
-  // Handle cancellation (when drawing modal closes without completion)
-  useEffect(() => {
-    // When isDrawing becomes false without insertion, it was cancelled
-    // This is handled by the native layer notifying via callbacks
-  }, [isDrawing]);
+  }, [hasNativeDrawing, insertDrawing, cancelDrawing]);
 
   return {
     hasNativeDrawing,

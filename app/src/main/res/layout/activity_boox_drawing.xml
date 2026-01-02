@@ -14,63 +14,26 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <!-- Top toolbar - Brush style selection -->
+    <!-- Top toolbar - Brush name display -->
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="top"
         android:background="@android:color/transparent"
-        app:contentInsetStart="8dp"
-        app:contentInsetEnd="8dp">
+        app:contentInsetStart="16dp"
+        app:contentInsetEnd="16dp">
 
-        <LinearLayout
-            android:layout_width="match_parent"
+        <!-- Title showing current brush -->
+        <TextView
+            android:id="@+id/tvBrushName"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
-
-            <!-- Cancel button -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnCancel"
-                style="@style/Widget.Material3.Button.TextButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Cancel"
-                android:textColor="#666666"
-                app:icon="@drawable/ic_close"
-                app:iconTint="#666666" />
-
-            <Space
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="1" />
-
-            <!-- Title showing current brush -->
-            <TextView
-                android:id="@+id/tvBrushName"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Fountain Pen"
-                android:textColor="#333333"
-                android:textSize="16sp"
-                android:textStyle="bold" />
-
-            <Space
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="1" />
-
-            <!-- Done button -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnDone"
-                style="@style/Widget.Material3.Button.TonalButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Done"
-                app:icon="@drawable/ic_check" />
-
-        </LinearLayout>
+            android:layout_gravity="center"
+            android:text="Fountain Pen"
+            android:textColor="#333333"
+            android:textSize="16sp"
+            android:textStyle="bold" />
 
     </com.google.android.material.appbar.MaterialToolbar>
 
@@ -122,91 +85,127 @@
 
         </LinearLayout>
 
-        <!-- Brush style buttons -->
-        <HorizontalScrollView
+        <!-- Brush style buttons and action buttons -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:scrollbars="none">
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
-            <LinearLayout
+            <HorizontalScrollView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:scrollbars="none">
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:orientation="horizontal"
+                    android:paddingVertical="4dp">
+
+                    <!-- Pencil -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnPencil"
+                        style="@style/Widget.Material3.Button.OutlinedButton.Icon"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginHorizontal="4dp"
+                        android:text="Pencil"
+                        app:icon="@drawable/ic_pencil" />
+
+                    <!-- Fountain Pen (default) -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnFountain"
+                        style="@style/Widget.Material3.Button.OutlinedButton.Icon"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginHorizontal="4dp"
+                        android:text="Fountain"
+                        app:icon="@drawable/ic_fountain_pen" />
+
+                    <!-- Neo Brush -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnNeoBrush"
+                        style="@style/Widget.Material3.Button.OutlinedButton.Icon"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginHorizontal="4dp"
+                        android:text="Brush"
+                        app:icon="@drawable/ic_brush" />
+
+                    <!-- Marker -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnMarker"
+                        style="@style/Widget.Material3.Button.OutlinedButton.Icon"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginHorizontal="4dp"
+                        android:text="Marker"
+                        app:icon="@drawable/ic_marker" />
+
+                    <!-- Charcoal -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnCharcoal"
+                        style="@style/Widget.Material3.Button.OutlinedButton.Icon"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginHorizontal="4dp"
+                        android:text="Charcoal"
+                        app:icon="@drawable/ic_charcoal" />
+
+                    <!-- Divider -->
+                    <View
+                        android:layout_width="1dp"
+                        android:layout_height="32dp"
+                        android:layout_marginHorizontal="8dp"
+                        android:background="#CCCCCC" />
+
+                    <!-- Clear Canvas -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnClear"
+                        style="@style/Widget.Material3.Button.TextButton.Icon"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginHorizontal="4dp"
+                        android:text="Clear"
+                        android:textColor="#CC0000"
+                        app:icon="@drawable/ic_clear"
+                        app:iconTint="#CC0000" />
+
+                </LinearLayout>
+
+            </HorizontalScrollView>
+
+            <!-- Divider before action buttons -->
+            <View
+                android:layout_width="1dp"
+                android:layout_height="32dp"
+                android:layout_marginHorizontal="8dp"
+                android:background="#CCCCCC" />
+
+            <!-- Cancel button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnCancel"
+                style="@style/Widget.Material3.Button.TextButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:gravity="center"
-                android:orientation="horizontal"
-                android:paddingVertical="4dp">
+                android:text="Cancel"
+                android:textColor="#666666"
+                app:icon="@drawable/ic_close"
+                app:iconTint="#666666" />
 
-                <!-- Pencil -->
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnPencil"
-                    style="@style/Widget.Material3.Button.OutlinedButton.Icon"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginHorizontal="4dp"
-                    android:text="Pencil"
-                    app:icon="@drawable/ic_pencil" />
+            <!-- Done button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnDone"
+                style="@style/Widget.Material3.Button.TonalButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Done"
+                app:icon="@drawable/ic_check" />
 
-                <!-- Fountain Pen (default) -->
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnFountain"
-                    style="@style/Widget.Material3.Button.TonalButton.Icon"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginHorizontal="4dp"
-                    android:text="Fountain"
-                    app:icon="@drawable/ic_fountain_pen" />
-
-                <!-- Neo Brush -->
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnNeoBrush"
-                    style="@style/Widget.Material3.Button.OutlinedButton.Icon"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginHorizontal="4dp"
-                    android:text="Brush"
-                    app:icon="@drawable/ic_brush" />
-
-                <!-- Marker -->
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnMarker"
-                    style="@style/Widget.Material3.Button.OutlinedButton.Icon"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginHorizontal="4dp"
-                    android:text="Marker"
-                    app:icon="@drawable/ic_marker" />
-
-                <!-- Charcoal -->
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnCharcoal"
-                    style="@style/Widget.Material3.Button.OutlinedButton.Icon"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginHorizontal="4dp"
-                    android:text="Charcoal"
-                    app:icon="@drawable/ic_charcoal" />
-
-                <!-- Divider -->
-                <View
-                    android:layout_width="1dp"
-                    android:layout_height="32dp"
-                    android:layout_marginHorizontal="8dp"
-                    android:background="#CCCCCC" />
-
-                <!-- Clear Canvas -->
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnClear"
-                    style="@style/Widget.Material3.Button.TextButton.Icon"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginHorizontal="4dp"
-                    android:text="Clear"
-                    android:textColor="#CC0000"
-                    app:icon="@drawable/ic_clear"
-                    app:iconTint="#CC0000" />
-
-            </LinearLayout>
-
-        </HorizontalScrollView>
+        </LinearLayout>
 
     </LinearLayout>
 

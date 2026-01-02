@@ -8,14 +8,14 @@ import org.lsposed.hiddenapibypass.HiddenApiBypass
 
 @HiltAndroidApp
 class DiagrammerApp : Application() {
-    
+
     companion object {
         private const val TAG = "DiagrammerApp"
     }
-    
+
     override fun onCreate() {
         super.onCreate()
-        
+
         // Enable hidden API bypass for Android 11+ (required for Boox SDK)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             Log.d(TAG, "Enabling HiddenApiBypass for Android ${Build.VERSION.SDK_INT}")
