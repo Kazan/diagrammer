@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback } from "react";
 import { CaptureUpdateAction } from "@excalidraw/excalidraw";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
@@ -100,9 +100,6 @@ type UseExplicitStyleDefaultsParams = {
  * - Explicitly changing a property DOES capture it as a default for new shapes
  */
 export function useExplicitStyleDefaults({ api }: UseExplicitStyleDefaultsParams) {
-  const [defaults, setDefaults] = useState<ExplicitStyleDefaults>({});
-  const defaultsRef = useRef<ExplicitStyleDefaults>({});
-
   /**
    * Record an explicit style change. Call this when the user
    * actively changes a style property (not when just viewing).
@@ -112,13 +109,7 @@ export function useExplicitStyleDefaults({ api }: UseExplicitStyleDefaultsParams
       key: K,
       value: ExplicitStyleDefaults[K],
     ) => {
-      setDefaults((prev) => {
-        const next = { ...prev, [key]: value };
-        defaultsRef.current = next;
-        return next;
-      });
-
-      // Also update Excalidraw's appState so it uses this default for new elements
+      // Update Excalidraw's appState so it uses this default for new elements
       if (api) {
         const propsToUpdate = mapToAppStateProps({ [key]: value });
         if (Object.keys(propsToUpdate).length > 0) {
@@ -133,54 +124,8 @@ export function useExplicitStyleDefaults({ api }: UseExplicitStyleDefaultsParams
     [api],
   );
 
-  /**
-   * Batch capture multiple style changes at once.
-   */
-  const captureStyleChanges = useCallback(
-    (changes: Partial<ExplicitStyleDefaults>) => {
-      setDefaults((prev) => {
-        const next = { ...prev, ...changes };
-        defaultsRef.current = next;
-        return next;
-      });
-
-      if (api) {
-        const propsToUpdate = mapToAppStateProps(changes);
-        if (Object.keys(propsToUpdate).length > 0) {
-          const currentAppState = api.getAppState();
-          api.updateScene({
-            appState: { ...currentAppState, ...propsToUpdate },
-            captureUpdate: CaptureUpdateAction.NEVER,
-          });
-        }
-      }
-    },
-    [api],
-  );
-
-  /**
-   * Get the current explicit defaults (useful for passing to components).
-   */
-  const getDefaults = useCallback(() => defaultsRef.current, []);
-
-  /**
-   * Clear all explicit defaults.
-   */
-  const clearDefaults = useCallback(() => {
-    setDefaults({});
-    defaultsRef.current = {};
-  }, []);
-
   return {
-    /** Current explicit style defaults */
-    defaults,
     /** Capture a single explicit style change */
     captureStyleChange,
-    /** Capture multiple explicit style changes at once */
-    captureStyleChanges,
-    /** Get current defaults (ref-stable) */
-    getDefaults,
-    /** Clear all explicit defaults */
-    clearDefaults,
   };
 }

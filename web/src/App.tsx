@@ -9,13 +9,35 @@ import {
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import "@excalidraw/excalidraw/index.css";
-import { ChromeOverlay } from "./components/ChromeOverlay";
-import { type ToolType, type ArrowType } from "./components/CustomToolbar";
-import { SelectionPropertiesRail } from "./components/SelectionPropertiesRail";
-import { BottomLeftBar, BottomRightBar, ZoomControls, HistoryControls, UiScaleControls, FocusModeToggle } from "./components/bottombar";
-import type { SelectionInfo } from "./components/SelectionFlyout";
-import { type StatusMessage } from "./components/NativeStatus";
-import { LibrarySidebar } from "./components/LibrarySidebar";
+
+// Chrome UI - organized by screen region
+import {
+  // TopBar region
+  TopBar,
+  // LeftRail region
+  DrawingToolbar,
+  type ToolType,
+  type ArrowType,
+  // RightRail region
+  SelectionPropertiesRail,
+  type SelectionInfo,
+  // RightPanel region
+  LibrarySidebar,
+  // BottomBar region
+  BottomLeftBar,
+  BottomRightBar,
+  ZoomControls,
+  HistoryControls,
+  UiScaleControls,
+  FocusModeToggle,
+  // Overlays
+  StatusBanner,
+  MultiPointDoneButton,
+  ClearConfirmDialog,
+  NativeStatus,
+  type StatusMessage,
+} from "./components/chrome";
+
 import { useNativeBridge, useNativeBridgeCallbacks } from "./hooks/useNativeBridge";
 import { useNativeFileHandles } from "./hooks/useNativeFileHandles";
 import { useNativePickers } from "./hooks/useNativePickers";
@@ -635,6 +657,7 @@ export default function App() {
 
   return (
     <div className={`app-shell${HIDE_DEFAULT_PROPS_FLYOUT ? " hide-default-props" : ""}`}>
+      {/* Hidden file inputs */}
       <input
         ref={imageInputRef}
         type="file"
@@ -643,7 +666,6 @@ export default function App() {
         onChange={handleImageInputChange}
         aria-label="Insert image"
       />
-      {/* Hidden file input for browser-based scene file upload (fallback when native bridge unavailable) */}
       <input
         ref={sceneFileInputRef}
         type="file"
@@ -652,6 +674,8 @@ export default function App() {
         onChange={handleSceneFileInputChange}
         aria-label="Open scene file"
       />
+
+      {/* Canvas */}
       <div className="excalidraw-container">
         <Excalidraw
           theme={THEME.LIGHT}
@@ -665,49 +689,60 @@ export default function App() {
             setApi(api);
           }}
         >
-          {/* Override Excalidraw's fallback MainMenu to avoid rendering built-in load/save/export items. */}
           <MainMenu />
-          {/* Render a stripped-down welcome screen so the default menu items stay hidden */}
           <WelcomeScreen>
             <WelcomeScreen.Center>
               <WelcomeScreen.Center.Logo />
               <WelcomeScreen.Center.Heading>
                 Start drawing whenever you like
               </WelcomeScreen.Center.Heading>
-              {/* No menu items rendered here on purpose */}
             </WelcomeScreen.Center>
           </WelcomeScreen>
         </Excalidraw>
       </div>
-      <SelectionPropertiesRail selection={selectionInfo} api={api} onStyleCapture={captureStyleChange} closeSignal={canvasClickSignal} />
-      <LibrarySidebar excalidrawAPI={api} closeSignal={canvasClickSignal} />
-      <ChromeOverlay
+
+      {/* ===== Chrome UI by Region ===== */}
+
+      {/* Top: File status and actions */}
+      <TopBar
         fileName={currentFileName}
         isDirty={isDirty}
+        lastSaved={lastSaved}
+        nativePresent={nativePresent}
         canSave={hasCurrentFileRef.current}
         hasSceneContent={hasSceneContent}
-        activeTool={activeTool}
-        arrowType={arrowType}
-        isToolLocked={isToolLocked}
-        onSelectTool={handleSelectTool}
-        onLockTool={handleLockTool}
-        nativePresent={nativePresent}
-        lastSaved={lastSaved}
-        status={status}
         onOpen={handleOpenFromOverlay}
-        onSaveNow={handleSaveNow}
-        onSaveToDocument={handleSaveToDocument}
+        onSave={handleSaveNow}
+        onSaveAs={handleSaveToDocument}
         onCopySource={handleCopySource}
         onExportPng={handleExportPng}
         onExportSvg={handleExportSvg}
         onClear={handleClear}
-        showClearConfirm={showClearConfirm}
-        onForceClear={handleForceClear}
-        onCancelClear={handleCancelClear}
         exporting={exporting}
-        isDrawingMultiPoint={isDrawingMultiPoint}
-        onFinalizeMultiPoint={finalizeMultiPoint}
+        showCopySource={false}
       />
+
+      {/* Left: Drawing tools */}
+      <DrawingToolbar
+        activeTool={activeTool}
+        arrowType={arrowType}
+        isToolLocked={isToolLocked}
+        onSelect={handleSelectTool}
+        onLockTool={handleLockTool}
+      />
+
+      {/* Right Rail: Selection properties */}
+      <SelectionPropertiesRail
+        selection={selectionInfo}
+        api={api}
+        onStyleCapture={captureStyleChange}
+        closeSignal={canvasClickSignal}
+      />
+
+      {/* Right Panel: Library sidebar */}
+      <LibrarySidebar excalidrawAPI={api} closeSignal={canvasClickSignal} />
+
+      {/* Bottom Left: Zoom, history, focus mode */}
       <BottomLeftBar>
         <FocusModeToggle isFocusMode={isFocusMode} onToggle={toggleFocusMode} />
         <ZoomControls
@@ -720,6 +755,8 @@ export default function App() {
         />
         <HistoryControls onUndo={handleUndo} canUndo={canUndo} />
       </BottomLeftBar>
+
+      {/* Bottom Right: UI scale */}
       <BottomRightBar>
         <UiScaleControls
           scale={scale}
@@ -730,6 +767,26 @@ export default function App() {
           maxScale={maxScale}
         />
       </BottomRightBar>
+
+      {/* ===== Overlays ===== */}
+
+      {/* Status messages */}
+      <StatusBanner status={status} />
+
+      {/* Multi-point drawing finalization */}
+      {isDrawingMultiPoint && (
+        <MultiPointDoneButton onFinalize={finalizeMultiPoint} />
+      )}
+
+      {/* Native bridge status (renders nothing but exported for types) */}
+      <NativeStatus present={nativePresent} lastSaved={lastSaved} status={status} />
+
+      {/* Clear confirmation dialog */}
+      <ClearConfirmDialog
+        open={showClearConfirm}
+        onConfirm={handleForceClear}
+        onCancel={handleCancelClear}
+      />
     </div>
   );
 }

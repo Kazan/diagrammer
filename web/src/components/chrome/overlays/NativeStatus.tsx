@@ -1,4 +1,4 @@
-import { isNativeContext } from "../hooks/useNativeBridge";
+import { isNativeContext } from "@/hooks/useNativeBridge";
 
 const statusColors = {
   ok: "var(--status-ok)",
