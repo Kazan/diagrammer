@@ -157,38 +157,9 @@ class BooxDrawingActivity : AppCompatActivity() {
             override fun surfaceCreated(holder: SurfaceHolder) {
                 Log.i(TAG, "surfaceCreated: Surface ready")
 
-                val rect = Rect()
-                binding.surfaceView.getLocalVisibleRect(rect)
-                Log.d(TAG, "surfaceCreated: Canvas size = ${rect.width()}x${rect.height()}")
-
-                // Initialize bitmap for drawing
-                initBitmap(rect.width(), rect.height())
-
-                // Clear canvas to white
-                clearCanvas()
-
-                // Try to initialize Boox SDK
-                if (BooxDeviceUtils.hasFullBooxDrawingSupport) {
-                    Log.i(TAG, "surfaceCreated: Initializing Boox TouchHelper...")
-                    try {
-                        booxDrawingHelper = BooxDrawingHelper(
-                            surfaceView = binding.surfaceView,
-                            onStrokeComplete = { points -> onNativeStrokeComplete(points) }
-                        )
-                        booxDrawingHelper?.apply {
-                            setStrokeWidth(currentWidth)
-                            setStrokeStyle(currentStyle)
-                            openDrawing(rect)
-                        }
-                        Log.i(TAG, "surfaceCreated: Boox TouchHelper initialized successfully!")
-                    } catch (e: Exception) {
-                        Log.e(TAG, "surfaceCreated: Failed to initialize Boox SDK", e)
-                        // Fall back to standard touch handling
-                        setupFallbackTouchHandler()
-                    }
-                } else {
-                    Log.i(TAG, "surfaceCreated: No Boox SDK, using fallback touch handling")
-                    setupFallbackTouchHandler()
+                // Wait for layout to complete to get proper toolbar measurements
+                binding.root.post {
+                    initializeDrawingAfterLayout()
                 }
             }
 
@@ -201,6 +172,129 @@ class BooxDrawingActivity : AppCompatActivity() {
                 booxDrawingHelper?.closeDrawing()
             }
         })
+    }
+
+    /**
+     * Initialize drawing after layout is complete so we can measure toolbar heights.
+     */
+    private fun initializeDrawingAfterLayout() {
+        val surfaceRect = Rect()
+        binding.surfaceView.getLocalVisibleRect(surfaceRect)
+        Log.d(TAG, "initializeDrawingAfterLayout: Surface size = ${surfaceRect.width()}x${surfaceRect.height()}")
+
+        // Get screen location of SurfaceView
+        val surfaceLocation = IntArray(2)
+        binding.surfaceView.getLocationOnScreen(surfaceLocation)
+        Log.d(TAG, "initializeDrawingAfterLayout: Surface location = (${surfaceLocation[0]}, ${surfaceLocation[1]})")
+
+        // Initialize bitmap for drawing
+        initBitmap(surfaceRect.width(), surfaceRect.height())
+
+        // Clear canvas to white
+        clearCanvas()
+
+        // Calculate exclude rectangles for top and bottom toolbars
+        val excludeRects = calculateExcludeRects()
+        Log.i(TAG, "initializeDrawingAfterLayout: Exclude rects count = ${excludeRects.size}")
+        for ((index, rect) in excludeRects.withIndex()) {
+            Log.d(TAG, "  Exclude rect[$index]: ${rect.left},${rect.top} - ${rect.right},${rect.bottom}")
+        }
+
+        // Calculate the actual drawing bounds (between top and bottom toolbars)
+        val drawingBounds = calculateDrawingBounds()
+        Log.i(TAG, "initializeDrawingAfterLayout: Drawing bounds = ${drawingBounds.left},${drawingBounds.top} - ${drawingBounds.right},${drawingBounds.bottom}")
+
+        // Try to initialize Boox SDK
+        if (BooxDeviceUtils.hasFullBooxDrawingSupport) {
+            Log.i(TAG, "initializeDrawingAfterLayout: Initializing Boox TouchHelper...")
+            try {
+                booxDrawingHelper = BooxDrawingHelper(
+                    surfaceView = binding.surfaceView,
+                    onStrokeComplete = { points -> onNativeStrokeComplete(points) }
+                )
+                booxDrawingHelper?.apply {
+                    setStrokeWidth(currentWidth)
+                    setStrokeStyle(currentStyle)
+                    setStrokeColor(currentColor)
+                    openDrawing(drawingBounds, excludeRects)
+                }
+                Log.i(TAG, "initializeDrawingAfterLayout: Boox TouchHelper initialized successfully!")
+            } catch (e: Exception) {
+                Log.e(TAG, "initializeDrawingAfterLayout: Failed to initialize Boox SDK", e)
+                // Fall back to standard touch handling
+                setupFallbackTouchHandler()
+            }
+        } else {
+            Log.i(TAG, "initializeDrawingAfterLayout: No Boox SDK, using fallback touch handling")
+            setupFallbackTouchHandler()
+        }
+    }
+
+    /**
+     * Calculate exclude rectangles for UI areas that should not receive stylus input.
+     * This includes the top toolbar and bottom control panel.
+     */
+    private fun calculateExcludeRects(): List<Rect> {
+        val excludeRects = mutableListOf<Rect>()
+
+        // Get screen location of SurfaceView for coordinate conversion
+        val surfaceLocation = IntArray(2)
+        binding.surfaceView.getLocationOnScreen(surfaceLocation)
+
+        // Top toolbar exclude rect
+        val topToolbarLocation = IntArray(2)
+        binding.toolbar.getLocationOnScreen(topToolbarLocation)
+        val topRect = Rect(
+            topToolbarLocation[0] - surfaceLocation[0],
+            topToolbarLocation[1] - surfaceLocation[1],
+            topToolbarLocation[0] - surfaceLocation[0] + binding.toolbar.width,
+            topToolbarLocation[1] - surfaceLocation[1] + binding.toolbar.height
+        )
+        excludeRects.add(topRect)
+        Log.d(TAG, "calculateExcludeRects: Top toolbar rect = $topRect")
+
+        // Bottom toolbar exclude rect
+        val bottomToolbarLocation = IntArray(2)
+        binding.bottomToolbar.getLocationOnScreen(bottomToolbarLocation)
+        val bottomRect = Rect(
+            bottomToolbarLocation[0] - surfaceLocation[0],
+            bottomToolbarLocation[1] - surfaceLocation[1],
+            bottomToolbarLocation[0] - surfaceLocation[0] + binding.bottomToolbar.width,
+            bottomToolbarLocation[1] - surfaceLocation[1] + binding.bottomToolbar.height
+        )
+        excludeRects.add(bottomRect)
+        Log.d(TAG, "calculateExcludeRects: Bottom toolbar rect = $bottomRect")
+
+        return excludeRects
+    }
+
+    /**
+     * Calculate the drawing bounds (the area between toolbars where drawing is allowed).
+     */
+    private fun calculateDrawingBounds(): Rect {
+        // Get SurfaceView dimensions
+        val surfaceRect = Rect()
+        binding.surfaceView.getLocalVisibleRect(surfaceRect)
+
+        // Get screen locations
+        val surfaceLocation = IntArray(2)
+        binding.surfaceView.getLocationOnScreen(surfaceLocation)
+
+        val topToolbarLocation = IntArray(2)
+        binding.toolbar.getLocationOnScreen(topToolbarLocation)
+        val topToolbarBottom = topToolbarLocation[1] + binding.toolbar.height - surfaceLocation[1]
+
+        val bottomToolbarLocation = IntArray(2)
+        binding.bottomToolbar.getLocationOnScreen(bottomToolbarLocation)
+        val bottomToolbarTop = bottomToolbarLocation[1] - surfaceLocation[1]
+
+        // Drawing area is between the toolbars
+        return Rect(
+            0,
+            topToolbarBottom.coerceAtLeast(0),
+            surfaceRect.width(),
+            bottomToolbarTop.coerceAtMost(surfaceRect.height())
+        )
     }
 
     /**
@@ -680,10 +774,10 @@ class BooxDrawingHelper(
     }
 
     /**
-     * Open drawing mode with the given bounds.
+     * Open drawing mode with the given bounds and exclude rectangles.
      */
-    fun openDrawing(bounds: Rect) {
-        Log.i(TAG, "openDrawing: bounds=${bounds.width()}x${bounds.height()}")
+    fun openDrawing(bounds: Rect, excludeRects: List<Rect> = emptyList()) {
+        Log.i(TAG, "openDrawing: bounds=${bounds.width()}x${bounds.height()}, excludeRects=${excludeRects.size}")
 
         try {
             // Create callback implementation
@@ -731,7 +825,12 @@ class BooxDrawingHelper(
 
             touchHelper?.apply {
                 setStrokeWidth(3.0f)
-                setLimitRect(bounds, emptyList())
+
+                // Set limit rect with exclude areas for UI elements
+                // The exclude rects tell the SDK to NOT capture touch input in those areas
+                Log.d(TAG, "openDrawing: Setting limit rect with ${excludeRects.size} exclude areas")
+                setLimitRect(bounds, excludeRects)
+
                 openRawDrawing()
                 setRawDrawingEnabled(true)
 
