@@ -148,6 +148,9 @@ class BooxDrawingActivity : AppCompatActivity() {
     // Boox SDK wrapper (null on non-Boox devices)
     private var booxDrawingHelper: BooxDrawingHelper? = null
 
+    // Device receiver for system events (notification panel, screen on)
+    private var deviceReceiver: GlobalDeviceReceiver? = null
+
     // Brush buttons for easy iteration
     private val brushButtons = mutableMapOf<Int, MaterialButton>()
 
@@ -247,6 +250,9 @@ class BooxDrawingActivity : AppCompatActivity() {
                     openDrawing(drawingBounds, excludeRects)
                 }
                 Log.i(TAG, "initializeDrawingAfterLayout: Boox TouchHelper initialized successfully!")
+
+                // Initialize device receiver for system gesture detection
+                initializeDeviceReceiver()
             } catch (e: Exception) {
                 Log.e(TAG, "initializeDrawingAfterLayout: Failed to initialize Boox SDK", e)
                 // Fall back to standard touch handling
@@ -259,8 +265,49 @@ class BooxDrawingActivity : AppCompatActivity() {
     }
 
     /**
+     * Initialize the device receiver for system events.
+     * This allows us to detect when the system notification panel opens
+     * and automatically disable raw drawing to allow system gestures.
+     */
+    private fun initializeDeviceReceiver() {
+        Log.d(TAG, "initializeDeviceReceiver: Setting up system event listener...")
+        try {
+            deviceReceiver = GlobalDeviceReceiver().apply {
+                setSystemNotificationPanelChangeListener { isPanelOpen ->
+                    Log.d(TAG, "System notification panel changed: open=$isPanelOpen")
+                    if (isPanelOpen) {
+                        // Disable drawing when system panel opens
+                        booxDrawingHelper?.setDrawingEnabled(false)
+                    } else {
+                        // Re-enable drawing and restore bitmap when panel closes
+                        renderBitmapToSurface()
+                        booxDrawingHelper?.setDrawingEnabled(true)
+                    }
+                }
+                setSystemScreenOnListener {
+                    Log.d(TAG, "System screen turned on")
+                    // Re-render bitmap when screen turns on
+                    renderBitmapToSurface()
+                }
+                // Enable the receiver
+                enable(this@BooxDrawingActivity, true)
+            }
+            Log.i(TAG, "initializeDeviceReceiver: Device receiver initialized")
+        } catch (e: Exception) {
+            Log.w(TAG, "initializeDeviceReceiver: Failed to initialize device receiver", e)
+            // Continue without device receiver - system gestures may not work perfectly
+        }
+    }
+
+    /**
      * Calculate exclude rectangles for UI areas that should not receive stylus input.
-     * With left sidebar layout, we exclude the sidebar and bottom action bar.
+     * With left sidebar layout, we exclude:
+     * - The sidebar
+     * - The bottom action bar
+     * - The system status bar area (to allow system gestures like swipe-down)
+     *
+     * These exclusions allow the user to interact with UI elements and system
+     * menus while drawing is active.
      */
     private fun calculateExcludeRects(): List<Rect> {
         val excludeRects = mutableListOf<Rect>()
@@ -293,31 +340,72 @@ class BooxDrawingActivity : AppCompatActivity() {
         excludeRects.add(actionBarRect)
         Log.d(TAG, "calculateExcludeRects: Action bar rect = $actionBarRect")
 
+        // System status bar exclusion zone at the top of the screen
+        // This allows the user to swipe down from the top to access system menus
+        // The status bar area extends from the top of the screen, so we calculate
+        // it relative to the SurfaceView's position
+        val statusBarHeight = getStatusBarHeight()
+        if (statusBarHeight > 0) {
+            // Create an exclusion zone that extends above the SurfaceView
+            // Since the SurfaceView might be positioned below the status bar,
+            // we need to include that area in view-local coordinates
+            val topExcludeHeight = maxOf(0, statusBarHeight - surfaceLocation[1])
+            if (topExcludeHeight > 0) {
+                val statusBarRect = Rect(
+                    0,
+                    -surfaceLocation[1],  // Start from top of screen in surface-local coords
+                    binding.surfaceView.width,
+                    topExcludeHeight
+                )
+                excludeRects.add(statusBarRect)
+                Log.d(TAG, "calculateExcludeRects: Status bar rect = $statusBarRect (statusBarHeight=$statusBarHeight)")
+            }
+
+            // Also add a "gesture zone" at the very top of the SurfaceView
+            // to make it easier to trigger system swipe gestures
+            val gestureZoneHeight = (48 * resources.displayMetrics.density).toInt()
+            val gestureZoneRect = Rect(
+                0,
+                0,
+                binding.surfaceView.width,
+                gestureZoneHeight
+            )
+            excludeRects.add(gestureZoneRect)
+            Log.d(TAG, "calculateExcludeRects: Top gesture zone rect = $gestureZoneRect")
+        }
+
         return excludeRects
     }
 
     /**
+     * Get the system status bar height.
+     */
+    private fun getStatusBarHeight(): Int {
+        val resourceId = resources.getIdentifier("status_bar_height", "dimen", "android")
+        return if (resourceId > 0) {
+            resources.getDimensionPixelSize(resourceId)
+        } else {
+            // Fallback to a reasonable default (24dp)
+            (24 * resources.displayMetrics.density).toInt()
+        }
+    }
+
+    /**
      * Calculate the drawing bounds (the SurfaceView area where drawing is allowed).
-     * With left sidebar layout, the SurfaceView is already constrained to the right of the sidebar,
-     * so we just use its full bounds.
+     *
+     * Uses simple view-local coordinates (0,0 to width,height) with a small margin.
+     * The SDK handles coordinate transformation internally.
+     *
+     * Note: We keep the bounds simple here. Exclusion of UI areas is handled
+     * separately via calculateExcludeRects() which excludes sidebar, action bar,
+     * and system UI areas.
      */
     private fun calculateDrawingBounds(): Rect {
-        // Get SurfaceView dimensions - this is already the drawing area
-        val surfaceRect = Rect()
-        binding.surfaceView.getLocalVisibleRect(surfaceRect)
+        // Use simple view-local coordinates (0,0 origin)
+        // This matches how notable and saber-notes configure their bounds
+        val bounds = Rect(0, 0, binding.surfaceView.width, binding.surfaceView.height)
 
-        // Add a small margin (4dp converted to pixels) to ensure clean separation
-        val marginPx = (4 * resources.displayMetrics.density).toInt()
-
-        val bounds = Rect(
-            marginPx,
-            marginPx,
-            surfaceRect.width() - marginPx,
-            surfaceRect.height() - marginPx
-        )
-
-        Log.d(TAG, "calculateDrawingBounds: Surface size = ${surfaceRect.width()}x${surfaceRect.height()}")
-        Log.d(TAG, "calculateDrawingBounds: Final bounds = ${bounds.left},${bounds.top} - ${bounds.right},${bounds.bottom}")
+        Log.d(TAG, "calculateDrawingBounds: Full bounds = ${bounds.left},${bounds.top} - ${bounds.right},${bounds.bottom}")
 
         return bounds
     }
@@ -396,7 +484,14 @@ class BooxDrawingActivity : AppCompatActivity() {
     /**
      * Handle stroke completion from native Boox SDK.
      * The points contain x, y, pressure, and timestamp data.
-     * We store the stroke data with style info for proper rendering on export.
+     *
+     * With native EPD rendering enabled, the user already sees the stroke
+     * on the e-ink display with ultra-low latency. Here we:
+     * 1. Store the stroke data for later re-rendering if needed
+     * 2. Render the stroke to our bitmap (for accurate export)
+     * 3. Update the SurfaceView with our bitmap (backup display)
+     *
+     * The native EPD shows during drawing, our bitmap is the export source.
      */
     private fun onNativeStrokeComplete(points: List<BooxTouchPoint>) {
         Log.d(TAG, "onNativeStrokeComplete: Received ${points.size} points, style=$currentStyle, color=${Integer.toHexString(currentColor)}, width=$currentWidth")
@@ -414,12 +509,16 @@ class BooxDrawingActivity : AppCompatActivity() {
         )
         strokes.add(strokeData)
 
-        // Render this stroke to our bitmap using the brush renderer
+        // Render this stroke to our bitmap (single source of truth)
         val localCanvas = canvas ?: return
         BrushRenderer.renderStroke(localCanvas, strokeData)
 
-        // Note: We don't call renderBitmapToSurface() because the SDK is already
-        // rendering to the EPD with native brush styles via setRawDrawingRenderEnabled(true)
+        // Display the updated bitmap on the SurfaceView
+        renderBitmapToSurface()
+
+        // Force EPD to refresh with the new bitmap content
+        // This is necessary since we disabled native EPD rendering
+        booxDrawingHelper?.forceEpdRefresh()
     }
 
     /**
@@ -767,6 +866,14 @@ class BooxDrawingActivity : AppCompatActivity() {
     override fun onDestroy() {
         Log.i(TAG, "onDestroy: Cleaning up resources")
 
+        // Disable device receiver
+        try {
+            deviceReceiver?.enable(this, false)
+        } catch (e: Exception) {
+            Log.w(TAG, "onDestroy: Failed to disable device receiver", e)
+        }
+        deviceReceiver = null
+
         booxDrawingHelper?.closeDrawing()
         booxDrawingHelper = null
 
@@ -800,6 +907,19 @@ data class BooxTouchPoint(
  *
  * This class directly uses the SDK classes since they are bundled with the app.
  * It is only instantiated after capability detection confirms SDK availability.
+ *
+ * APPROACH: Native EPD rendering with bitmap backup
+ * - We ENABLE native EPD rendering (setRawDrawingRenderEnabled=true) for ultra-low latency (~10ms)
+ * - Strokes are ALSO rendered to our bitmap for export consistency
+ * - System gestures handled via GlobalDeviceReceiver (auto-disable when panel opens)
+ * - setLimitRect/setExcludeRect confine drawing to canvas area, leaving UI touchable
+ *
+ * This gives us:
+ * 1. Ultra-low latency native EPD preview during drawing
+ * 2. Bitmap backup for accurate export
+ * 3. System UI access via exclude rects and panel detection
+ *
+ * Reference implementations: PatKreitzberg/notes-merge, aarontharris/atonyx
  */
 class BooxDrawingHelper(
     private val surfaceView: android.view.SurfaceView,
@@ -819,9 +939,16 @@ class BooxDrawingHelper(
 
     /**
      * Open drawing mode with the given bounds and exclude rectangles.
+     *
+     * @param bounds The drawable area in view-local coordinates
+     * @param excludeRects Areas to exclude from drawing (toolbars, status bar)
      */
     fun openDrawing(bounds: Rect, excludeRects: List<Rect> = emptyList()) {
-        Log.i(TAG, "openDrawing: bounds=${bounds.left},${bounds.top}-${bounds.right},${bounds.bottom} (${bounds.width()}x${bounds.height()}), excludeRects ignored")
+        Log.i(TAG, "openDrawing: bounds=${bounds.left},${bounds.top}-${bounds.right},${bounds.bottom} (${bounds.width()}x${bounds.height()})")
+        Log.i(TAG, "openDrawing: excludeRects count=${excludeRects.size}")
+        for ((index, rect) in excludeRects.withIndex()) {
+            Log.d(TAG, "openDrawing: excludeRect[$index]=${rect.left},${rect.top}-${rect.right},${rect.bottom}")
+        }
 
         try {
             // Create callback implementation
@@ -870,26 +997,35 @@ class BooxDrawingHelper(
             touchHelper?.apply {
                 setStrokeWidth(3.0f)
 
-                // Set limit rect to ONLY the drawing area - no exclude rects needed
-                // The bounds define where touch input is captured; touches outside are ignored
-                // This prevents the EPD/TouchHelper from intercepting toolbar touches
-                Log.d(TAG, "openDrawing: Setting limit rect to bounds only: ${bounds.left},${bounds.top} - ${bounds.right},${bounds.bottom}")
-                setLimitRect(bounds, emptyList())
+                // Set limit rect as a list (required by some SDK versions)
+                Log.d(TAG, "openDrawing: Setting limit rect: ${bounds.left},${bounds.top} - ${bounds.right},${bounds.bottom}")
+                setLimitRect(mutableListOf(bounds))
+
+                // Set exclude rects separately - this is the correct API pattern
+                // Exclude rects allow system UI areas to remain interactive
+                if (excludeRects.isNotEmpty()) {
+                    Log.d(TAG, "openDrawing: Setting ${excludeRects.size} exclude rects")
+                    setExcludeRect(excludeRects)
+                }
 
                 openRawDrawing()
                 setRawDrawingEnabled(true)
 
-                // Enable native rendering for smooth, low-latency strokes
+                // ENABLE native EPD rendering for ultra-low latency (~10ms)
+                // We also render strokes to bitmap for export, giving us both:
+                // - Fast native preview during drawing
+                // - Accurate bitmap for export
+                // System UI access is handled via exclude rects and GlobalDeviceReceiver
                 try {
                     setRawDrawingRenderEnabled(true)
-                    Log.i(TAG, "openDrawing: Native EPD rendering enabled!")
+                    Log.i(TAG, "openDrawing: Native EPD rendering ENABLED for ultra-low latency")
                 } catch (e: Exception) {
                     Log.w(TAG, "openDrawing: setRawDrawingRenderEnabled not available", e)
                 }
             }
 
             isOpen = true
-            Log.i(TAG, "openDrawing: Successfully opened native drawing mode!")
+            Log.i(TAG, "openDrawing: Successfully opened native drawing mode (native EPD + bitmap backup)")
 
         } catch (e: Exception) {
             Log.e(TAG, "openDrawing: Failed to initialize TouchHelper", e)
@@ -958,20 +1094,44 @@ class BooxDrawingHelper(
     }
 
     /**
-     * Temporarily pause raw drawing render to allow UI refresh, then resume.
-     * This is needed because raw render mode takes over the entire screen refresh.
+     * Force the e-ink display to refresh with current bitmap content.
+     *
+     * With native EPD rendering enabled, the display updates automatically
+     * during drawing. This method is called after stroke completion to ensure
+     * the bitmap rendering is also visible (for cases where native and bitmap
+     * might differ slightly).
+     *
+     * The toggle pattern forces a full surface redraw.
+     */
+    fun forceEpdRefresh() {
+        Log.d(TAG, "forceEpdRefresh: Triggering EPD refresh...")
+        try {
+            // Brief toggle to ensure surface content is refreshed
+            // This helps sync native EPD state with our bitmap
+            touchHelper?.setRawDrawingEnabled(false)
+            touchHelper?.setRawDrawingEnabled(true)
+            Log.d(TAG, "forceEpdRefresh: EPD refresh triggered")
+        } catch (e: Exception) {
+            Log.w(TAG, "forceEpdRefresh: Failed to trigger refresh", e)
+        }
+    }
+
+    /**
+     * Temporarily pause raw drawing to allow UI refresh, then resume.
+     * This is needed for updating toolbar/button states which are outside
+     * the drawing area.
      */
     fun pauseForUiRefresh(onPaused: () -> Unit) {
-        Log.d(TAG, "pauseForUiRefresh: Pausing render...")
+        Log.d(TAG, "pauseForUiRefresh: Pausing for UI update...")
         try {
-            touchHelper?.setRawDrawingRenderEnabled(false)
+            touchHelper?.setRawDrawingEnabled(false)
             // Give the system a moment to do a normal refresh
             android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                 onPaused()
                 // Small delay to let the UI update render
                 android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                    touchHelper?.setRawDrawingRenderEnabled(true)
-                    Log.d(TAG, "pauseForUiRefresh: Render resumed")
+                    touchHelper?.setRawDrawingEnabled(true)
+                    Log.d(TAG, "pauseForUiRefresh: Drawing resumed")
                 }, 50)
             }, 10)
         } catch (e: Exception) {
