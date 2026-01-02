@@ -105,56 +105,125 @@ object BooxDeviceUtils {
 
     /**
      * Detects if the Pen SDK is available by attempting to load key classes.
+     * Tries multiple known package paths as Boox has moved classes between SDK versions.
      */
     private fun detectPenSdk(): Boolean {
         Log.d(TAG, "detectPenSdk: checking for TouchHelper class...")
 
-        return try {
-            // Try to load the TouchHelper class which is the main entry point
-            Class.forName("com.onyx.android.sdk.pen.TouchHelper")
-            Log.d(TAG, "detectPenSdk: TouchHelper class found!")
+        // List of known package paths for TouchHelper across different SDK versions
+        val touchHelperClasses = listOf(
+            "com.onyx.android.sdk.pen.TouchHelper",
+            "com.onyx.android.sdk.api.device.pen.TouchHelper",
+            "com.onyx.android.sdk.scribble.touch.TouchHelper"
+        )
 
-            // Also verify RawInputCallback is available
-            Class.forName("com.onyx.android.sdk.pen.RawInputCallback")
-            Log.d(TAG, "detectPenSdk: RawInputCallback class found!")
+        val rawInputCallbackClasses = listOf(
+            "com.onyx.android.sdk.pen.RawInputCallback",
+            "com.onyx.android.sdk.api.device.pen.RawInputCallback",
+            "com.onyx.android.sdk.scribble.touch.RawInputCallback"
+        )
 
-            // Try to detect touch point data class
-            Class.forName("com.onyx.android.sdk.pen.data.TouchPoint")
-            Log.d(TAG, "detectPenSdk: TouchPoint class found!")
+        val touchPointClasses = listOf(
+            "com.onyx.android.sdk.pen.data.TouchPoint",
+            "com.onyx.android.sdk.data.note.TouchPoint",
+            "com.onyx.android.sdk.api.device.pen.data.TouchPoint"
+        )
 
-            true
-        } catch (e: ClassNotFoundException) {
-            Log.d(TAG, "detectPenSdk: SDK class not found: ${e.message}")
-            false
-        } catch (e: Exception) {
-            Log.w(TAG, "detectPenSdk: Unexpected error during detection", e)
-            false
+        var foundTouchHelper = false
+        var foundRawInputCallback = false
+        var foundTouchPoint = false
+
+        // Try to find TouchHelper
+        for (className in touchHelperClasses) {
+            try {
+                Class.forName(className)
+                Log.d(TAG, "detectPenSdk: TouchHelper found at $className")
+                foundTouchHelper = true
+                break
+            } catch (e: ClassNotFoundException) {
+                Log.d(TAG, "detectPenSdk: TouchHelper not at $className")
+            }
         }
+
+        // Try to find RawInputCallback
+        for (className in rawInputCallbackClasses) {
+            try {
+                Class.forName(className)
+                Log.d(TAG, "detectPenSdk: RawInputCallback found at $className")
+                foundRawInputCallback = true
+                break
+            } catch (e: ClassNotFoundException) {
+                Log.d(TAG, "detectPenSdk: RawInputCallback not at $className")
+            }
+        }
+
+        // Try to find TouchPoint
+        for (className in touchPointClasses) {
+            try {
+                Class.forName(className)
+                Log.d(TAG, "detectPenSdk: TouchPoint found at $className")
+                foundTouchPoint = true
+                break
+            } catch (e: ClassNotFoundException) {
+                Log.d(TAG, "detectPenSdk: TouchPoint not at $className")
+            }
+        }
+
+        val result = foundTouchHelper && foundRawInputCallback && foundTouchPoint
+        Log.d(TAG, "detectPenSdk: result=$result (TouchHelper=$foundTouchHelper, RawInputCallback=$foundRawInputCallback, TouchPoint=$foundTouchPoint)")
+        return result
     }
 
     /**
      * Detects if the EPD Controller is available for direct e-ink display access.
+     * Tries multiple known package paths as Boox has moved classes between SDK versions.
      */
     private fun detectEpdController(): Boolean {
         Log.d(TAG, "detectEpdController: checking for EpdController class...")
 
-        return try {
-            // Try to load the EpdController class
-            Class.forName("com.onyx.android.sdk.device.EpdController")
-            Log.d(TAG, "detectEpdController: EpdController class found!")
+        // List of known package paths for EpdController across different SDK versions
+        val epdControllerClasses = listOf(
+            "com.onyx.android.sdk.api.device.epd.EpdController",
+            "com.onyx.android.sdk.device.EpdController",
+            "com.onyx.android.sdk.device.epd.EpdController"
+        )
 
-            // Also check for Device class
-            Class.forName("com.onyx.android.sdk.device.Device")
-            Log.d(TAG, "detectEpdController: Device class found!")
+        val deviceClasses = listOf(
+            "com.onyx.android.sdk.api.device.Device",
+            "com.onyx.android.sdk.device.Device"
+        )
 
-            true
-        } catch (e: ClassNotFoundException) {
-            Log.d(TAG, "detectEpdController: EPD class not found: ${e.message}")
-            false
-        } catch (e: Exception) {
-            Log.w(TAG, "detectEpdController: Unexpected error during detection", e)
-            false
+        var foundEpdController = false
+        var foundDevice = false
+
+        // Try to find EpdController
+        for (className in epdControllerClasses) {
+            try {
+                Class.forName(className)
+                Log.d(TAG, "detectEpdController: EpdController found at $className")
+                foundEpdController = true
+                break
+            } catch (e: ClassNotFoundException) {
+                Log.d(TAG, "detectEpdController: EpdController not at $className")
+            }
         }
+
+        // Try to find Device class (optional, less critical)
+        for (className in deviceClasses) {
+            try {
+                Class.forName(className)
+                Log.d(TAG, "detectEpdController: Device found at $className")
+                foundDevice = true
+                break
+            } catch (e: ClassNotFoundException) {
+                Log.d(TAG, "detectEpdController: Device not at $className")
+            }
+        }
+
+        // EpdController is the critical one, Device is nice to have
+        val result = foundEpdController
+        Log.d(TAG, "detectEpdController: result=$result (EpdController=$foundEpdController, Device=$foundDevice)")
+        return result
     }
 
     /**
