@@ -1364,6 +1364,7 @@ object BrushRenderer {
 
     /**
      * Neo Brush: Use SDK NeoBrushPen for dynamic brush strokes.
+     * Match notable's implementation: use drawStroke directly
      */
     private fun renderNeoBrushStroke(canvas: Canvas, stroke: StrokeData) {
         val paint = createPaint(stroke.color)
@@ -1371,13 +1372,15 @@ object BrushRenderer {
         val maxPressure = getMaxPressure()
 
         try {
-            // Use SDK's NeoBrushPen
-            val brushPoints = com.onyx.android.sdk.pen.NeoBrushPen.computeStrokePoints(
+            // Use SDK's NeoBrushPen.drawStroke directly (like notable does)
+            com.onyx.android.sdk.pen.NeoBrushPen.drawStroke(
+                canvas,
+                paint,
                 sdkPoints,
                 stroke.width,
-                maxPressure
+                maxPressure,
+                false // not erasing
             )
-            com.onyx.android.sdk.pen.PenUtils.drawStrokeByPointSize(canvas, paint, brushPoints, false)
         } catch (e: Exception) {
             Log.w(TAG, "renderNeoBrushStroke: SDK failed, using fallback", e)
             renderFallbackStroke(canvas, stroke)
@@ -1385,25 +1388,35 @@ object BrushRenderer {
     }
 
     /**
-     * Marker: Use SDK NeoMarkerPen for semi-transparent highlighter strokes.
+     * Marker: Semi-transparent highlighter strokes.
+     * Match notable's simple path-based approach for markers.
      */
     private fun renderMarkerStroke(canvas: Canvas, stroke: StrokeData) {
-        val paint = createPaint(stroke.color)
-        val sdkPoints = toSdkTouchPoints(stroke.points, stroke.width)
-        val maxPressure = getMaxPressure()
-
-        try {
-            // Use SDK's NeoMarkerPen
-            val markerPoints = com.onyx.android.sdk.pen.NeoMarkerPen.computeStrokePoints(
-                sdkPoints,
-                stroke.width,
-                maxPressure
-            )
-            com.onyx.android.sdk.pen.NeoMarkerPen.drawStroke(canvas, paint, markerPoints, stroke.width, true)
-        } catch (e: Exception) {
-            Log.w(TAG, "renderMarkerStroke: SDK failed, using fallback", e)
-            renderFallbackStroke(canvas, stroke)
+        val paint = createPaint(stroke.color).apply {
+            strokeWidth = stroke.width
+            alpha = 100 // Semi-transparent like notable
         }
+
+        val points = stroke.points
+        if (points.isEmpty()) return
+
+        if (points.size == 1) {
+            paint.style = Paint.Style.FILL
+            canvas.drawCircle(points[0].x, points[0].y, stroke.width / 2, paint)
+            return
+        }
+
+        // Simple path-based marker (like notable's drawMarkerStroke)
+        val path = Path()
+        path.moveTo(points[0].x, points[0].y)
+
+        for (i in 1 until points.size) {
+            val prev = points[i - 1]
+            val curr = points[i]
+            path.quadTo(prev.x, prev.y, curr.x, curr.y)
+        }
+
+        canvas.drawPath(path, paint)
     }
 
     /**
