@@ -294,14 +294,28 @@ class BooxDrawingActivity : AppCompatActivity() {
             val radius = (currentWidth / 2) * pt.pressure.coerceIn(0.2f, 1.0f)
             localCanvas.drawCircle(pt.x, pt.y, radius, paint)
         } else {
-            // Multiple points - draw connected lines
+            // Multiple points - draw smooth curve using quadratic bezier
             val path = android.graphics.Path()
             val firstPt = points[0]
             path.moveTo(firstPt.x, firstPt.y)
 
-            for (i in 1 until points.size) {
-                val pt = points[i]
-                path.lineTo(pt.x, pt.y)
+            if (points.size == 2) {
+                // Only 2 points - draw a line
+                path.lineTo(points[1].x, points[1].y)
+            } else {
+                // Use quadratic bezier curves for smooth strokes
+                // Each segment uses the current point as control and midpoint to next as end
+                for (i in 1 until points.size - 1) {
+                    val current = points[i]
+                    val next = points[i + 1]
+                    val midX = (current.x + next.x) / 2f
+                    val midY = (current.y + next.y) / 2f
+                    path.quadTo(current.x, current.y, midX, midY)
+                }
+                // Connect to the last point
+                val lastPt = points.last()
+                val secondLast = points[points.size - 2]
+                path.quadTo(secondLast.x, secondLast.y, lastPt.x, lastPt.y)
             }
 
             localCanvas.drawPath(path, paint)
@@ -646,9 +660,8 @@ data class BooxTouchPoint(
 /**
  * Helper class to wrap Boox SDK TouchHelper.
  *
- * This is isolated to avoid ClassNotFoundException on non-Boox devices.
- * The actual SDK classes are only referenced inside this class, which is
- * only instantiated after capability detection confirms SDK availability.
+ * This class directly uses the SDK classes since they are bundled with the app.
+ * It is only instantiated after capability detection confirms SDK availability.
  */
 class BooxDrawingHelper(
     private val surfaceView: android.view.SurfaceView,
@@ -658,8 +671,8 @@ class BooxDrawingHelper(
         private const val TAG = "BooxDrawingHelper"
     }
 
-    // These are lazily loaded to avoid ClassNotFoundException
-    private var touchHelper: Any? = null
+    // Direct reference to TouchHelper (SDK is bundled)
+    private var touchHelper: com.onyx.android.sdk.pen.TouchHelper? = null
     private var isOpen = false
 
     init {
@@ -673,36 +686,63 @@ class BooxDrawingHelper(
         Log.i(TAG, "openDrawing: bounds=${bounds.width()}x${bounds.height()}")
 
         try {
-            // Use reflection to load and instantiate TouchHelper
-            val touchHelperClass = Class.forName("com.onyx.android.sdk.pen.TouchHelper")
+            // Create callback implementation
+            val callback = object : com.onyx.android.sdk.pen.RawInputCallback() {
+                override fun onBeginRawDrawing(b: Boolean, touchPoint: com.onyx.android.sdk.data.note.TouchPoint?) {
+                    Log.v(TAG, "RawInputCallback: onBeginRawDrawing")
+                }
 
-            // Get the create method: TouchHelper.create(SurfaceView, RawInputCallback)
-            val rawInputCallbackClass = Class.forName("com.onyx.android.sdk.pen.RawInputCallback")
+                override fun onRawDrawingTouchPointMoveReceived(touchPoint: com.onyx.android.sdk.data.note.TouchPoint?) {
+                    Log.v(TAG, "RawInputCallback: onRawDrawingTouchPointMoveReceived")
+                }
 
-            // Create our callback proxy
-            val callbackProxy = createRawInputCallbackProxy(rawInputCallbackClass)
+                override fun onRawDrawingTouchPointListReceived(touchPointList: com.onyx.android.sdk.pen.data.TouchPointList?) {
+                    Log.d(TAG, "RawInputCallback: onRawDrawingTouchPointListReceived")
+                    touchPointList?.let {
+                        val points = extractTouchPoints(it)
+                        onStrokeComplete(points)
+                    }
+                }
 
-            // Call TouchHelper.create(surfaceView, callback)
-            val createMethod = touchHelperClass.getMethod("create", android.view.SurfaceView::class.java, rawInputCallbackClass)
-            touchHelper = createMethod.invoke(null, surfaceView, callbackProxy)
+                override fun onEndRawDrawing(b: Boolean, touchPoint: com.onyx.android.sdk.data.note.TouchPoint?) {
+                    Log.v(TAG, "RawInputCallback: onEndRawDrawing")
+                }
 
+                override fun onBeginRawErasing(b: Boolean, touchPoint: com.onyx.android.sdk.data.note.TouchPoint?) {
+                    Log.v(TAG, "RawInputCallback: onBeginRawErasing")
+                }
+
+                override fun onRawErasingTouchPointMoveReceived(touchPoint: com.onyx.android.sdk.data.note.TouchPoint?) {
+                    Log.v(TAG, "RawInputCallback: onRawErasingTouchPointMoveReceived")
+                }
+
+                override fun onRawErasingTouchPointListReceived(touchPointList: com.onyx.android.sdk.pen.data.TouchPointList?) {
+                    Log.d(TAG, "RawInputCallback: onRawErasingTouchPointListReceived")
+                }
+
+                override fun onEndRawErasing(b: Boolean, touchPoint: com.onyx.android.sdk.data.note.TouchPoint?) {
+                    Log.v(TAG, "RawInputCallback: onEndRawErasing")
+                }
+            }
+
+            // Create TouchHelper
+            touchHelper = com.onyx.android.sdk.pen.TouchHelper.create(surfaceView, callback)
             Log.d(TAG, "openDrawing: TouchHelper created: $touchHelper")
 
-            // Set stroke width
-            val setStrokeWidthMethod = touchHelperClass.getMethod("setStrokeWidth", Float::class.java)
-            setStrokeWidthMethod.invoke(touchHelper, 3.0f)
+            touchHelper?.apply {
+                setStrokeWidth(3.0f)
+                setLimitRect(bounds, emptyList())
+                openRawDrawing()
+                setRawDrawingEnabled(true)
 
-            // Set limit rect
-            val setLimitRectMethod = touchHelperClass.getMethod("setLimitRect", Rect::class.java, java.util.List::class.java)
-            setLimitRectMethod.invoke(touchHelper, bounds, emptyList<Rect>())
-
-            // Open raw drawing
-            val openRawDrawingMethod = touchHelperClass.getMethod("openRawDrawing")
-            openRawDrawingMethod.invoke(touchHelper)
-
-            // Enable raw drawing
-            val setRawDrawingEnabledMethod = touchHelperClass.getMethod("setRawDrawingEnabled", Boolean::class.java)
-            setRawDrawingEnabledMethod.invoke(touchHelper, true)
+                // Enable native rendering for smooth, low-latency strokes
+                try {
+                    setRawDrawingRenderEnabled(true)
+                    Log.i(TAG, "openDrawing: Native EPD rendering enabled!")
+                } catch (e: Exception) {
+                    Log.w(TAG, "openDrawing: setRawDrawingRenderEnabled not available", e)
+                }
+            }
 
             isOpen = true
             Log.i(TAG, "openDrawing: Successfully opened native drawing mode!")
@@ -714,90 +754,26 @@ class BooxDrawingHelper(
     }
 
     /**
-     * Create a proxy implementation of RawInputCallback using reflection.
+     * Extract touch points from SDK TouchPointList.
      */
-    private fun createRawInputCallbackProxy(callbackClass: Class<*>): Any {
-        Log.d(TAG, "createRawInputCallbackProxy: Creating callback proxy...")
-
-        // Use java.lang.reflect.Proxy to create implementation
-        return java.lang.reflect.Proxy.newProxyInstance(
-            callbackClass.classLoader,
-            arrayOf(callbackClass)
-        ) { _, method, args ->
-            val methodName = method.name
-
-            when (methodName) {
-                "onBeginRawDrawing" -> {
-                    Log.v(TAG, "RawInputCallback: onBeginRawDrawing")
-                }
-                "onRawDrawingTouchPointMoveReceived" -> {
-                    // Real-time point during stroke
-                    Log.v(TAG, "RawInputCallback: onRawDrawingTouchPointMoveReceived")
-                }
-                "onRawDrawingTouchPointListReceived" -> {
-                    // Complete list of points for stroke
-                    Log.d(TAG, "RawInputCallback: onRawDrawingTouchPointListReceived")
-
-                    if (args != null && args.isNotEmpty()) {
-                        val touchPointList = args[0]
-                        val points = extractTouchPoints(touchPointList)
-                        onStrokeComplete(points)
-                    }
-                }
-                "onEndRawDrawing" -> {
-                    Log.v(TAG, "RawInputCallback: onEndRawDrawing")
-                }
-                "onBeginRawErasing" -> {
-                    Log.v(TAG, "RawInputCallback: onBeginRawErasing")
-                }
-                "onRawErasingTouchPointMoveReceived" -> {
-                    Log.v(TAG, "RawInputCallback: onRawErasingTouchPointMoveReceived")
-                }
-                "onRawErasingTouchPointListReceived" -> {
-                    Log.d(TAG, "RawInputCallback: onRawErasingTouchPointListReceived")
-                }
-                "onEndRawErasing" -> {
-                    Log.v(TAG, "RawInputCallback: onEndRawErasing")
-                }
-                else -> {
-                    Log.v(TAG, "RawInputCallback: Unknown method: $methodName")
-                }
-            }
-            null
-        }
-    }
-
-    /**
-     * Extract touch points from SDK TouchPointList using reflection.
-     */
-    private fun extractTouchPoints(touchPointList: Any): List<BooxTouchPoint> {
-        Log.v(TAG, "extractTouchPoints: Extracting points from $touchPointList")
-
+    private fun extractTouchPoints(touchPointList: com.onyx.android.sdk.pen.data.TouchPointList): List<BooxTouchPoint> {
         val points = mutableListOf<BooxTouchPoint>()
 
         try {
-            // Get the points list from TouchPointList
-            val getPointsMethod = touchPointList.javaClass.getMethod("getPoints")
-            @Suppress("UNCHECKED_CAST")
-            val rawPoints = getPointsMethod.invoke(touchPointList) as? List<Any> ?: return points
-
+            val rawPoints = touchPointList.points ?: return points
             Log.d(TAG, "extractTouchPoints: Found ${rawPoints.size} points")
 
             for (rawPoint in rawPoints) {
-                // Extract fields from TouchPoint using reflection
-                val pointClass = rawPoint.javaClass
-
-                val x = pointClass.getField("x").get(rawPoint) as Float
-                val y = pointClass.getField("y").get(rawPoint) as Float
-                val pressure = pointClass.getField("pressure").get(rawPoint) as Float
-                val size = pointClass.getField("size").get(rawPoint) as Float
-                val timestamp = pointClass.getField("timestamp").get(rawPoint) as Long
-
-                points.add(BooxTouchPoint(x, y, pressure, size, timestamp))
+                points.add(BooxTouchPoint(
+                    x = rawPoint.x,
+                    y = rawPoint.y,
+                    pressure = rawPoint.pressure,
+                    size = rawPoint.size,
+                    timestamp = rawPoint.timestamp
+                ))
             }
 
             Log.d(TAG, "extractTouchPoints: Extracted ${points.size} points")
-
         } catch (e: Exception) {
             Log.e(TAG, "extractTouchPoints: Failed to extract points", e)
         }
@@ -810,14 +786,7 @@ class BooxDrawingHelper(
      */
     fun setStrokeWidth(width: Float) {
         Log.d(TAG, "setStrokeWidth: $width")
-
-        try {
-            val helper = touchHelper ?: return
-            val method = helper.javaClass.getMethod("setStrokeWidth", Float::class.java)
-            method.invoke(helper, width)
-        } catch (e: Exception) {
-            Log.e(TAG, "setStrokeWidth: Failed", e)
-        }
+        touchHelper?.setStrokeWidth(width)
     }
 
     /**
@@ -825,14 +794,7 @@ class BooxDrawingHelper(
      */
     fun setStrokeStyle(style: Int) {
         Log.d(TAG, "setStrokeStyle: $style")
-
-        try {
-            val helper = touchHelper ?: return
-            val method = helper.javaClass.getMethod("setStrokeStyle", Int::class.java)
-            method.invoke(helper, style)
-        } catch (e: Exception) {
-            Log.e(TAG, "setStrokeStyle: Failed", e)
-        }
+        touchHelper?.setStrokeStyle(style)
     }
 
     /**
@@ -840,14 +802,7 @@ class BooxDrawingHelper(
      */
     fun setStrokeColor(color: Int) {
         Log.d(TAG, "setStrokeColor: ${Integer.toHexString(color)}")
-
-        try {
-            val helper = touchHelper ?: return
-            val method = helper.javaClass.getMethod("setStrokeColor", Int::class.java)
-            method.invoke(helper, color)
-        } catch (e: Exception) {
-            Log.e(TAG, "setStrokeColor: Failed", e)
-        }
+        touchHelper?.setStrokeColor(color)
     }
 
     /**
@@ -855,14 +810,7 @@ class BooxDrawingHelper(
      */
     fun setDrawingEnabled(enabled: Boolean) {
         Log.d(TAG, "setDrawingEnabled: $enabled")
-
-        try {
-            val helper = touchHelper ?: return
-            val method = helper.javaClass.getMethod("setRawDrawingEnabled", Boolean::class.java)
-            method.invoke(helper, enabled)
-        } catch (e: Exception) {
-            Log.e(TAG, "setDrawingEnabled: Failed", e)
-        }
+        touchHelper?.setRawDrawingEnabled(enabled)
     }
 
     /**
@@ -877,9 +825,7 @@ class BooxDrawingHelper(
         }
 
         try {
-            val helper = touchHelper ?: return
-            val method = helper.javaClass.getMethod("closeRawDrawing")
-            method.invoke(helper)
+            touchHelper?.closeRawDrawing()
             isOpen = false
             Log.i(TAG, "closeDrawing: Successfully closed")
         } catch (e: Exception) {
