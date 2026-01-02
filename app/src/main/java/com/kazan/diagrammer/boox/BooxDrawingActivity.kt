@@ -656,6 +656,8 @@ class BooxDrawingActivity : AppCompatActivity() {
                 // Pause render to update UI, then resume
                 booxDrawingHelper?.pauseForUiRefresh {
                     binding.tvWidthValue.text = value.toInt().toString()
+                    // Re-render bitmap to restore previous strokes after pause clears native EPD
+                    renderBitmapToSurface()
                 } ?: run {
                     binding.tvWidthValue.text = value.toInt().toString()
                 }
@@ -779,13 +781,25 @@ class BooxDrawingActivity : AppCompatActivity() {
      */
     private fun handleClear() {
         if (hasDrawn) {
+            // Disable drawing so the dialog is accessible
+            booxDrawingHelper?.setDrawingEnabled(false)
+
             AlertDialog.Builder(this)
                 .setTitle("Clear Canvas")
                 .setMessage("This will erase your drawing. Continue?")
                 .setPositiveButton("Clear") { _, _ ->
                     clearCanvas()
+                    // Re-enable drawing after clearing
+                    booxDrawingHelper?.setDrawingEnabled(true)
                 }
-                .setNegativeButton("Cancel", null)
+                .setNegativeButton("Cancel") { _, _ ->
+                    // Re-enable drawing on cancel
+                    booxDrawingHelper?.setDrawingEnabled(true)
+                }
+                .setOnCancelListener {
+                    // Re-enable drawing if dialog is dismissed (e.g., back button)
+                    booxDrawingHelper?.setDrawingEnabled(true)
+                }
                 .show()
         } else {
             clearCanvas()
@@ -797,13 +811,23 @@ class BooxDrawingActivity : AppCompatActivity() {
      */
     private fun handleCancel() {
         if (hasDrawn) {
+            // Disable drawing so the dialog is accessible
+            booxDrawingHelper?.setDrawingEnabled(false)
+
             AlertDialog.Builder(this)
                 .setTitle("Discard Drawing")
                 .setMessage("You have unsaved changes. Discard?")
                 .setPositiveButton("Discard") { _, _ ->
                     cancelAndClose()
                 }
-                .setNegativeButton("Keep Drawing", null)
+                .setNegativeButton("Keep Drawing") { _, _ ->
+                    // Re-enable drawing on cancel
+                    booxDrawingHelper?.setDrawingEnabled(true)
+                }
+                .setOnCancelListener {
+                    // Re-enable drawing if dialog is dismissed (e.g., back button)
+                    booxDrawingHelper?.setDrawingEnabled(true)
+                }
                 .show()
         } else {
             cancelAndClose()
@@ -1238,10 +1262,12 @@ object BrushRenderer {
 
     /**
      * Convert our BooxTouchPoint list to SDK TouchPoint list.
+     * Note: We pass strokeWidth as the size parameter for each point, matching how notable does it.
+     * This ensures the bitmap rendering uses the same stroke width as the native EPD preview.
      */
-    private fun toSdkTouchPoints(points: List<BooxTouchPoint>): List<com.onyx.android.sdk.data.note.TouchPoint> {
+    private fun toSdkTouchPoints(points: List<BooxTouchPoint>, strokeWidth: Float): List<com.onyx.android.sdk.data.note.TouchPoint> {
         return points.map { pt ->
-            com.onyx.android.sdk.data.note.TouchPoint(pt.x, pt.y, pt.pressure, pt.size, pt.timestamp)
+            com.onyx.android.sdk.data.note.TouchPoint(pt.x, pt.y, pt.pressure, strokeWidth, pt.timestamp)
         }
     }
 
@@ -1291,7 +1317,7 @@ object BrushRenderer {
             strokeWidth = stroke.width
         }
 
-        val sdkPoints = toSdkTouchPoints(stroke.points)
+        val sdkPoints = toSdkTouchPoints(stroke.points, stroke.width)
 
         if (sdkPoints.size == 1) {
             paint.style = Paint.Style.FILL
@@ -1316,7 +1342,7 @@ object BrushRenderer {
      */
     private fun renderFountainStroke(canvas: Canvas, stroke: StrokeData) {
         val paint = createPaint(stroke.color)
-        val sdkPoints = toSdkTouchPoints(stroke.points)
+        val sdkPoints = toSdkTouchPoints(stroke.points, stroke.width)
         val maxPressure = getMaxPressure()
 
         try {
@@ -1341,7 +1367,7 @@ object BrushRenderer {
      */
     private fun renderNeoBrushStroke(canvas: Canvas, stroke: StrokeData) {
         val paint = createPaint(stroke.color)
-        val sdkPoints = toSdkTouchPoints(stroke.points)
+        val sdkPoints = toSdkTouchPoints(stroke.points, stroke.width)
         val maxPressure = getMaxPressure()
 
         try {
@@ -1363,7 +1389,7 @@ object BrushRenderer {
      */
     private fun renderMarkerStroke(canvas: Canvas, stroke: StrokeData) {
         val paint = createPaint(stroke.color)
-        val sdkPoints = toSdkTouchPoints(stroke.points)
+        val sdkPoints = toSdkTouchPoints(stroke.points, stroke.width)
         val maxPressure = getMaxPressure()
 
         try {
@@ -1386,7 +1412,7 @@ object BrushRenderer {
      */
     private fun renderCharcoalStroke(canvas: Canvas, stroke: StrokeData) {
         val paint = createPaint(stroke.color)
-        val sdkPoints = toSdkTouchPoints(stroke.points)
+        val sdkPoints = toSdkTouchPoints(stroke.points, stroke.width)
 
         Log.d(TAG, "renderCharcoalStroke: Rendering ${sdkPoints.size} points with width=${stroke.width}")
 
