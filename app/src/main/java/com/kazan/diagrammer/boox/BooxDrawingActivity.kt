@@ -486,11 +486,14 @@ class BooxDrawingActivity : AppCompatActivity() {
 
     /**
      * Render the current bitmap to the SurfaceView.
+     * Draws a white background first since the bitmap is transparent for export.
      */
     private fun renderBitmapToSurface() {
         val holder = binding.surfaceView.holder
         val surfaceCanvas = holder.lockCanvas() ?: return
         try {
+            // Draw white background first (bitmap is transparent for export)
+            surfaceCanvas.drawColor(Color.WHITE)
             bitmap?.let { surfaceCanvas.drawBitmap(it, 0f, 0f, null) }
         } finally {
             holder.unlockCanvasAndPost(surfaceCanvas)
@@ -769,9 +772,9 @@ class BooxDrawingActivity : AppCompatActivity() {
      * Clear the canvas.
      */
     private fun clearCanvas() {
-        Log.d(TAG, "clearCanvas: Clearing canvas to white and stored strokes")
+        Log.d(TAG, "clearCanvas: Clearing canvas to transparent and stored strokes")
         strokes.clear()
-        canvas?.drawColor(Color.WHITE)
+        canvas?.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
         renderBitmapToSurface()
         hasDrawn = false
     }
