@@ -37,7 +37,7 @@
 
     </com.google.android.material.appbar.MaterialToolbar>
 
-    <!-- Bottom toolbar - Brush/width selection and actions -->
+    <!-- Bottom toolbar - Brush/width/color selection and actions -->
     <LinearLayout
         android:id="@+id/bottomToolbar"
         android:layout_width="match_parent"
@@ -46,6 +46,40 @@
         android:background="#F5F5F5"
         android:orientation="vertical"
         android:padding="8dp">
+
+        <!-- Color selection row -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="8dp"
+            android:paddingVertical="4dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Color"
+                android:textColor="#666666"
+                android:textSize="12sp" />
+
+            <HorizontalScrollView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:scrollbars="none">
+
+                <LinearLayout
+                    android:id="@+id/colorContainer"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal" />
+
+            </HorizontalScrollView>
+
+        </LinearLayout>
 
         <!-- Stroke width slider -->
         <LinearLayout

@@ -1,5 +1,52 @@
 # Boox Native Stylus API Research
 
+## Implementation Status
+
+> **Last Updated**: January 2, 2026
+
+### ✅ Completed Features
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Device Detection** | ✅ Done | `BooxDeviceUtils.kt` detects Onyx device, Pen SDK, EPD controller |
+| **SDK Integration** | ✅ Done | `onyxsdk-pen:1.4.10.1`, `onyxsdk-device:1.3.0` bundled as `implementation` |
+| **BooxDrawingActivity** | ✅ Done | Full native drawing canvas with SurfaceView + TouchHelper |
+| **Brush Styles** | ✅ Done | Pencil, Fountain, Neo Brush, Marker, Charcoal |
+| **Stroke Width Slider** | ✅ Done | Adjustable 1-20px width |
+| **NativeBridge Integration** | ✅ Done | `openNativeDrawingCanvas()`, `hasFullBooxDrawingSupport()`, `getDeviceCapabilities()` |
+| **MainActivity Callbacks** | ✅ Done | Launches activity, receives PNG result, passes to WebView |
+| **TypeScript Types** | ✅ Done | `types.d.ts` updated with bridge types |
+| **useNativeDrawing Hook** | ✅ Done | React hook manages native drawing lifecycle |
+| **DrawingToolbar UI** | ✅ Done | "Native Draw" button shown conditionally |
+| **Image Insertion** | ✅ Done | PNG inserted as Excalidraw image element at viewport center |
+| **Cancel Callback** | ✅ Done | `window.cancelNativeDrawing()` resets UI state |
+| **HiddenApiBypass** | ✅ Done | For Android 11+ hidden API access |
+
+### 🎨 UI Refinements Made
+
+- Cancel/Done buttons moved to bottom bar (right side)
+- Brush buttons use consistent OutlinedButton style
+- Active brush shows filled background (#D0D0D0)
+- Native Draw button uses RailButton with `col-span-2` width
+
+### 🔧 Build Configuration
+
+- SDK dependencies changed from `compileOnly` to `implementation` (bundle in APK)
+- Added exclusions for `com.android.support` duplicate classes
+- Added `jniLibs.pickFirsts` for `libc++_shared.so` conflicts
+
+### ⏳ Remaining / Not Implemented
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Background Image** | ❌ Not done | Show scene screenshot as background in native canvas |
+| **Color Support** | ❌ Not done | Air4C supports 16 colors - not exposed in UI |
+| **Eraser Mode** | ❌ Not done | SDK supports eraser via stylus button - not wired |
+| **Undo/Redo** | ❌ Not done | No stroke history management |
+| **Custom Brush Textures** | N/A | Not available in SDK |
+
+---
+
 ## Target Device
 
 **Boox Tab Ultra C / Air4C** - Kaleido 3 color e-ink display supporting **16 colors** (not just B&W).

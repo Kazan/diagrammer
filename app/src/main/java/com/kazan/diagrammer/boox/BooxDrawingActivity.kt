@@ -64,6 +64,29 @@ class BooxDrawingActivity : AppCompatActivity() {
         const val STYLE_CHARCOAL = 4
 
         /**
+         * Kaleido 3 color palette - 16 colors optimized for e-ink display.
+         * These colors are specifically chosen for best rendering on Boox color e-ink.
+         */
+        val KALEIDO_COLORS = listOf(
+            0xFF000000.toInt(), // Black
+            0xFF424242.toInt(), // Dark Gray
+            0xFF757575.toInt(), // Gray
+            0xFFBDBDBD.toInt(), // Light Gray
+            0xFFD32F2F.toInt(), // Red
+            0xFFE91E63.toInt(), // Pink
+            0xFF9C27B0.toInt(), // Purple
+            0xFF673AB7.toInt(), // Deep Purple
+            0xFF3F51B5.toInt(), // Indigo
+            0xFF2196F3.toInt(), // Blue
+            0xFF03A9F4.toInt(), // Light Blue
+            0xFF009688.toInt(), // Teal
+            0xFF4CAF50.toInt(), // Green
+            0xFF8BC34A.toInt(), // Light Green
+            0xFFFFEB3B.toInt(), // Yellow
+            0xFFFF9800.toInt(), // Orange
+        )
+
+        /**
          * Creates an intent to launch this activity.
          */
         fun createIntent(context: Context): Intent {
@@ -88,7 +111,11 @@ class BooxDrawingActivity : AppCompatActivity() {
     // Current tool settings
     private var currentStyle = STYLE_FOUNTAIN
     private var currentWidth = 3f
+    private var currentColor = Color.BLACK
     private var hasDrawn = false
+
+    // Color buttons for easy iteration
+    private val colorButtons = mutableListOf<View>()
 
     // Boox SDK wrapper (null on non-Boox devices)
     private var booxDrawingHelper: BooxDrawingHelper? = null
@@ -112,6 +139,7 @@ class BooxDrawingActivity : AppCompatActivity() {
         initSurfaceView()
         initToolbar()
         initBrushButtons()
+        initColorButtons()
         initWidthSlider()
 
         Log.i(TAG, "onCreate: Initialization complete")
@@ -324,6 +352,41 @@ class BooxDrawingActivity : AppCompatActivity() {
     }
 
     /**
+     * Initialize the color selection buttons dynamically.
+     */
+    private fun initColorButtons() {
+        val colorContainer = binding.colorContainer
+        colorContainer.removeAllViews()
+        colorButtons.clear()
+
+        val buttonSize = (32 * resources.displayMetrics.density).toInt()
+        val margin = (4 * resources.displayMetrics.density).toInt()
+
+        for ((index, color) in KALEIDO_COLORS.withIndex()) {
+            val colorView = View(this).apply {
+                layoutParams = android.widget.LinearLayout.LayoutParams(buttonSize, buttonSize).apply {
+                    setMargins(margin, margin, margin, margin)
+                }
+                setBackgroundColor(color)
+
+                // Add border for visibility (especially for light colors)
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    setColor(color)
+                    setStroke((1 * resources.displayMetrics.density).toInt(), Color.parseColor("#888888"))
+                    cornerRadius = 4 * resources.displayMetrics.density
+                }
+
+                setOnClickListener { selectColor(index, color) }
+            }
+            colorContainer.addView(colorView)
+            colorButtons.add(colorView)
+        }
+
+        // Set initial selection
+        updateColorButtonStates()
+    }
+
+    /**
      * Initialize the stroke width slider.
      */
     private fun initWidthSlider() {
@@ -371,6 +434,44 @@ class BooxDrawingActivity : AppCompatActivity() {
             } else {
                 button.setBackgroundColor(Color.TRANSPARENT)
                 button.strokeWidth = (1 * resources.displayMetrics.density).toInt() // 1dp
+            }
+        }
+    }
+
+    /**
+     * Select a color.
+     */
+    private fun selectColor(index: Int, color: Int) {
+        Log.i(TAG, "selectColor: index=$index, color=${Integer.toHexString(color)}")
+
+        currentColor = color
+        paint.color = color
+
+        // Update SDK stroke color
+        booxDrawingHelper?.setDrawingEnabled(false)
+        booxDrawingHelper?.setStrokeColor(color)
+        booxDrawingHelper?.setDrawingEnabled(true)
+
+        updateColorButtonStates()
+    }
+
+    /**
+     * Update the visual state of color buttons to reflect current selection.
+     */
+    private fun updateColorButtonStates() {
+        val strokeWidth = (3 * resources.displayMetrics.density).toInt()
+        val normalStrokeWidth = (1 * resources.displayMetrics.density).toInt()
+
+        for ((index, view) in colorButtons.withIndex()) {
+            val color = KALEIDO_COLORS[index]
+            val isSelected = color == currentColor
+
+            (view.background as? android.graphics.drawable.GradientDrawable)?.apply {
+                if (isSelected) {
+                    setStroke(strokeWidth, Color.parseColor("#1976D2")) // Blue highlight for selected
+                } else {
+                    setStroke(normalStrokeWidth, Color.parseColor("#888888"))
+                }
             }
         }
     }
@@ -731,6 +832,21 @@ class BooxDrawingHelper(
             method.invoke(helper, style)
         } catch (e: Exception) {
             Log.e(TAG, "setStrokeStyle: Failed", e)
+        }
+    }
+
+    /**
+     * Set stroke color.
+     */
+    fun setStrokeColor(color: Int) {
+        Log.d(TAG, "setStrokeColor: ${Integer.toHexString(color)}")
+
+        try {
+            val helper = touchHelper ?: return
+            val method = helper.javaClass.getMethod("setStrokeColor", Int::class.java)
+            method.invoke(helper, color)
+        } catch (e: Exception) {
+            Log.e(TAG, "setStrokeColor: Failed", e)
         }
     }
 
