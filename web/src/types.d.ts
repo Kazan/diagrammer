@@ -17,6 +17,23 @@ declare global {
     __NATIVE_PLATFORM__?: "android" | string;
 
     /**
+     * Whether the device supports Boox native stylus drawing.
+     * Injected by Android native layer for Boox/Onyx e-ink devices.
+     */
+    __NATIVE_HAS_BOOX_DRAWING__?: boolean;
+
+    /**
+     * Called by Android native layer when a native drawing is complete.
+     * Receives the PNG as a base64 data URL along with dimensions.
+     */
+    insertNativeDrawing?: (dataUrl: string, width: number, height: number) => void;
+
+    /**
+     * Called by Android native layer when native drawing is cancelled.
+     */
+    cancelNativeDrawing?: () => void;
+
+    /**
      * Optional file picker APIs (overridden in Android WebView to route through the native bridge).
      * We intentionally keep these types broad because the browser versions (if present) return
      * platform file handles, while our native shim returns bridge-backed handles.

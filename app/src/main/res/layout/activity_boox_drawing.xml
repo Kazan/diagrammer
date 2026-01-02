@@ -1,0 +1,295 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FFFFFF"
+    tools:context=".boox.BooxDrawingActivity">
+
+    <!-- Left Sidebar -->
+    <LinearLayout
+        android:id="@+id/leftSidebar"
+        android:layout_width="140dp"
+        android:layout_height="0dp"
+        android:background="#F5F5F5"
+        android:clickable="true"
+        android:focusable="true"
+        android:orientation="vertical"
+        android:padding="8dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <!-- Brush Tools Section -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingHorizontal="4dp"
+            android:paddingBottom="4dp"
+            android:text="Tools"
+            android:textColor="#666666"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <!-- Pencil -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnPencil"
+            style="@style/Widget.Material3.Button.OutlinedButton.Icon"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginVertical="2dp"
+            android:gravity="start|center_vertical"
+            android:text="Pencil"
+            android:textSize="12sp"
+            app:icon="@drawable/ic_pencil"
+            app:iconGravity="start" />
+
+        <!-- Fountain Pen -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnFountain"
+            style="@style/Widget.Material3.Button.OutlinedButton.Icon"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginVertical="2dp"
+            android:gravity="start|center_vertical"
+            android:text="Fountain"
+            android:textSize="12sp"
+            app:icon="@drawable/ic_fountain_pen"
+            app:iconGravity="start" />
+
+        <!-- Neo Brush -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnNeoBrush"
+            style="@style/Widget.Material3.Button.OutlinedButton.Icon"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginVertical="2dp"
+            android:gravity="start|center_vertical"
+            android:text="Brush"
+            android:textSize="12sp"
+            app:icon="@drawable/ic_brush"
+            app:iconGravity="start" />
+
+        <!-- Marker -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnMarker"
+            style="@style/Widget.Material3.Button.OutlinedButton.Icon"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginVertical="2dp"
+            android:gravity="start|center_vertical"
+            android:text="Marker"
+            android:textSize="12sp"
+            app:icon="@drawable/ic_marker"
+            app:iconGravity="start" />
+
+        <!-- Charcoal -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnCharcoal"
+            style="@style/Widget.Material3.Button.OutlinedButton.Icon"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginVertical="2dp"
+            android:gravity="start|center_vertical"
+            android:text="Charcoal"
+            android:textSize="12sp"
+            app:icon="@drawable/ic_charcoal"
+            app:iconGravity="start" />
+
+        <!-- Divider -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginVertical="8dp"
+            android:background="#CCCCCC" />
+
+        <!-- Colors Section -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingBottom="4dp"
+            android:text="Color"
+            android:textColor="#666666"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <!-- Color swatches grid - fills available width -->
+        <GridLayout
+            android:id="@+id/colorContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:columnCount="2" />
+
+        <!-- Divider -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginVertical="8dp"
+            android:background="#CCCCCC" />
+
+        <!-- Width Section (vertical slider at bottom) -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Width"
+            android:textColor="#666666"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tvWidthValue"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:paddingTop="4dp"
+            android:text="3"
+            android:textColor="#333333"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <!-- FrameLayout to hold rotated slider - fills remaining height -->
+        <FrameLayout
+            android:id="@+id/sliderContainer"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:clipChildren="false"
+            android:clipToPadding="false">
+
+            <com.google.android.material.slider.Slider
+                android:id="@+id/sliderWidth"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_gravity="center"
+                android:stepSize="1"
+                android:valueFrom="1"
+                android:valueTo="50"
+                app:labelBehavior="gone"
+                app:thumbRadius="10dp"
+                app:trackHeight="6dp" />
+
+        </FrameLayout>
+
+    </LinearLayout>
+
+    <!-- Main drawing canvas -->
+    <SurfaceView
+        android:id="@+id/surfaceView"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toEndOf="@id/leftSidebar"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- Current brush indicator -->
+    <TextView
+        android:id="@+id/tvBrushName"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="8dp"
+        android:background="#CCFFFFFF"
+        android:padding="4dp"
+        android:text="Fountain Pen"
+        android:textColor="#666666"
+        android:textSize="12sp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="@id/surfaceView" />
+
+    <!-- Bottom Right Action Bar -->
+    <LinearLayout
+        android:id="@+id/bottomActionBar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="#F5F5F5"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="8dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnClear"
+            style="@style/Widget.Material3.Button.TextButton.Icon"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Clear"
+            android:textColor="#CC0000"
+            android:textSize="12sp"
+            app:icon="@drawable/ic_clear"
+            app:iconTint="#CC0000" />
+
+        <View
+            android:layout_width="1dp"
+            android:layout_height="32dp"
+            android:layout_marginHorizontal="8dp"
+            android:background="#CCCCCC" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnCancel"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Cancel"
+            android:textColor="#666666"
+            android:textSize="12sp"
+            app:icon="@drawable/ic_close"
+            app:iconTint="#666666" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnDone"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Done"
+            android:textSize="12sp"
+            app:icon="@drawable/ic_check" />
+
+    </LinearLayout>
+
+    <!-- Loading overlay -->
+    <FrameLayout
+        android:id="@+id/loadingOverlay"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="#80000000"
+        android:clickable="true"
+        android:focusable="true"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:background="@drawable/bg_loading_card"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="24dp">
+
+            <ProgressBar
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:indeterminate="true" />
+
+            <TextView
+                android:id="@+id/tvLoadingMessage"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="Exporting..."
+                android:textColor="#333333"
+                android:textSize="14sp" />
+
+        </LinearLayout>
+
+    </FrameLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

@@ -13,6 +13,7 @@ import {
   Pencil,
   Type as TypeIcon,
   Image as ImageIcon,
+  PenTool,
 } from "lucide-react";
 import {
   ToolRail,
@@ -20,6 +21,7 @@ import {
   RailSeparator,
   RailToggleGroup,
   RailToggleItem,
+  RailButton,
 } from "@/components/ui/tool-rail";
 
 export type ToolType =
@@ -56,6 +58,12 @@ type Props = {
   isToolLocked?: boolean;
   onSelect: (tool: ToolType) => void;
   onLockTool?: (tool: ToolType) => void;
+  /** Whether Boox native stylus drawing is available */
+  hasNativeDrawing?: boolean;
+  /** Whether native drawing is currently in progress */
+  isNativeDrawing?: boolean;
+  /** Callback to open native drawing canvas */
+  onNativeDraw?: () => void;
 };
 
 /**
@@ -125,6 +133,9 @@ export function DrawingToolbar({
   isToolLocked = false,
   onSelect,
   onLockTool,
+  hasNativeDrawing = false,
+  isNativeDrawing = false,
+  onNativeDraw,
 }: Props) {
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressTriggeredRef = useRef(false);
@@ -173,6 +184,11 @@ export function DrawingToolbar({
     longPressTriggeredRef.current = false;
   }, [clearLongPressTimer]);
 
+  const handleNativeDrawClick = useCallback(() => {
+    console.log("[DrawingToolbar] Native Draw button clicked");
+    onNativeDraw?.();
+  }, [onNativeDraw]);
+
   return (
     <ToolRail position="left" aria-label="Drawing tools">
       <RailToggleGroup value={activeTool} onValueChange={onSelect}>
@@ -205,6 +221,25 @@ export function DrawingToolbar({
           </RailSection>
         ))}
       </RailToggleGroup>
+
+      {/* Native Boox stylus drawing button - only shown on supported devices */}
+      {hasNativeDrawing && (
+        <>
+          <RailSeparator colSpan={2} />
+          <RailSection columns={2} label="native">
+            <RailButton
+              onClick={handleNativeDrawClick}
+              disabled={isNativeDrawing}
+              pressed={isNativeDrawing}
+              className="col-span-2 w-full"
+              aria-label="Native stylus drawing"
+              title="Draw with Boox native stylus (hardware accelerated)"
+            >
+              <PenTool aria-hidden="true" />
+            </RailButton>
+          </RailSection>
+        </>
+      )}
     </ToolRail>
   );
 }

@@ -46,6 +46,16 @@
             </intent-filter>
         </activity>
 
+        <!-- Boox native stylus drawing activity -->
+        <activity
+            android:name=".boox.BooxDrawingActivity"
+            android:exported="false"
+            android:configChanges="keyboardHidden|orientation|screenSize"
+            android:label="Native Drawing"
+            android:screenOrientation="sensorLandscape"
+            android:theme="@style/Theme.DiagrammerApp"
+            android:windowSoftInputMode="stateHidden" />
+
     </application>
 
 </manifest>

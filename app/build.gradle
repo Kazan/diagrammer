@@ -114,6 +114,10 @@ android {
                 "META-INF/NOTICE.txt"
             ]
         }
+        jniLibs {
+            // Handle duplicate native libs from Boox SDK
+            pickFirsts += ['lib/*/libc++_shared.so', 'lib/*/libc++.so']
+        }
     }
 }
 
@@ -127,6 +131,21 @@ dependencies {
     implementation "androidx.webkit:webkit:1.10.0"
     implementation "com.google.dagger:hilt-android:2.52"
     ksp "com.google.dagger:hilt-compiler:2.52"
+
+    // Boox/Onyx native stylus SDK - provides TouchHelper and pressure-sensitive drawing
+    // Bundle with app since Air4C doesn't have SDK pre-installed in system
+    // Exclude old support libraries that conflict with AndroidX
+    implementation("com.onyx.android.sdk:onyxsdk-pen:1.4.10.1") {
+        exclude group: 'com.android.support'
+        exclude group: 'android.arch.lifecycle'
+    }
+    implementation("com.onyx.android.sdk:onyxsdk-device:1.3.0") {
+        exclude group: 'com.android.support'
+        exclude group: 'android.arch.lifecycle'
+    }
+
+    // Required for hidden API bypass on Android 11+
+    implementation("org.lsposed.hiddenapibypass:hiddenapibypass:4.3")
 }
 
 def rootApkDir = rootDir.toPath().resolve("build").toFile()

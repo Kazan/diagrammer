@@ -42,6 +42,7 @@ import { useNativeBridge, useNativeBridgeCallbacks } from "./hooks/useNativeBrid
 import { useNativeFileHandles } from "./hooks/useNativeFileHandles";
 import { useNativePickers } from "./hooks/useNativePickers";
 import { useNativeMessageHandlers } from "./hooks/useNativeMessageHandlers";
+import { useNativeDrawing } from "./hooks/useNativeDrawing";
 import { useSceneChangeSubscription } from "./hooks/useSceneChangeSubscription";
 import { useSceneSerialization } from "./hooks/useSceneSerialization";
 import { useExportActions } from "./hooks/useExportActions";
@@ -160,6 +161,16 @@ export default function App() {
   const { scale, handleScaleUp, handleScaleDown, handleReset: handleResetScale, minScale, maxScale } = useUiScale();
 
   const { isFocusMode, toggleFocusMode } = useFocusMode();
+
+  const { hasNativeDrawing, isDrawing: isNativeDrawing, openNativeDrawing } = useNativeDrawing({
+    api,
+    setStatus,
+    onInserted: () => {
+      // When a native drawing is inserted, switch back to selection tool
+      setActiveTool("selection");
+      apiRef.current?.setActiveTool({ type: "selection" });
+    },
+  });
 
   const { isDrawingMultiPoint, finalizeMultiPoint } = useMultiPointFinalize(api);
 
@@ -729,6 +740,9 @@ export default function App() {
         isToolLocked={isToolLocked}
         onSelect={handleSelectTool}
         onLockTool={handleLockTool}
+        hasNativeDrawing={hasNativeDrawing}
+        isNativeDrawing={isNativeDrawing}
+        onNativeDraw={openNativeDrawing}
       />
 
       {/* Right Rail: Selection properties */}

@@ -28,6 +28,8 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.webkit.WebViewAssetLoader
+import com.kazan.diagrammer.boox.BooxDeviceUtils
+import com.kazan.diagrammer.boox.BooxDrawingActivity
 import com.kazan.diagrammer.databinding.ActivityMainBinding
 import com.kazan.diagrammer.di.IoDispatcher
 import com.kazan.diagrammer.di.MainHandler
@@ -99,10 +101,59 @@ class MainActivity : ComponentActivity() {
         fileChooserCallback = null
     }
 
+    /**
+     * Launcher for Boox native drawing activity.
+     * Returns the drawing as a PNG bitmap when complete.
+     */
+    private val nativeDrawingLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        Log.i(TAG, "nativeDrawingLauncher: resultCode=${result.resultCode}")
+
+        when (result.resultCode) {
+            BooxDrawingActivity.RESULT_DRAWING_COMPLETE -> {
+                val data = result.data
+                val pngBytes = data?.getByteArrayExtra(BooxDrawingActivity.EXTRA_DRAWING_PNG)
+                val width = data?.getIntExtra(BooxDrawingActivity.EXTRA_DRAWING_WIDTH, 0) ?: 0
+                val height = data?.getIntExtra(BooxDrawingActivity.EXTRA_DRAWING_HEIGHT, 0) ?: 0
+
+                Log.i(TAG, "nativeDrawingLauncher: Drawing complete, bytes=${pngBytes?.size}, size=${width}x$height")
+
+                if (pngBytes != null && pngBytes.isNotEmpty()) {
+                    nativeBridge?.completeNativeDrawing(pngBytes, width, height)
+                } else {
+                    Log.w(TAG, "nativeDrawingLauncher: No drawing data received")
+                    nativeBridge?.cancelNativeDrawing()
+                }
+            }
+            BooxDrawingActivity.RESULT_DRAWING_CANCELLED -> {
+                Log.i(TAG, "nativeDrawingLauncher: Drawing cancelled by user")
+                nativeBridge?.cancelNativeDrawing()
+            }
+            else -> {
+                Log.w(TAG, "nativeDrawingLauncher: Unknown result code: ${result.resultCode}")
+                nativeBridge?.cancelNativeDrawing()
+            }
+        }
+
+        enterImmersive()
+    }
+
+    companion object {
+        private const val TAG = "MainActivity"
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     @Suppress("DEPRECATION")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Log Boox device capabilities at startup for diagnostics
+        Log.i(TAG, "═══════════════════════════════════════════════════════")
+        Log.i(TAG, "onCreate: Starting Diagrammer")
+        BooxDeviceUtils.logCapabilitySummary()
+        Log.i(TAG, "═══════════════════════════════════════════════════════")
+
         WebView.setWebContentsDebuggingEnabled(true)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -157,7 +208,13 @@ class MainActivity : ComponentActivity() {
                         openDocumentLauncher.launch(arrayOf("application/json", "application/octet-stream", "*/*"))
                     },
                     rememberPickerUri = ::rememberPickerUri
-                ).also { nativeBridge = it },
+                ).also { bridge ->
+                    nativeBridge = bridge
+                    // Set up native drawing callback
+                    bridge.startNativeDrawing = {
+                        launchNativeDrawing()
+                    }
+                },
                 "NativeBridge"
             )
         }
@@ -221,6 +278,23 @@ class MainActivity : ComponentActivity() {
         createDocumentLauncher.launch(suggestedName)
     }
 
+    /**
+     * Launch the native Boox drawing activity.
+     * Called when user taps the "Native Draw" button in the web UI.
+     */
+    private fun launchNativeDrawing() {
+        Log.i(TAG, "launchNativeDrawing: Starting BooxDrawingActivity")
+
+        if (!BooxDeviceUtils.hasFullBooxDrawingSupport) {
+            Log.w(TAG, "launchNativeDrawing: Device does not support native drawing")
+            return
+        }
+
+        exitImmersive()
+        val intent = BooxDrawingActivity.createIntent(this)
+        nativeDrawingLauncher.launch(intent)
+    }
+
     // No upfront directory grant; rely on user-selected locations via picker.
 
     private inner class DiagrammerWebViewClient : WebViewClient() {
@@ -248,6 +322,8 @@ class MainActivity : ComponentActivity() {
             super.onPageStarted(view, url, favicon)
             // Inject native state before React app mounts.
             // This allows the web app to detect native context synchronously on startup.
+            val hasBooxDrawing = BooxDeviceUtils.hasFullBooxDrawingSupport
+            Log.d(TAG, "onPageStarted: Injecting native state, hasBooxDrawing=$hasBooxDrawing")
             view?.evaluateJavascript(
                 """
                 window.__NATIVE_PRESENT__ = true;
@@ -255,6 +331,7 @@ class MainActivity : ComponentActivity() {
                 window.__NATIVE_BUILD_LABEL__ = '${BuildConfig.BUILD_LABEL}';
                 window.__NATIVE_GIT_HASH__ = '${BuildConfig.GIT_HASH}';
                 window.__NATIVE_PLATFORM__ = 'android';
+                window.__NATIVE_HAS_BOOX_DRAWING__ = $hasBooxDrawing;
                 """.trimIndent(),
                 null
             )

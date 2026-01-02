@@ -18,6 +18,11 @@ export type NativeBridgeEvent =
       message?: string;
     }
   | {
+      event: "onNativeDrawingComplete";
+      success: boolean;
+      message?: string;
+    }
+  | {
       event?: string;
       success?: boolean;
       message?: string;
@@ -53,6 +58,10 @@ export type NativeBridge = {
   exportSvg?: (dataUrl: string) => void;
   // Library loading for bundled assets
   loadLibraryAsset?: (assetPath: string) => Promise<string | null>;
+  // Boox native stylus drawing
+  hasFullBooxDrawingSupport?: () => boolean;
+  getDeviceInfo?: () => string;
+  openNativeDrawingCanvas?: () => void;
 };
 
 export type NativeBridgeCallbacks = {
