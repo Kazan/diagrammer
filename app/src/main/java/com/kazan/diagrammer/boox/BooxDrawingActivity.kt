@@ -861,16 +861,16 @@ class BooxDrawingActivity : AppCompatActivity() {
         // Export on background thread
         Thread {
             try {
-                val pngBytes = exportToPng()
-                Log.i(TAG, "handleDone: Exported ${pngBytes.size} bytes")
+                val exportResult = exportToPng()
+                Log.i(TAG, "handleDone: Exported ${exportResult.bytes.size} bytes (${exportResult.width}x${exportResult.height})")
 
                 runOnUiThread {
                     hideLoading()
 
                     val resultIntent = Intent().apply {
-                        putExtra(EXTRA_DRAWING_PNG, pngBytes)
-                        putExtra(EXTRA_DRAWING_WIDTH, bitmap?.width ?: 0)
-                        putExtra(EXTRA_DRAWING_HEIGHT, bitmap?.height ?: 0)
+                        putExtra(EXTRA_DRAWING_PNG, exportResult.bytes)
+                        putExtra(EXTRA_DRAWING_WIDTH, exportResult.width)
+                        putExtra(EXTRA_DRAWING_HEIGHT, exportResult.height)
                     }
 
                     Log.i(TAG, "handleDone: Returning successful result")
@@ -893,20 +893,97 @@ class BooxDrawingActivity : AppCompatActivity() {
     }
 
     /**
-     * Export the current bitmap to PNG bytes.
+     * Calculate the bounding box of all strokes.
+     * Returns null if no strokes exist.
      */
-    private fun exportToPng(): ByteArray {
+    private fun calculateStrokesBoundingBox(): Rect? {
+        if (strokes.isEmpty()) return null
+
+        var minX = Float.MAX_VALUE
+        var minY = Float.MAX_VALUE
+        var maxX = Float.MIN_VALUE
+        var maxY = Float.MIN_VALUE
+
+        for (stroke in strokes) {
+            // Account for stroke width when calculating bounds
+            val halfWidth = stroke.width / 2f + 2f // Add small margin
+
+            for (point in stroke.points) {
+                minX = minOf(minX, point.x - halfWidth)
+                minY = minOf(minY, point.y - halfWidth)
+                maxX = maxOf(maxX, point.x + halfWidth)
+                maxY = maxOf(maxY, point.y + halfWidth)
+            }
+        }
+
+        // Ensure bounds are valid
+        if (minX >= maxX || minY >= maxY) return null
+
+        // Clamp to bitmap bounds
+        val bitmapWidth = bitmap?.width ?: return null
+        val bitmapHeight = bitmap?.height ?: return null
+
+        val left = maxOf(0, minX.toInt())
+        val top = maxOf(0, minY.toInt())
+        val right = minOf(bitmapWidth, maxX.toInt() + 1)
+        val bottom = minOf(bitmapHeight, maxY.toInt() + 1)
+
+        // Ensure we have a valid rectangle
+        if (right <= left || bottom <= top) return null
+
+        return Rect(left, top, right, bottom)
+    }
+
+    /**
+     * Result of exporting the drawing to PNG.
+     */
+    private data class ExportResult(
+        val bytes: ByteArray,
+        val width: Int,
+        val height: Int
+    )
+
+    /**
+     * Export the current bitmap to PNG bytes, cropped to the drawn area.
+     */
+    private fun exportToPng(): ExportResult {
         Log.d(TAG, "exportToPng: Starting compression...")
 
         val localBitmap = bitmap ?: throw IllegalStateException("No bitmap to export")
 
+        // Calculate bounding box of all strokes
+        val bounds = calculateStrokesBoundingBox()
+
+        val exportBitmap = if (bounds != null) {
+            Log.d(TAG, "exportToPng: Cropping to bounds: ${bounds.left},${bounds.top} - ${bounds.right},${bounds.bottom} (${bounds.width()}x${bounds.height()})")
+            // Crop bitmap to the drawn area
+            Bitmap.createBitmap(
+                localBitmap,
+                bounds.left,
+                bounds.top,
+                bounds.width(),
+                bounds.height()
+            )
+        } else {
+            Log.d(TAG, "exportToPng: No bounds calculated, exporting full bitmap")
+            localBitmap
+        }
+
         val stream = ByteArrayOutputStream()
-        localBitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+        exportBitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+
+        val width = exportBitmap.width
+        val height = exportBitmap.height
+
+        // Recycle cropped bitmap if it's a new one
+        if (exportBitmap !== localBitmap) {
+            exportBitmap.recycle()
+        }
 
         val bytes = stream.toByteArray()
-        Log.d(TAG, "exportToPng: Compressed to ${bytes.size} bytes")
+        Log.d(TAG, "exportToPng: Compressed to ${bytes.size} bytes (${width}x${height})")
 
-        return bytes
+        return ExportResult(bytes, width, height)
     }
 
     /**
