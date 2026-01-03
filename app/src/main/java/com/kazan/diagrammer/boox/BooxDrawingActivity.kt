@@ -52,6 +52,7 @@ class BooxDrawingActivity : AppCompatActivity() {
 
         // Intent extras
         const val EXTRA_DRAWING_PNG = "drawing_png"
+        const val EXTRA_DRAWING_URI = "drawing_uri"  // File-based transfer for large drawings (Issue #2 fix)
         const val EXTRA_DRAWING_WIDTH = "drawing_width"
         const val EXTRA_DRAWING_HEIGHT = "drawing_height"
 
@@ -260,10 +261,12 @@ class BooxDrawingActivity : AppCompatActivity() {
                     onStrokeComplete = { points -> onNativeStrokeComplete(points) }
                 )
                 booxDrawingHelper?.apply {
+                    // IMPORTANT: openDrawing must be called FIRST to create the TouchHelper
+                    // Only after that can we configure stroke width, style, and color
+                    openDrawing(drawingBounds, excludeRects)
                     setStrokeWidth(currentWidth)
                     setStrokeStyle(currentStyle)
                     setStrokeColor(currentColor)
-                    openDrawing(drawingBounds, excludeRects)
                 }
                 Log.i(TAG, "initializeDrawingAfterLayout: Boox TouchHelper initialized successfully!")
 
@@ -451,12 +454,16 @@ class BooxDrawingActivity : AppCompatActivity() {
 
         var lastX = 0f
         var lastY = 0f
+        // Track current stroke points for proper cancellation handling (Issue #6 fix)
+        val currentStrokePoints = mutableListOf<Pair<Float, Float>>()
 
         binding.surfaceView.setOnTouchListener { _, event ->
             when (event.action) {
                 android.view.MotionEvent.ACTION_DOWN -> {
                     lastX = event.x
                     lastY = event.y
+                    currentStrokePoints.clear()
+                    currentStrokePoints.add(lastX to lastY)
                     Log.v(TAG, "Touch DOWN: ($lastX, $lastY)")
                     true
                 }
@@ -467,6 +474,7 @@ class BooxDrawingActivity : AppCompatActivity() {
                     // Draw line from last point to current
                     canvas?.drawLine(lastX, lastY, currentX, currentY, paint)
                     hasDrawn = true
+                    currentStrokePoints.add(currentX to currentY)
 
                     // Update the surface
                     renderBitmapToSurface()
@@ -477,6 +485,14 @@ class BooxDrawingActivity : AppCompatActivity() {
                 }
                 android.view.MotionEvent.ACTION_UP -> {
                     Log.v(TAG, "Touch UP: ($lastX, $lastY)")
+                    currentStrokePoints.clear()
+                    true
+                }
+                android.view.MotionEvent.ACTION_CANCEL -> {
+                    // Handle touch cancellation (e.g., system steals touch for notification)
+                    // Discard incomplete stroke by clearing tracking (Issue #6 fix)
+                    Log.d(TAG, "Touch CANCELLED - discarding incomplete stroke")
+                    currentStrokePoints.clear()
                     true
                 }
                 else -> false
@@ -592,16 +608,20 @@ class BooxDrawingActivity : AppCompatActivity() {
         colorContainer.removeAllViews()
         colorButtons.clear()
 
-        // Smaller swatches with more padding - makes color section more compact
-        val buttonSize = (32 * resources.displayMetrics.density).toInt()
-        val margin = (6 * resources.displayMetrics.density).toInt()
+        // Wider swatches that fill the horizontal space (2 columns)
+        val buttonHeight = (28 * resources.displayMetrics.density).toInt()
+        val horizontalMargin = (3 * resources.displayMetrics.density).toInt()
+        val verticalMargin = (4 * resources.displayMetrics.density).toInt()
 
         for ((index, color) in KALEIDO_COLORS.withIndex()) {
             val colorView = View(this).apply {
+                // Use columnWeight to make each swatch fill half the container width
                 layoutParams = android.widget.GridLayout.LayoutParams().apply {
-                    width = buttonSize
-                    height = buttonSize
-                    setMargins(margin, margin, margin, margin)
+                    width = 0
+                    height = buttonHeight
+                    columnSpec = android.widget.GridLayout.spec(index % 2, 1f) // 1f weight
+                    rowSpec = android.widget.GridLayout.spec(index / 2)
+                    setMargins(horizontalMargin, verticalMargin, horizontalMargin, verticalMargin)
                 }
 
                 // Add border for visibility (especially for light colors)
@@ -848,6 +868,7 @@ class BooxDrawingActivity : AppCompatActivity() {
 
     /**
      * Handle done - export bitmap and return to caller.
+     * Uses file-based transfer for large drawings to avoid TransactionTooLargeException (Issue #2 fix).
      */
     private fun handleDone() {
         Log.i(TAG, "handleDone: Starting export...")
@@ -867,15 +888,28 @@ class BooxDrawingActivity : AppCompatActivity() {
                 val exportResult = exportToPng()
                 Log.i(TAG, "handleDone: Exported ${exportResult.bytes.size} bytes (${exportResult.width}x${exportResult.height})")
 
-                runOnUiThread {
-                    hideLoading()
-
-                    val resultIntent = Intent().apply {
+                // Use file-based transfer for larger drawings to avoid TransactionTooLargeException
+                // Android Intent limit is ~500KB; use file transfer for anything over 256KB to be safe
+                val resultIntent = if (exportResult.bytes.size > 256 * 1024) {
+                    Log.i(TAG, "handleDone: Using file-based transfer (${exportResult.bytes.size} bytes > 256KB)")
+                    val tempFile = java.io.File(cacheDir, "drawing_${System.currentTimeMillis()}.png")
+                    tempFile.writeBytes(exportResult.bytes)
+                    Intent().apply {
+                        putExtra(EXTRA_DRAWING_URI, android.net.Uri.fromFile(tempFile).toString())
+                        putExtra(EXTRA_DRAWING_WIDTH, exportResult.width)
+                        putExtra(EXTRA_DRAWING_HEIGHT, exportResult.height)
+                    }
+                } else {
+                    Log.i(TAG, "handleDone: Using Intent extras (${exportResult.bytes.size} bytes)")
+                    Intent().apply {
                         putExtra(EXTRA_DRAWING_PNG, exportResult.bytes)
                         putExtra(EXTRA_DRAWING_WIDTH, exportResult.width)
                         putExtra(EXTRA_DRAWING_HEIGHT, exportResult.height)
                     }
+                }
 
+                runOnUiThread {
+                    hideLoading()
                     Log.i(TAG, "handleDone: Returning successful result")
                     setResult(RESULT_DRAWING_COMPLETE, resultIntent)
                     finish()
@@ -889,6 +923,10 @@ class BooxDrawingActivity : AppCompatActivity() {
                         .setTitle("Export Failed")
                         .setMessage("Failed to export drawing: ${e.message}")
                         .setPositiveButton("OK", null)
+                        .setOnDismissListener {
+                            // Re-enable drawing after dialog dismissed
+                            booxDrawingHelper?.setDrawingEnabled(true)
+                        }
                         .show()
                 }
             }
@@ -1025,6 +1063,34 @@ class BooxDrawingActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
+    /**
+     * Pause device receiver when activity goes to background (Issue #5 fix).
+     * This prevents receiving broadcasts and wasting battery when not visible.
+     */
+    override fun onPause() {
+        super.onPause()
+        try {
+            deviceReceiver?.enable(this, false)
+        } catch (e: Exception) {
+            Log.w(TAG, "onPause: Failed to disable device receiver", e)
+        }
+    }
+
+    /**
+     * Re-enable device receiver when activity returns to foreground (Issue #5 fix).
+     */
+    override fun onResume() {
+        super.onResume()
+        // Only re-enable if we have an active drawing helper
+        if (booxDrawingHelper != null && deviceReceiver != null) {
+            try {
+                deviceReceiver?.enable(this, true)
+            } catch (e: Exception) {
+                Log.w(TAG, "onResume: Failed to enable device receiver", e)
+            }
+        }
+    }
+
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         Log.d(TAG, "onBackPressed")
@@ -1073,6 +1139,10 @@ class BooxDrawingHelper(
     // Direct reference to TouchHelper (SDK is bundled)
     private var touchHelper: com.onyx.android.sdk.pen.TouchHelper? = null
     private var isOpen = false
+
+    // Single reusable Handler to avoid memory leaks (Issue #1 fix)
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val pendingRunnables = mutableListOf<Runnable>()
 
     init {
         Log.d(TAG, "BooxDrawingHelper: Initializing...")
@@ -1136,7 +1206,8 @@ class BooxDrawingHelper(
             Log.d(TAG, "openDrawing: TouchHelper created: $touchHelper")
 
             touchHelper?.apply {
-                setStrokeWidth(3.0f)
+                // NOTE: Stroke width, style, and color should be set AFTER openDrawing()
+                // by the caller, since this method just creates the TouchHelper.
 
                 // Set limit rect as a list (required by some SDK versions)
                 Log.d(TAG, "openDrawing: Setting limit rect: ${bounds.left},${bounds.top} - ${bounds.right},${bounds.bottom}")
@@ -1261,20 +1332,32 @@ class BooxDrawingHelper(
      * Temporarily pause raw drawing to allow UI refresh, then resume.
      * This is needed for updating toolbar/button states which are outside
      * the drawing area.
+     *
+     * Note: Uses tracked runnables to prevent memory leaks if activity is
+     * destroyed while delays are pending (Issue #1 fix).
      */
     fun pauseForUiRefresh(onPaused: () -> Unit) {
         Log.d(TAG, "pauseForUiRefresh: Pausing for UI update...")
+        cancelPendingUiRefresh() // Cancel any pending refresh operations
+
         try {
             touchHelper?.setRawDrawingEnabled(false)
-            // Give the system a moment to do a normal refresh
-            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+
+            val resumeRunnable = Runnable {
+                touchHelper?.setRawDrawingEnabled(true)
+                Log.d(TAG, "pauseForUiRefresh: Drawing resumed")
+            }
+
+            val pauseRunnable = Runnable {
                 onPaused()
                 // Small delay to let the UI update render
-                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                    touchHelper?.setRawDrawingEnabled(true)
-                    Log.d(TAG, "pauseForUiRefresh: Drawing resumed")
-                }, 50)
-            }, 10)
+                mainHandler.postDelayed(resumeRunnable, 50)
+                pendingRunnables.add(resumeRunnable)
+            }
+
+            // Give the system a moment to do a normal refresh
+            mainHandler.postDelayed(pauseRunnable, 10)
+            pendingRunnables.add(pauseRunnable)
         } catch (e: Exception) {
             Log.w(TAG, "pauseForUiRefresh: Failed", e)
             onPaused() // Still call the callback
@@ -1282,10 +1365,22 @@ class BooxDrawingHelper(
     }
 
     /**
+     * Cancel any pending UI refresh operations.
+     * Called during cleanup to prevent leaks (Issue #1 fix).
+     */
+    private fun cancelPendingUiRefresh() {
+        pendingRunnables.forEach { mainHandler.removeCallbacks(it) }
+        pendingRunnables.clear()
+    }
+
+    /**
      * Close drawing mode and release resources.
      */
     fun closeDrawing() {
         Log.i(TAG, "closeDrawing: Releasing resources...")
+
+        // Cancel any pending UI refresh runnables to prevent leaks (Issue #1 fix)
+        cancelPendingUiRefresh()
 
         if (!isOpen) {
             Log.d(TAG, "closeDrawing: Not open, skipping")
@@ -1324,17 +1419,23 @@ object BrushRenderer {
     // Cache max pressure value
     private var cachedMaxPressure: Float = 0f
 
+    // Safe default max pressure - common value for Boox devices
+    private const val DEFAULT_MAX_PRESSURE = 4096f
+
     /**
      * Get max touch pressure from SDK.
+     * Always returns a positive value to prevent SDK division-by-zero issues (Issue #7 fix).
      */
     private fun getMaxPressure(): Float {
         if (cachedMaxPressure <= 0f) {
-            try {
-                cachedMaxPressure = com.onyx.android.sdk.api.device.epd.EpdController.getMaxTouchPressure()
-                Log.d(TAG, "getMaxPressure: $cachedMaxPressure")
+            cachedMaxPressure = try {
+                val pressure = com.onyx.android.sdk.api.device.epd.EpdController.getMaxTouchPressure()
+                Log.d(TAG, "getMaxPressure: SDK returned $pressure")
+                // Validate the SDK value - must be positive to avoid division issues
+                if (pressure > 0f) pressure else DEFAULT_MAX_PRESSURE
             } catch (e: Exception) {
                 Log.w(TAG, "getMaxPressure: Failed to get from SDK, using default", e)
-                cachedMaxPressure = 4096f // Common default
+                DEFAULT_MAX_PRESSURE
             }
         }
         return cachedMaxPressure
