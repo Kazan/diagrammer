@@ -743,6 +743,7 @@ export default function App() {
         hasNativeDrawing={hasNativeDrawing}
         isNativeDrawing={isNativeDrawing}
         onNativeDraw={openNativeDrawing}
+        selection={selectionInfo}
       />
 
       {/* Right Rail: Selection properties */}

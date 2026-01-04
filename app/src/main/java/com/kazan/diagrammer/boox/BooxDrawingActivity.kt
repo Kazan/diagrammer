@@ -783,6 +783,9 @@ class BooxDrawingActivity : AppCompatActivity() {
         val anchorView = binding.btnCharcoal
         val density = resources.displayMetrics.density
 
+        // Pause raw drawing so popup can receive touch events
+        booxDrawingHelper?.setDrawingEnabled(false)
+
         // Create container for texture options (horizontal layout)
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -817,6 +820,12 @@ class BooxDrawingActivity : AppCompatActivity() {
         ).apply {
             isOutsideTouchable = true
             setBackgroundDrawable(null)
+
+            // Resume raw drawing when popup is dismissed
+            setOnDismissListener {
+                booxDrawingHelper?.setDrawingEnabled(true)
+                renderBitmapToSurface()
+            }
 
             // Measure the popup to get its dimensions
             container.measure(

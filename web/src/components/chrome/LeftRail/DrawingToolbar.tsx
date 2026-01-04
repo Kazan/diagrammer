@@ -1,4 +1,4 @@
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useMemo } from "react";
 import {
   MousePointer2,
   Hand,
@@ -23,6 +23,7 @@ import {
   RailToggleItem,
   RailButton,
 } from "@/components/ui/tool-rail";
+import type { SelectionInfo } from "@/components/chrome/RightRail/SelectionFlyout";
 
 export type ToolType =
   | "selection"
@@ -64,6 +65,8 @@ type Props = {
   isNativeDrawing?: boolean;
   /** Callback to open native drawing canvas */
   onNativeDraw?: () => void;
+  /** Current selection info for enabling/disabling native draw */
+  selection?: SelectionInfo | null;
 };
 
 /**
@@ -136,10 +139,35 @@ export function DrawingToolbar({
   hasNativeDrawing = false,
   isNativeDrawing = false,
   onNativeDraw,
+  selection = null,
 }: Props) {
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressTriggeredRef = useRef(false);
   const LONG_PRESS_DURATION = 500; // ms
+
+  /**
+   * Determine if native drawing button should be enabled.
+   * Enabled when:
+   * - No objects selected, OR
+   * - Exactly one image selected
+   * Disabled when:
+   * - Shapes selected
+   * - Multiple objects selected
+   * - Mixed selection types
+   */
+  const nativeDrawEnabled = useMemo(() => {
+    // No selection = enabled
+    if (!selection || selection.elements.length === 0) {
+      return true;
+    }
+    // Multiple objects = disabled
+    if (selection.elements.length > 1) {
+      return false;
+    }
+    // Single object - only enabled if it's an image
+    const element = selection.elements[0];
+    return element.type === "image";
+  }, [selection]);
 
   // Determine the icon for the arrow tool based on current arrow type
   const getArrowIcon = () => (arrowType === "elbow" ? ElbowArrowIcon : ArrowUpRight);
@@ -229,11 +257,15 @@ export function DrawingToolbar({
           <RailSection columns={2} label="native">
             <RailButton
               onClick={handleNativeDrawClick}
-              disabled={isNativeDrawing}
+              disabled={isNativeDrawing || !nativeDrawEnabled}
               pressed={isNativeDrawing}
               className="col-span-2 w-full"
               aria-label="Native stylus drawing"
-              title="Draw with Boox native stylus (hardware accelerated)"
+              title={
+                !nativeDrawEnabled
+                  ? "Deselect objects or select a single image to use native drawing"
+                  : "Draw with Boox native stylus (hardware accelerated)"
+              }
             >
               <PenTool aria-hidden="true" />
             </RailButton>
