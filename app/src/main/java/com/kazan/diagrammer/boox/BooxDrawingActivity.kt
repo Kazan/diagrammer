@@ -946,8 +946,14 @@ class BooxDrawingActivity : AppCompatActivity() {
         var maxY = Float.MIN_VALUE
 
         for (stroke in strokes) {
-            // Account for stroke width when calculating bounds
-            val halfWidth = stroke.width / 2f + 2f // Add small margin
+            // Account for actual rendered stroke width when calculating bounds
+            // Some brush types (fountain, neo brush, charcoal) use WIDTH_MULTIPLIER
+            val effectiveWidth = when (stroke.style) {
+                STYLE_FOUNTAIN, STYLE_NEO_BRUSH, STYLE_CHARCOAL -> stroke.width * BrushRenderer.WIDTH_MULTIPLIER
+                else -> stroke.width
+            }
+            // Add generous margin for round caps and any rendering artifacts
+            val halfWidth = effectiveWidth / 2f + 8f
 
             for (point in stroke.points) {
                 minX = minOf(minX, point.x - halfWidth)
@@ -1423,6 +1429,14 @@ object BrushRenderer {
     private const val DEFAULT_MAX_PRESSURE = 4096f
 
     /**
+     * Width multiplier to compensate for pressure modulation in SDK pen rendering.
+     * The native EPD preview uses the stroke width directly, but SDK pen classes
+     * (NeoFountainPen, NeoBrushPen) internally scale width by pressure ratio.
+     * This multiplier ensures bitmap strokes match the native EPD preview appearance.
+     */
+    const val WIDTH_MULTIPLIER = 3.0f
+
+    /**
      * Get max touch pressure from SDK.
      * Always returns a positive value to prevent SDK division-by-zero issues (Issue #7 fix).
      */
@@ -1492,26 +1506,27 @@ object BrushRenderer {
 
     /**
      * Pencil: Simple path-based rendering with consistent width.
+     * Uses direct path drawing, no SDK pressure modulation - no multiplier needed.
      */
     private fun renderPencilStroke(canvas: Canvas, stroke: StrokeData) {
         val paint = createPaint(stroke.color).apply {
             strokeWidth = stroke.width
         }
 
-        val sdkPoints = toSdkTouchPoints(stroke.points, stroke.width)
+        val points = stroke.points
 
-        if (sdkPoints.size == 1) {
+        if (points.size == 1) {
             paint.style = Paint.Style.FILL
-            canvas.drawCircle(sdkPoints[0].x, sdkPoints[0].y, stroke.width / 2, paint)
+            canvas.drawCircle(points[0].x, points[0].y, stroke.width / 2, paint)
             return
         }
 
         val path = Path()
-        path.moveTo(sdkPoints[0].x, sdkPoints[0].y)
+        path.moveTo(points[0].x, points[0].y)
 
-        for (i in 1 until sdkPoints.size) {
-            val prev = sdkPoints[i - 1]
-            val curr = sdkPoints[i]
+        for (i in 1 until points.size) {
+            val prev = points[i - 1]
+            val curr = points[i]
             path.quadTo(prev.x, prev.y, curr.x, curr.y)
         }
 
@@ -1522,8 +1537,9 @@ object BrushRenderer {
      * Fountain Pen: Use SDK NeoFountainPen for pressure-sensitive calligraphy strokes.
      */
     private fun renderFountainStroke(canvas: Canvas, stroke: StrokeData) {
+        val adjustedWidth = stroke.width * WIDTH_MULTIPLIER
         val paint = createPaint(stroke.color)
-        val sdkPoints = toSdkTouchPoints(stroke.points, stroke.width)
+        val sdkPoints = toSdkTouchPoints(stroke.points, adjustedWidth)
         val maxPressure = getMaxPressure()
 
         try {
@@ -1533,7 +1549,7 @@ object BrushRenderer {
                 paint,
                 sdkPoints,
                 1.0f, // density
-                stroke.width,
+                adjustedWidth,
                 maxPressure,
                 false // not erasing
             )
@@ -1548,8 +1564,9 @@ object BrushRenderer {
      * Match notable's implementation: use drawStroke directly
      */
     private fun renderNeoBrushStroke(canvas: Canvas, stroke: StrokeData) {
+        val adjustedWidth = stroke.width * WIDTH_MULTIPLIER
         val paint = createPaint(stroke.color)
-        val sdkPoints = toSdkTouchPoints(stroke.points, stroke.width)
+        val sdkPoints = toSdkTouchPoints(stroke.points, adjustedWidth)
         val maxPressure = getMaxPressure()
 
         try {
@@ -1558,7 +1575,7 @@ object BrushRenderer {
                 canvas,
                 paint,
                 sdkPoints,
-                stroke.width,
+                adjustedWidth,
                 maxPressure,
                 false // not erasing
             )
@@ -1573,6 +1590,7 @@ object BrushRenderer {
      * Match notable's simple path-based approach for markers.
      */
     private fun renderMarkerStroke(canvas: Canvas, stroke: StrokeData) {
+        // Marker uses simple path rendering, no pressure modulation - no multiplier needed
         val paint = createPaint(stroke.color).apply {
             strokeWidth = stroke.width
             alpha = 100 // Semi-transparent like notable
@@ -1605,10 +1623,11 @@ object BrushRenderer {
      * This matches how notable app renders charcoal/pencil strokes.
      */
     private fun renderCharcoalStroke(canvas: Canvas, stroke: StrokeData) {
+        val adjustedWidth = stroke.width * WIDTH_MULTIPLIER
         val paint = createPaint(stroke.color)
-        val sdkPoints = toSdkTouchPoints(stroke.points, stroke.width)
+        val sdkPoints = toSdkTouchPoints(stroke.points, adjustedWidth)
 
-        Log.d(TAG, "renderCharcoalStroke: Rendering ${sdkPoints.size} points with width=${stroke.width}")
+        Log.d(TAG, "renderCharcoalStroke: Rendering ${sdkPoints.size} points with width=$adjustedWidth (original=${stroke.width})")
 
         try {
             // Use SDK's NeoCharcoalPen (not V2) - this is what notable uses
@@ -1618,7 +1637,7 @@ object BrushRenderer {
                 paint,
                 sdkPoints,
                 stroke.color,                                  // color as int
-                stroke.width,
+                adjustedWidth,
                 com.onyx.android.sdk.data.note.ShapeCreateArgs(),
                 android.graphics.Matrix(),                     // identity matrix
                 false                                          // not erasing
@@ -1635,6 +1654,7 @@ object BrushRenderer {
      * Charcoal fallback: Simulates charcoal texture with multiple overlapping strokes.
      */
     private fun renderCharcoalFallback(canvas: Canvas, stroke: StrokeData) {
+        val adjustedWidth = stroke.width * WIDTH_MULTIPLIER
         val paint = createPaint(stroke.color)
         val points = stroke.points
 
@@ -1643,7 +1663,7 @@ object BrushRenderer {
         if (points.size == 1) {
             paint.style = Paint.Style.FILL
             val pt = points[0]
-            val radius = stroke.width * 1.5f * pt.pressure.coerceIn(0.3f, 1.0f)
+            val radius = adjustedWidth * 1.5f * pt.pressure.coerceIn(0.3f, 1.0f)
             canvas.drawCircle(pt.x, pt.y, radius, paint)
             return
         }
@@ -1654,7 +1674,7 @@ object BrushRenderer {
             val p2 = points[i + 1]
 
             val avgPressure = ((p1.pressure + p2.pressure) / 2).coerceIn(0.3f, 1.0f)
-            val baseWidth = stroke.width * 2.5f * avgPressure
+            val baseWidth = adjustedWidth * 2.5f * avgPressure
 
             // Main stroke
             paint.strokeWidth = baseWidth
@@ -1679,15 +1699,16 @@ object BrushRenderer {
      * Fallback stroke rendering when SDK classes fail.
      */
     private fun renderFallbackStroke(canvas: Canvas, stroke: StrokeData) {
+        val adjustedWidth = stroke.width * WIDTH_MULTIPLIER
         val paint = createPaint(stroke.color).apply {
-            strokeWidth = stroke.width
+            strokeWidth = adjustedWidth
         }
 
         val points = stroke.points
 
         if (points.size == 1) {
             paint.style = Paint.Style.FILL
-            canvas.drawCircle(points[0].x, points[0].y, stroke.width / 2, paint)
+            canvas.drawCircle(points[0].x, points[0].y, adjustedWidth / 2, paint)
             return
         }
 
@@ -1696,7 +1717,7 @@ object BrushRenderer {
             val p1 = points[i]
             val p2 = points[i + 1]
             val avgPressure = ((p1.pressure + p2.pressure) / 2).coerceIn(0.2f, 1.0f)
-            paint.strokeWidth = stroke.width * avgPressure
+            paint.strokeWidth = adjustedWidth * avgPressure
             canvas.drawLine(p1.x, p1.y, p2.x, p2.y, paint)
         }
     }
