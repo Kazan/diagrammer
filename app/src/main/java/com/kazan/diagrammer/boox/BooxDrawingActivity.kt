@@ -12,10 +12,15 @@ import android.graphics.Path
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.graphics.Rect
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.util.Log
+import android.view.Gravity
 import android.view.SurfaceHolder
 import android.view.View
+import android.widget.LinearLayout
+import android.widget.PopupWindow
+import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.button.MaterialButton
@@ -67,6 +72,10 @@ class BooxDrawingActivity : AppCompatActivity() {
         const val STYLE_NEO_BRUSH = 2
         const val STYLE_MARKER = 3
         const val STYLE_CHARCOAL = 4
+
+        // Charcoal texture constants (matching SDK PenTexture values)
+        const val CHARCOAL_TEXTURE_V1 = 0
+        const val CHARCOAL_TEXTURE_V2 = 1
 
         // Stroke width range
         const val MIN_STROKE_WIDTH = 1f
@@ -154,7 +163,11 @@ class BooxDrawingActivity : AppCompatActivity() {
     private var currentStyle = STYLE_FOUNTAIN
     private var currentWidth = DEFAULT_STROKE_WIDTHS[STYLE_FOUNTAIN] ?: 5f
     private var currentColor = Color.BLACK
+    private var currentCharcoalTexture = CHARCOAL_TEXTURE_V2  // Default to V2
     private var hasDrawn = false
+
+    // Charcoal texture flyout popup
+    private var charcoalTexturePopup: PopupWindow? = null
 
     // Stored strokes for proper re-rendering with brush styles
     private val strokes = mutableListOf<StrokeData>()
@@ -546,7 +559,8 @@ class BooxDrawingActivity : AppCompatActivity() {
             points = points.toList(),
             style = currentStyle,
             color = currentColor,
-            width = currentWidth
+            width = currentWidth,
+            charcoalTexture = currentCharcoalTexture
         )
         strokes.add(strokeData)
 
@@ -694,8 +708,16 @@ class BooxDrawingActivity : AppCompatActivity() {
     private fun selectBrush(style: Int, name: String) {
         Log.i(TAG, "selectBrush: style=$style ($name)")
 
+        // Dismiss any existing charcoal texture popup
+        charcoalTexturePopup?.dismiss()
+        charcoalTexturePopup = null
+
         currentStyle = style
-        binding.tvBrushName.text = name
+        binding.tvBrushName.text = if (style == STYLE_CHARCOAL) {
+            "Charcoal V${currentCharcoalTexture + 1}"
+        } else {
+            name
+        }
 
         // Set default width for this brush type
         val defaultWidth = DEFAULT_STROKE_WIDTHS[style] ?: currentWidth
@@ -703,6 +725,11 @@ class BooxDrawingActivity : AppCompatActivity() {
 
         // Update the stroke style on TouchHelper (no need to disable/enable)
         booxDrawingHelper?.setStrokeStyle(style)
+
+        // Show charcoal texture flyout if charcoal is selected
+        if (style == STYLE_CHARCOAL) {
+            showCharcoalTextureFlyout()
+        }
 
         // Pause render, update UI, then resume render
         booxDrawingHelper?.pauseForUiRefresh {
@@ -714,6 +741,122 @@ class BooxDrawingActivity : AppCompatActivity() {
             updateBrushButtonStates()
             renderBitmapToSurface()
         }
+    }
+
+    /**
+     * Show the charcoal texture selection flyout to the left of the charcoal button.
+     */
+    private fun showCharcoalTextureFlyout() {
+        val anchorView = binding.btnCharcoal
+        val density = resources.displayMetrics.density
+
+        // Create container for texture options
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(
+                (8 * density).toInt(),
+                (8 * density).toInt(),
+                (8 * density).toInt(),
+                (8 * density).toInt()
+            )
+            background = GradientDrawable().apply {
+                setColor(Color.WHITE)
+                setStroke((1 * density).toInt(), Color.parseColor("#CCCCCC"))
+                cornerRadius = 8 * density
+            }
+            elevation = 4 * density
+        }
+
+        // Create V1 option
+        val v1Button = createTextureOption("V1", CHARCOAL_TEXTURE_V1)
+        container.addView(v1Button)
+
+        // Create V2 option
+        val v2Button = createTextureOption("V2", CHARCOAL_TEXTURE_V2)
+        container.addView(v2Button)
+
+        // Create popup window
+        charcoalTexturePopup = PopupWindow(
+            container,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            true // focusable
+        ).apply {
+            isOutsideTouchable = true
+            setBackgroundDrawable(null)
+
+            // Position to the left of the charcoal button
+            val location = IntArray(2)
+            anchorView.getLocationOnScreen(location)
+
+            // Measure the popup to get its width
+            container.measure(
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+            )
+            val popupWidth = container.measuredWidth
+
+            // Show to the left of the button, vertically centered
+            val xOffset = -(popupWidth + (8 * density).toInt())
+            val yOffset = (anchorView.height - container.measuredHeight) / 2
+
+            showAsDropDown(anchorView, xOffset, yOffset, Gravity.START or Gravity.TOP)
+        }
+    }
+
+    /**
+     * Create a texture option button for the flyout.
+     */
+    private fun createTextureOption(label: String, textureValue: Int): TextView {
+        val density = resources.displayMetrics.density
+        val isSelected = currentCharcoalTexture == textureValue
+
+        return TextView(this).apply {
+            text = label
+            textSize = 14f
+            setTextColor(if (isSelected) Color.WHITE else Color.parseColor("#333333"))
+            gravity = Gravity.CENTER
+            setPadding(
+                (16 * density).toInt(),
+                (10 * density).toInt(),
+                (16 * density).toInt(),
+                (10 * density).toInt()
+            )
+            background = GradientDrawable().apply {
+                if (isSelected) {
+                    setColor(Color.parseColor("#2196F3"))
+                } else {
+                    setColor(Color.parseColor("#F0F0F0"))
+                }
+                cornerRadius = 4 * density
+            }
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = (4 * density).toInt()
+            }
+
+            setOnClickListener {
+                selectCharcoalTexture(textureValue)
+            }
+        }
+    }
+
+    /**
+     * Select a charcoal texture variant.
+     */
+    private fun selectCharcoalTexture(texture: Int) {
+        Log.i(TAG, "selectCharcoalTexture: texture=$texture (V${texture + 1})")
+
+        currentCharcoalTexture = texture
+        binding.tvBrushName.text = "Charcoal V${texture + 1}"
+
+        // Dismiss and recreate the flyout to update selection state
+        charcoalTexturePopup?.dismiss()
+        showCharcoalTextureFlyout()
+
+        // No need to re-render - texture is used at render time
     }
 
     /**
@@ -1050,6 +1193,10 @@ class BooxDrawingActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         Log.i(TAG, "onDestroy: Cleaning up resources")
+
+        // Dismiss charcoal texture popup if showing
+        charcoalTexturePopup?.dismiss()
+        charcoalTexturePopup = null
 
         // Disable device receiver
         try {
@@ -1412,7 +1559,8 @@ data class StrokeData(
     val points: List<BooxTouchPoint>,
     val style: Int,
     val color: Int,
-    val width: Float
+    val width: Float,
+    val charcoalTexture: Int = BooxDrawingActivity.CHARCOAL_TEXTURE_V2  // Only used for charcoal style
 )
 
 /**
@@ -1628,7 +1776,8 @@ object BrushRenderer {
     }
 
     /**
-     * Charcoal: Use SDK NeoCharcoalPen for textured charcoal strokes.
+     * Charcoal: Use SDK NeoCharcoalPenV2 for textured charcoal strokes.
+     * Supports V1 and V2 textures via the stroke's charcoalTexture property.
      * Uses original touch point size values for tilt/contact-area responsiveness,
      * matching the native EPD preview appearance.
      */
@@ -1637,22 +1786,32 @@ object BrushRenderer {
         val paint = createPaint(stroke.color)
         val sdkPoints = toSdkTouchPoints(stroke.points)
 
-        Log.d(TAG, "renderCharcoalStroke: Rendering ${sdkPoints.size} points with width=$adjustedWidth (original=${stroke.width})")
+        // Determine pen type based on texture selection
+        val penType = if (stroke.charcoalTexture == BooxDrawingActivity.CHARCOAL_TEXTURE_V2) {
+            com.onyx.android.sdk.pen.NeoPenConfig.NEOPEN_PEN_TYPE_CHARCOAL_V2
+        } else {
+            com.onyx.android.sdk.pen.NeoPenConfig.NEOPEN_PEN_TYPE_CHARCOAL
+        }
+
+        Log.d(TAG, "renderCharcoalStroke: Rendering ${sdkPoints.size} points with width=$adjustedWidth, texture=V${stroke.charcoalTexture + 1}")
 
         try {
-            // Use SDK's NeoCharcoalPen (not V2) - this is what notable uses
-            com.onyx.android.sdk.pen.NeoCharcoalPen.drawNormalStroke(
-                null,                                          // RenderContext (nullable)
-                canvas,
-                paint,
-                sdkPoints,
-                stroke.color,                                  // color as int
-                adjustedWidth,
-                com.onyx.android.sdk.data.note.ShapeCreateArgs(),
-                android.graphics.Matrix(),                     // identity matrix
-                false                                          // not erasing
-            )
-            Log.d(TAG, "renderCharcoalStroke: SDK NeoCharcoalPen rendering succeeded")
+            // Use NeoCharcoalPenV2 with PenRenderArgs for full texture control
+            val renderArgs = com.onyx.android.sdk.pen.PenRenderArgs()
+                .setCreateArgs(com.onyx.android.sdk.data.note.ShapeCreateArgs())
+                .setCanvas(canvas)
+                .setPenType(penType)
+                .setColor(stroke.color)
+                .setErase(false)
+                .setPaint(paint)
+                .setStrokeWidth(adjustedWidth)
+                .setPoints(sdkPoints)
+                .setScreenMatrix(android.graphics.Matrix())
+
+            // Use drawNormalStroke for all widths (simpler, works well for typical use)
+            com.onyx.android.sdk.pen.NeoCharcoalPenV2.drawNormalStroke(renderArgs)
+
+            Log.d(TAG, "renderCharcoalStroke: SDK NeoCharcoalPenV2 rendering succeeded")
         } catch (e: Exception) {
             Log.w(TAG, "renderCharcoalStroke: SDK failed (${e.message}), using charcoal fallback", e)
             // Custom charcoal fallback - thick textured strokes
