@@ -23,15 +23,6 @@
         app:layout_constraintTop_toTopOf="parent">
 
         <!-- Brush Tools Section -->
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:paddingHorizontal="4dp"
-            android:paddingBottom="4dp"
-            android:text="Tools"
-            android:textColor="#666666"
-            android:textSize="11sp"
-            android:textStyle="bold" />
 
         <!-- Pencil -->
         <com.google.android.material.button.MaterialButton
@@ -106,14 +97,6 @@
             android:background="#CCCCCC" />
 
         <!-- Colors Section -->
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:paddingBottom="4dp"
-            android:text="Color"
-            android:textColor="#666666"
-            android:textSize="11sp"
-            android:textStyle="bold" />
 
         <!-- Color swatches grid - fills available width -->
         <GridLayout
@@ -130,13 +113,6 @@
             android:background="#CCCCCC" />
 
         <!-- Width Section (vertical slider at bottom) -->
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Width"
-            android:textColor="#666666"
-            android:textSize="11sp"
-            android:textStyle="bold" />
 
         <TextView
             android:id="@+id/tvWidthValue"
