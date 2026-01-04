@@ -77,9 +77,28 @@ class BooxDrawingActivity : AppCompatActivity() {
         const val CHARCOAL_TEXTURE_V1 = 0
         const val CHARCOAL_TEXTURE_V2 = 1
 
-        // Stroke width range
-        const val MIN_STROKE_WIDTH = 1f
-        const val MAX_STROKE_WIDTH = 50f
+        /**
+         * Stroke width ranges per brush type.
+         * Based on SDK PenConstant values:
+         * - Normal brushes (Pencil, Fountain, NeoBrush, Charcoal): 0.1mm to 20.0mm
+         * - Marker: 0.5mm to 80.0mm
+         * These are pixel values corresponding to the SDK's mm-based ranges.
+         */
+        val MIN_STROKE_WIDTHS = mapOf(
+            STYLE_PENCIL to 0.1f,
+            STYLE_FOUNTAIN to 0.1f,
+            STYLE_NEO_BRUSH to 0.1f,
+            STYLE_MARKER to 0.5f,
+            STYLE_CHARCOAL to 0.1f
+        )
+
+        val MAX_STROKE_WIDTHS = mapOf(
+            STYLE_PENCIL to 20.0f,
+            STYLE_FOUNTAIN to 20.0f,
+            STYLE_NEO_BRUSH to 20.0f,
+            STYLE_MARKER to 80.0f,
+            STYLE_CHARCOAL to 20.0f
+        )
 
         /**
          * Default stroke widths per brush type.
@@ -660,9 +679,8 @@ class BooxDrawingActivity : AppCompatActivity() {
      * The slider is rotated 90° to display vertically, filling the remaining sidebar height.
      */
     private fun initWidthSlider() {
-        // Set slider range
-        binding.sliderWidth.valueFrom = MIN_STROKE_WIDTH
-        binding.sliderWidth.valueTo = MAX_STROKE_WIDTH
+        // Set slider range based on current brush
+        updateSliderRangeForBrush(currentStyle)
         binding.sliderWidth.value = currentWidth
         binding.tvWidthValue.text = currentWidth.toInt().toString()
 
@@ -719,7 +737,10 @@ class BooxDrawingActivity : AppCompatActivity() {
             name
         }
 
-        // Set default width for this brush type
+        // Update slider range for new brush type
+        updateSliderRangeForBrush(style)
+
+        // Set default width for this brush type (clamped to new range)
         val defaultWidth = DEFAULT_STROKE_WIDTHS[style] ?: currentWidth
         updateStrokeWidth(defaultWidth)
 
@@ -744,20 +765,20 @@ class BooxDrawingActivity : AppCompatActivity() {
     }
 
     /**
-     * Show the charcoal texture selection flyout to the left of the charcoal button.
+     * Show the charcoal texture selection flyout to the right of the charcoal button.
      */
     private fun showCharcoalTextureFlyout() {
         val anchorView = binding.btnCharcoal
         val density = resources.displayMetrics.density
 
-        // Create container for texture options
+        // Create container for texture options (horizontal layout)
         val container = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
+            orientation = LinearLayout.HORIZONTAL
             setPadding(
                 (8 * density).toInt(),
+                (4 * density).toInt(),
                 (8 * density).toInt(),
-                (8 * density).toInt(),
-                (8 * density).toInt()
+                (4 * density).toInt()
             )
             background = GradientDrawable().apply {
                 setColor(Color.WHITE)
@@ -785,19 +806,14 @@ class BooxDrawingActivity : AppCompatActivity() {
             isOutsideTouchable = true
             setBackgroundDrawable(null)
 
-            // Position to the left of the charcoal button
-            val location = IntArray(2)
-            anchorView.getLocationOnScreen(location)
-
-            // Measure the popup to get its width
+            // Measure the popup to get its dimensions
             container.measure(
                 View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
                 View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
             )
-            val popupWidth = container.measuredWidth
 
-            // Show to the left of the button, vertically centered
-            val xOffset = -(popupWidth + (8 * density).toInt())
+            // Show to the right of the button, vertically centered
+            val xOffset = anchorView.width + (4 * density).toInt()
             val yOffset = (anchorView.height - container.measuredHeight) / 2
 
             showAsDropDown(anchorView, xOffset, yOffset, Gravity.START or Gravity.TOP)
@@ -860,14 +876,29 @@ class BooxDrawingActivity : AppCompatActivity() {
     }
 
     /**
+     * Update the slider range for the given brush type.
+     */
+    private fun updateSliderRangeForBrush(style: Int) {
+        val minWidth = MIN_STROKE_WIDTHS[style] ?: 0.1f
+        val maxWidth = MAX_STROKE_WIDTHS[style] ?: 20.0f
+        binding.sliderWidth.valueFrom = minWidth
+        binding.sliderWidth.valueTo = maxWidth
+    }
+
+    /**
      * Update the stroke width and sync UI.
      */
     private fun updateStrokeWidth(width: Float) {
-        currentWidth = width
-        paint.strokeWidth = width
-        binding.sliderWidth.value = width
-        binding.tvWidthValue.text = width.toInt().toString()
-        booxDrawingHelper?.setStrokeWidth(width)
+        // Clamp to current brush's range
+        val minWidth = MIN_STROKE_WIDTHS[currentStyle] ?: 0.1f
+        val maxWidth = MAX_STROKE_WIDTHS[currentStyle] ?: 20.0f
+        val clampedWidth = width.coerceIn(minWidth, maxWidth)
+
+        currentWidth = clampedWidth
+        paint.strokeWidth = clampedWidth
+        binding.sliderWidth.value = clampedWidth
+        binding.tvWidthValue.text = clampedWidth.toInt().toString()
+        booxDrawingHelper?.setStrokeWidth(clampedWidth)
     }
 
     /**

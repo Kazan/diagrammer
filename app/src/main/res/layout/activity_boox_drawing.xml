@@ -163,9 +163,9 @@
                 android:layout_width="match_parent"
                 android:layout_height="48dp"
                 android:layout_gravity="center"
-                android:stepSize="1"
-                android:valueFrom="1"
-                android:valueTo="50"
+                android:stepSize="0.1"
+                android:valueFrom="0.1"
+                android:valueTo="80"
                 app:labelBehavior="gone"
                 app:thumbRadius="10dp"
                 app:trackHeight="6dp" />
