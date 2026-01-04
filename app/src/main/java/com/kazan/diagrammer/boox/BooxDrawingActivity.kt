@@ -1433,8 +1433,9 @@ object BrushRenderer {
      * The native EPD preview uses the stroke width directly, but SDK pen classes
      * (NeoFountainPen, NeoBrushPen) internally scale width by pressure ratio.
      * This multiplier ensures bitmap strokes match the native EPD preview appearance.
+     * Reset to 1.0f for tuning after preserving original touch point size values.
      */
-    const val WIDTH_MULTIPLIER = 3.0f
+    const val WIDTH_MULTIPLIER = 1.0f
 
     /**
      * Get max touch pressure from SDK.
@@ -1457,12 +1458,19 @@ object BrushRenderer {
 
     /**
      * Convert our BooxTouchPoint list to SDK TouchPoint list.
-     * Note: We pass strokeWidth as the size parameter for each point, matching how notable does it.
-     * This ensures the bitmap rendering uses the same stroke width as the native EPD preview.
+     *
+     * IMPORTANT: We preserve the original `size` (contact area) from each touch point.
+     * This is critical for brushes like Charcoal, NeoBrush, and Fountain that use
+     * tilt/contact-area information to vary stroke appearance. The native EPD preview
+     * uses this data, so we must preserve it for bitmap rendering to match.
+     *
+     * The `size` parameter represents the stylus contact area on the digitizer,
+     * which varies based on pen tilt angle. SDK pen classes (NeoCharcoalPen,
+     * NeoBrushPen, NeoFountainPen) use this internally for expressive brush effects.
      */
-    private fun toSdkTouchPoints(points: List<BooxTouchPoint>, strokeWidth: Float): List<com.onyx.android.sdk.data.note.TouchPoint> {
+    private fun toSdkTouchPoints(points: List<BooxTouchPoint>): List<com.onyx.android.sdk.data.note.TouchPoint> {
         return points.map { pt ->
-            com.onyx.android.sdk.data.note.TouchPoint(pt.x, pt.y, pt.pressure, strokeWidth, pt.timestamp)
+            com.onyx.android.sdk.data.note.TouchPoint(pt.x, pt.y, pt.pressure, pt.size, pt.timestamp)
         }
     }
 
@@ -1535,11 +1543,12 @@ object BrushRenderer {
 
     /**
      * Fountain Pen: Use SDK NeoFountainPen for pressure-sensitive calligraphy strokes.
+     * Uses original touch point size values for tilt/contact-area responsiveness.
      */
     private fun renderFountainStroke(canvas: Canvas, stroke: StrokeData) {
         val adjustedWidth = stroke.width * WIDTH_MULTIPLIER
         val paint = createPaint(stroke.color)
-        val sdkPoints = toSdkTouchPoints(stroke.points, adjustedWidth)
+        val sdkPoints = toSdkTouchPoints(stroke.points)
         val maxPressure = getMaxPressure()
 
         try {
@@ -1561,12 +1570,12 @@ object BrushRenderer {
 
     /**
      * Neo Brush: Use SDK NeoBrushPen for dynamic brush strokes.
-     * Match notable's implementation: use drawStroke directly
+     * Uses original touch point size values for tilt/contact-area responsiveness.
      */
     private fun renderNeoBrushStroke(canvas: Canvas, stroke: StrokeData) {
         val adjustedWidth = stroke.width * WIDTH_MULTIPLIER
         val paint = createPaint(stroke.color)
-        val sdkPoints = toSdkTouchPoints(stroke.points, adjustedWidth)
+        val sdkPoints = toSdkTouchPoints(stroke.points)
         val maxPressure = getMaxPressure()
 
         try {
@@ -1620,12 +1629,13 @@ object BrushRenderer {
 
     /**
      * Charcoal: Use SDK NeoCharcoalPen for textured charcoal strokes.
-     * This matches how notable app renders charcoal/pencil strokes.
+     * Uses original touch point size values for tilt/contact-area responsiveness,
+     * matching the native EPD preview appearance.
      */
     private fun renderCharcoalStroke(canvas: Canvas, stroke: StrokeData) {
         val adjustedWidth = stroke.width * WIDTH_MULTIPLIER
         val paint = createPaint(stroke.color)
-        val sdkPoints = toSdkTouchPoints(stroke.points, adjustedWidth)
+        val sdkPoints = toSdkTouchPoints(stroke.points)
 
         Log.d(TAG, "renderCharcoalStroke: Rendering ${sdkPoints.size} points with width=$adjustedWidth (original=${stroke.width})")
 
