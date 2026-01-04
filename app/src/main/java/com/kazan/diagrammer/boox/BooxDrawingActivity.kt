@@ -78,38 +78,44 @@ class BooxDrawingActivity : AppCompatActivity() {
         const val CHARCOAL_TEXTURE_V2 = 1
 
         /**
-         * Stroke width ranges per brush type.
-         * Based on SDK PenConstant values:
-         * - Normal brushes (Pencil, Fountain, NeoBrush, Charcoal): 0.1mm to 20.0mm
-         * - Marker: 0.5mm to 80.0mm
-         * These are pixel values corresponding to the SDK's mm-based ranges.
+         * Conversion factor from display mm to internal API pixel values.
+         * Display: 0.10mm to 2.00mm -> Internal: 1.0 to 20.0 (multiply by 10)
+         * Display: 0.50mm to 8.00mm -> Internal: 5.0 to 80.0 (multiply by 10)
          */
-        val MIN_STROKE_WIDTHS = mapOf(
-            STYLE_PENCIL to 0.1f,
-            STYLE_FOUNTAIN to 0.1f,
-            STYLE_NEO_BRUSH to 0.1f,
-            STYLE_MARKER to 0.5f,
-            STYLE_CHARCOAL to 0.1f
+        const val MM_TO_INTERNAL_FACTOR = 10f
+
+        /**
+         * Stroke width ranges per brush type in MILLIMETERS (display values).
+         * These are the user-facing mm values shown on the slider.
+         * - Normal brushes (Pencil, Fountain, NeoBrush, Charcoal): 0.10mm to 2.00mm
+         * - Marker: 0.50mm to 8.00mm
+         */
+        val MIN_STROKE_WIDTH_MM = mapOf(
+            STYLE_PENCIL to 0.10f,
+            STYLE_FOUNTAIN to 0.10f,
+            STYLE_NEO_BRUSH to 0.10f,
+            STYLE_MARKER to 0.50f,
+            STYLE_CHARCOAL to 0.10f
         )
 
-        val MAX_STROKE_WIDTHS = mapOf(
-            STYLE_PENCIL to 20.0f,
-            STYLE_FOUNTAIN to 20.0f,
-            STYLE_NEO_BRUSH to 20.0f,
-            STYLE_MARKER to 80.0f,
-            STYLE_CHARCOAL to 20.0f
+        val MAX_STROKE_WIDTH_MM = mapOf(
+            STYLE_PENCIL to 2.00f,
+            STYLE_FOUNTAIN to 2.00f,
+            STYLE_NEO_BRUSH to 2.00f,
+            STYLE_MARKER to 8.00f,
+            STYLE_CHARCOAL to 2.00f
         )
 
         /**
-         * Default stroke widths per brush type.
+         * Default stroke widths per brush type in MILLIMETERS.
          * These are tuned for natural-looking strokes with each brush.
          */
-        val DEFAULT_STROKE_WIDTHS = mapOf(
-            STYLE_PENCIL to 3f,      // Thin, precise
-            STYLE_FOUNTAIN to 5f,    // Medium, calligraphy
-            STYLE_NEO_BRUSH to 8f,   // Broader, painterly
-            STYLE_MARKER to 15f,     // Wide highlighter
-            STYLE_CHARCOAL to 12f    // Thick, textured
+        val DEFAULT_STROKE_WIDTH_MM = mapOf(
+            STYLE_PENCIL to 0.30f,     // Thin, precise
+            STYLE_FOUNTAIN to 0.50f,   // Medium, calligraphy
+            STYLE_NEO_BRUSH to 0.80f,  // Broader, painterly
+            STYLE_MARKER to 1.50f,     // Wide highlighter
+            STYLE_CHARCOAL to 1.20f    // Thick, textured
         )
 
         /**
@@ -180,7 +186,7 @@ class BooxDrawingActivity : AppCompatActivity() {
 
     // Current tool settings
     private var currentStyle = STYLE_FOUNTAIN
-    private var currentWidth = DEFAULT_STROKE_WIDTHS[STYLE_FOUNTAIN] ?: 5f
+    private var currentWidthMm = DEFAULT_STROKE_WIDTH_MM[STYLE_FOUNTAIN] ?: 0.50f  // Width in mm for display
     private var currentColor = Color.BLACK
     private var currentCharcoalTexture = CHARCOAL_TEXTURE_V2  // Default to V2
     private var hasDrawn = false
@@ -296,7 +302,7 @@ class BooxDrawingActivity : AppCompatActivity() {
                     // IMPORTANT: openDrawing must be called FIRST to create the TouchHelper
                     // Only after that can we configure stroke width, style, and color
                     openDrawing(drawingBounds, excludeRects)
-                    setStrokeWidth(currentWidth)
+                    setStrokeWidth(mmToInternal(currentWidthMm))
                     setStrokeStyle(currentStyle)
                     setStrokeColor(currentColor)
                 }
@@ -567,7 +573,8 @@ class BooxDrawingActivity : AppCompatActivity() {
      * - Export happens
      */
     private fun onNativeStrokeComplete(points: List<BooxTouchPoint>) {
-        Log.d(TAG, "onNativeStrokeComplete: Received ${points.size} points, style=$currentStyle, color=${Integer.toHexString(currentColor)}, width=$currentWidth")
+        val internalWidth = mmToInternal(currentWidthMm)
+        Log.d(TAG, "onNativeStrokeComplete: Received ${points.size} points, style=$currentStyle, color=${Integer.toHexString(currentColor)}, width=${currentWidthMm}mm (internal=$internalWidth)")
 
         if (points.isEmpty()) return
 
@@ -578,7 +585,7 @@ class BooxDrawingActivity : AppCompatActivity() {
             points = points.toList(),
             style = currentStyle,
             color = currentColor,
-            width = currentWidth,
+            width = internalWidth,
             charcoalTexture = currentCharcoalTexture
         )
         strokes.add(strokeData)
@@ -679,10 +686,14 @@ class BooxDrawingActivity : AppCompatActivity() {
      * The slider is rotated 90° to display vertically, filling the remaining sidebar height.
      */
     private fun initWidthSlider() {
-        // Set slider range based on current brush
+        // Set slider range based on current brush (in mm)
         updateSliderRangeForBrush(currentStyle)
-        binding.sliderWidth.value = currentWidth
-        binding.tvWidthValue.text = currentWidth.toInt().toString()
+        binding.sliderWidth.value = currentWidthMm
+        binding.tvWidthValue.text = formatWidthMm(currentWidthMm)
+
+        // Configure the brush size indicator
+        binding.brushSizeIndicator.setTaperRatio(0.05f, 0.6f)
+        binding.brushSizeIndicator.setVerticalPadding(24f)
 
         // Rotate slider to vertical after layout is measured
         binding.sliderContainer.post {
@@ -700,21 +711,22 @@ class BooxDrawingActivity : AppCompatActivity() {
             binding.sliderWidth.layoutParams = layoutParams
         }
 
-        binding.sliderWidth.addOnChangeListener { _, value, fromUser ->
+        binding.sliderWidth.addOnChangeListener { _, valueMm, fromUser ->
             if (fromUser) {
-                Log.d(TAG, "Width changed: $value")
-                currentWidth = value
-                paint.strokeWidth = value
+                Log.d(TAG, "Width changed: ${valueMm}mm")
+                currentWidthMm = valueMm
+                val internalWidth = mmToInternal(valueMm)
+                paint.strokeWidth = internalWidth
 
-                booxDrawingHelper?.setStrokeWidth(value)
+                booxDrawingHelper?.setStrokeWidth(internalWidth)
 
                 // Pause render to update UI, then resume
                 booxDrawingHelper?.pauseForUiRefresh {
-                    binding.tvWidthValue.text = value.toInt().toString()
+                    binding.tvWidthValue.text = formatWidthMm(valueMm)
                     // Re-render bitmap to restore previous strokes after pause clears native EPD
                     renderBitmapToSurface()
                 } ?: run {
-                    binding.tvWidthValue.text = value.toInt().toString()
+                    binding.tvWidthValue.text = formatWidthMm(valueMm)
                 }
             }
         }
@@ -741,8 +753,8 @@ class BooxDrawingActivity : AppCompatActivity() {
         updateSliderRangeForBrush(style)
 
         // Set default width for this brush type (clamped to new range)
-        val defaultWidth = DEFAULT_STROKE_WIDTHS[style] ?: currentWidth
-        updateStrokeWidth(defaultWidth)
+        val defaultWidthMm = DEFAULT_STROKE_WIDTH_MM[style] ?: currentWidthMm
+        updateStrokeWidth(defaultWidthMm)
 
         // Update the stroke style on TouchHelper (no need to disable/enable)
         booxDrawingHelper?.setStrokeStyle(style)
@@ -876,30 +888,41 @@ class BooxDrawingActivity : AppCompatActivity() {
     }
 
     /**
-     * Update the slider range for the given brush type.
+     * Update the slider range for the given brush type (in mm).
      */
     private fun updateSliderRangeForBrush(style: Int) {
-        val minWidth = MIN_STROKE_WIDTHS[style] ?: 0.1f
-        val maxWidth = MAX_STROKE_WIDTHS[style] ?: 20.0f
-        binding.sliderWidth.valueFrom = minWidth
-        binding.sliderWidth.valueTo = maxWidth
+        val minMm = MIN_STROKE_WIDTH_MM[style] ?: 0.10f
+        val maxMm = MAX_STROKE_WIDTH_MM[style] ?: 2.00f
+        binding.sliderWidth.valueFrom = minMm
+        binding.sliderWidth.valueTo = maxMm
     }
 
     /**
-     * Update the stroke width and sync UI.
+     * Update the stroke width (in mm) and sync UI.
      */
-    private fun updateStrokeWidth(width: Float) {
+    private fun updateStrokeWidth(widthMm: Float) {
         // Clamp to current brush's range
-        val minWidth = MIN_STROKE_WIDTHS[currentStyle] ?: 0.1f
-        val maxWidth = MAX_STROKE_WIDTHS[currentStyle] ?: 20.0f
-        val clampedWidth = width.coerceIn(minWidth, maxWidth)
+        val minMm = MIN_STROKE_WIDTH_MM[currentStyle] ?: 0.10f
+        val maxMm = MAX_STROKE_WIDTH_MM[currentStyle] ?: 2.00f
+        val clampedMm = widthMm.coerceIn(minMm, maxMm)
 
-        currentWidth = clampedWidth
-        paint.strokeWidth = clampedWidth
-        binding.sliderWidth.value = clampedWidth
-        binding.tvWidthValue.text = clampedWidth.toInt().toString()
-        booxDrawingHelper?.setStrokeWidth(clampedWidth)
+        currentWidthMm = clampedMm
+        val internalWidth = mmToInternal(clampedMm)
+        paint.strokeWidth = internalWidth
+        binding.sliderWidth.value = clampedMm
+        binding.tvWidthValue.text = formatWidthMm(clampedMm)
+        booxDrawingHelper?.setStrokeWidth(internalWidth)
     }
+
+    /**
+     * Convert mm display value to internal API pixel value.
+     */
+    private fun mmToInternal(mm: Float): Float = mm * MM_TO_INTERNAL_FACTOR
+
+    /**
+     * Format mm value for display (e.g., "0.50mm").
+     */
+    private fun formatWidthMm(mm: Float): String = String.format("%.2f", mm)
 
     /**
      * Update the visual state of brush buttons to reflect current selection.

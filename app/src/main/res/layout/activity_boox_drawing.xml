@@ -158,17 +158,30 @@
             android:clipChildren="false"
             android:clipToPadding="false">
 
+            <!-- Tapered indicator showing brush size range (behind slider) -->
+            <com.kazan.diagrammer.boox.BrushSizeIndicatorView
+                android:id="@+id/brushSizeIndicator"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_gravity="center" />
+
             <com.google.android.material.slider.Slider
                 android:id="@+id/sliderWidth"
                 android:layout_width="match_parent"
                 android:layout_height="48dp"
                 android:layout_gravity="center"
-                android:stepSize="0.1"
-                android:valueFrom="0.1"
-                android:valueTo="80"
+                android:stepSize="0.01"
+                android:valueFrom="0.10"
+                android:valueTo="8.00"
                 app:labelBehavior="gone"
+                app:thumbColor="@android:color/white"
+                app:thumbStrokeColor="#333333"
+                app:thumbStrokeWidth="2dp"
                 app:thumbRadius="10dp"
-                app:trackHeight="6dp" />
+                app:haloColor="#33333333"
+                app:trackHeight="6dp"
+                app:trackColorActive="@android:color/transparent"
+                app:trackColorInactive="@android:color/transparent" />
 
         </FrameLayout>
 
