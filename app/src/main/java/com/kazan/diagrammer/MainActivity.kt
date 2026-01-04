@@ -104,6 +104,7 @@ class MainActivity : ComponentActivity() {
     /**
      * Launcher for Boox native drawing activity.
      * Returns the drawing as a PNG bitmap when complete.
+     * Supports both Intent extras and file-based transfer for large drawings (Issue #2 fix).
      */
     private val nativeDrawingLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -113,9 +114,31 @@ class MainActivity : ComponentActivity() {
         when (result.resultCode) {
             BooxDrawingActivity.RESULT_DRAWING_COMPLETE -> {
                 val data = result.data
-                val pngBytes = data?.getByteArrayExtra(BooxDrawingActivity.EXTRA_DRAWING_PNG)
                 val width = data?.getIntExtra(BooxDrawingActivity.EXTRA_DRAWING_WIDTH, 0) ?: 0
                 val height = data?.getIntExtra(BooxDrawingActivity.EXTRA_DRAWING_HEIGHT, 0) ?: 0
+
+                // Check for file-based transfer first (for large drawings)
+                val drawingUri = data?.getStringExtra(BooxDrawingActivity.EXTRA_DRAWING_URI)
+                val pngBytes = if (drawingUri != null) {
+                    Log.i(TAG, "nativeDrawingLauncher: Reading from file URI: $drawingUri")
+                    try {
+                        val uri = Uri.parse(drawingUri)
+                        contentResolver.openInputStream(uri)?.use { it.readBytes() }.also {
+                            // Clean up temp file after reading
+                            try {
+                                java.io.File(uri.path ?: "").delete()
+                            } catch (e: Exception) {
+                                Log.w(TAG, "nativeDrawingLauncher: Failed to clean up temp file", e)
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "nativeDrawingLauncher: Failed to read from URI", e)
+                        null
+                    }
+                } else {
+                    // Fall back to Intent extras for smaller drawings
+                    data?.getByteArrayExtra(BooxDrawingActivity.EXTRA_DRAWING_PNG)
+                }
 
                 Log.i(TAG, "nativeDrawingLauncher: Drawing complete, bytes=${pngBytes?.size}, size=${width}x$height")
 
@@ -245,6 +268,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        // Cancel coroutine scope to prevent leaks (Issue #3 fix)
+        (ioScope.coroutineContext[Job])?.cancel()
         binding.webView.destroy()
     }
 

@@ -23,15 +23,6 @@
         app:layout_constraintTop_toTopOf="parent">
 
         <!-- Brush Tools Section -->
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:paddingHorizontal="4dp"
-            android:paddingBottom="4dp"
-            android:text="Tools"
-            android:textColor="#666666"
-            android:textSize="11sp"
-            android:textStyle="bold" />
 
         <!-- Pencil -->
         <com.google.android.material.button.MaterialButton
@@ -106,14 +97,6 @@
             android:background="#CCCCCC" />
 
         <!-- Colors Section -->
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:paddingBottom="4dp"
-            android:text="Color"
-            android:textColor="#666666"
-            android:textSize="11sp"
-            android:textStyle="bold" />
 
         <!-- Color swatches grid - fills available width -->
         <GridLayout
@@ -130,13 +113,6 @@
             android:background="#CCCCCC" />
 
         <!-- Width Section (vertical slider at bottom) -->
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Width"
-            android:textColor="#666666"
-            android:textSize="11sp"
-            android:textStyle="bold" />
 
         <TextView
             android:id="@+id/tvWidthValue"
@@ -158,17 +134,30 @@
             android:clipChildren="false"
             android:clipToPadding="false">
 
+            <!-- Tapered indicator showing brush size range (behind slider) -->
+            <com.kazan.diagrammer.boox.BrushSizeIndicatorView
+                android:id="@+id/brushSizeIndicator"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_gravity="center" />
+
             <com.google.android.material.slider.Slider
                 android:id="@+id/sliderWidth"
                 android:layout_width="match_parent"
                 android:layout_height="48dp"
                 android:layout_gravity="center"
-                android:stepSize="1"
-                android:valueFrom="1"
-                android:valueTo="50"
+                android:stepSize="0.01"
+                android:valueFrom="0.10"
+                android:valueTo="8.00"
                 app:labelBehavior="gone"
+                app:thumbColor="@android:color/white"
+                app:thumbStrokeColor="#333333"
+                app:thumbStrokeWidth="2dp"
                 app:thumbRadius="10dp"
-                app:trackHeight="6dp" />
+                app:haloColor="#33333333"
+                app:trackHeight="6dp"
+                app:trackColorActive="@android:color/transparent"
+                app:trackColorInactive="@android:color/transparent" />
 
         </FrameLayout>
 

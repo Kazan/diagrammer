@@ -12,10 +12,15 @@ import android.graphics.Path
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.graphics.Rect
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.util.Log
+import android.view.Gravity
 import android.view.SurfaceHolder
 import android.view.View
+import android.widget.LinearLayout
+import android.widget.PopupWindow
+import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.button.MaterialButton
@@ -52,6 +57,7 @@ class BooxDrawingActivity : AppCompatActivity() {
 
         // Intent extras
         const val EXTRA_DRAWING_PNG = "drawing_png"
+        const val EXTRA_DRAWING_URI = "drawing_uri"  // File-based transfer for large drawings (Issue #2 fix)
         const val EXTRA_DRAWING_WIDTH = "drawing_width"
         const val EXTRA_DRAWING_HEIGHT = "drawing_height"
 
@@ -67,20 +73,49 @@ class BooxDrawingActivity : AppCompatActivity() {
         const val STYLE_MARKER = 3
         const val STYLE_CHARCOAL = 4
 
-        // Stroke width range
-        const val MIN_STROKE_WIDTH = 1f
-        const val MAX_STROKE_WIDTH = 50f
+        // Charcoal texture constants (matching SDK PenTexture values)
+        const val CHARCOAL_TEXTURE_V1 = 0
+        const val CHARCOAL_TEXTURE_V2 = 1
 
         /**
-         * Default stroke widths per brush type.
+         * Conversion factor from display mm to internal API pixel values.
+         * Display: 0.10mm to 2.00mm -> Internal: 1.0 to 20.0 (multiply by 10)
+         * Display: 0.50mm to 8.00mm -> Internal: 5.0 to 80.0 (multiply by 10)
+         */
+        const val MM_TO_INTERNAL_FACTOR = 10f
+
+        /**
+         * Stroke width ranges per brush type in MILLIMETERS (display values).
+         * These are the user-facing mm values shown on the slider.
+         * - Normal brushes (Pencil, Fountain, NeoBrush, Charcoal): 0.10mm to 2.00mm
+         * - Marker: 0.50mm to 8.00mm
+         */
+        val MIN_STROKE_WIDTH_MM = mapOf(
+            STYLE_PENCIL to 0.10f,
+            STYLE_FOUNTAIN to 0.10f,
+            STYLE_NEO_BRUSH to 0.10f,
+            STYLE_MARKER to 0.50f,
+            STYLE_CHARCOAL to 0.10f
+        )
+
+        val MAX_STROKE_WIDTH_MM = mapOf(
+            STYLE_PENCIL to 2.00f,
+            STYLE_FOUNTAIN to 2.00f,
+            STYLE_NEO_BRUSH to 2.00f,
+            STYLE_MARKER to 8.00f,
+            STYLE_CHARCOAL to 2.00f
+        )
+
+        /**
+         * Default stroke widths per brush type in MILLIMETERS.
          * These are tuned for natural-looking strokes with each brush.
          */
-        val DEFAULT_STROKE_WIDTHS = mapOf(
-            STYLE_PENCIL to 3f,      // Thin, precise
-            STYLE_FOUNTAIN to 5f,    // Medium, calligraphy
-            STYLE_NEO_BRUSH to 8f,   // Broader, painterly
-            STYLE_MARKER to 15f,     // Wide highlighter
-            STYLE_CHARCOAL to 12f    // Thick, textured
+        val DEFAULT_STROKE_WIDTH_MM = mapOf(
+            STYLE_PENCIL to 0.30f,     // Thin, precise
+            STYLE_FOUNTAIN to 0.50f,   // Medium, calligraphy
+            STYLE_NEO_BRUSH to 0.80f,  // Broader, painterly
+            STYLE_MARKER to 1.50f,     // Wide highlighter
+            STYLE_CHARCOAL to 1.20f    // Thick, textured
         )
 
         /**
@@ -151,7 +186,7 @@ class BooxDrawingActivity : AppCompatActivity() {
 
     // Current tool settings
     private var currentStyle = STYLE_FOUNTAIN
-    private var currentWidth = DEFAULT_STROKE_WIDTHS[STYLE_FOUNTAIN] ?: 5f
+    private var currentWidthMm = DEFAULT_STROKE_WIDTH_MM[STYLE_FOUNTAIN] ?: 0.50f  // Width in mm for display
     private var currentColor = Color.BLACK
     private var hasDrawn = false
 
@@ -260,10 +295,12 @@ class BooxDrawingActivity : AppCompatActivity() {
                     onStrokeComplete = { points -> onNativeStrokeComplete(points) }
                 )
                 booxDrawingHelper?.apply {
-                    setStrokeWidth(currentWidth)
+                    // IMPORTANT: openDrawing must be called FIRST to create the TouchHelper
+                    // Only after that can we configure stroke width, style, and color
+                    openDrawing(drawingBounds, excludeRects)
+                    setStrokeWidth(mmToInternal(currentWidthMm))
                     setStrokeStyle(currentStyle)
                     setStrokeColor(currentColor)
-                    openDrawing(drawingBounds, excludeRects)
                 }
                 Log.i(TAG, "initializeDrawingAfterLayout: Boox TouchHelper initialized successfully!")
 
@@ -451,12 +488,16 @@ class BooxDrawingActivity : AppCompatActivity() {
 
         var lastX = 0f
         var lastY = 0f
+        // Track current stroke points for proper cancellation handling (Issue #6 fix)
+        val currentStrokePoints = mutableListOf<Pair<Float, Float>>()
 
         binding.surfaceView.setOnTouchListener { _, event ->
             when (event.action) {
                 android.view.MotionEvent.ACTION_DOWN -> {
                     lastX = event.x
                     lastY = event.y
+                    currentStrokePoints.clear()
+                    currentStrokePoints.add(lastX to lastY)
                     Log.v(TAG, "Touch DOWN: ($lastX, $lastY)")
                     true
                 }
@@ -467,6 +508,7 @@ class BooxDrawingActivity : AppCompatActivity() {
                     // Draw line from last point to current
                     canvas?.drawLine(lastX, lastY, currentX, currentY, paint)
                     hasDrawn = true
+                    currentStrokePoints.add(currentX to currentY)
 
                     // Update the surface
                     renderBitmapToSurface()
@@ -477,6 +519,14 @@ class BooxDrawingActivity : AppCompatActivity() {
                 }
                 android.view.MotionEvent.ACTION_UP -> {
                     Log.v(TAG, "Touch UP: ($lastX, $lastY)")
+                    currentStrokePoints.clear()
+                    true
+                }
+                android.view.MotionEvent.ACTION_CANCEL -> {
+                    // Handle touch cancellation (e.g., system steals touch for notification)
+                    // Discard incomplete stroke by clearing tracking (Issue #6 fix)
+                    Log.d(TAG, "Touch CANCELLED - discarding incomplete stroke")
+                    currentStrokePoints.clear()
                     true
                 }
                 else -> false
@@ -519,7 +569,8 @@ class BooxDrawingActivity : AppCompatActivity() {
      * - Export happens
      */
     private fun onNativeStrokeComplete(points: List<BooxTouchPoint>) {
-        Log.d(TAG, "onNativeStrokeComplete: Received ${points.size} points, style=$currentStyle, color=${Integer.toHexString(currentColor)}, width=$currentWidth")
+        val internalWidth = mmToInternal(currentWidthMm)
+        Log.d(TAG, "onNativeStrokeComplete: Received ${points.size} points, style=$currentStyle, color=${Integer.toHexString(currentColor)}, width=${currentWidthMm}mm (internal=$internalWidth)")
 
         if (points.isEmpty()) return
 
@@ -530,7 +581,8 @@ class BooxDrawingActivity : AppCompatActivity() {
             points = points.toList(),
             style = currentStyle,
             color = currentColor,
-            width = currentWidth
+            width = internalWidth,
+            charcoalTexture = CHARCOAL_TEXTURE_V2
         )
         strokes.add(strokeData)
 
@@ -592,16 +644,20 @@ class BooxDrawingActivity : AppCompatActivity() {
         colorContainer.removeAllViews()
         colorButtons.clear()
 
-        // Smaller swatches with more padding - makes color section more compact
-        val buttonSize = (32 * resources.displayMetrics.density).toInt()
-        val margin = (6 * resources.displayMetrics.density).toInt()
+        // Wider swatches that fill the horizontal space (2 columns)
+        val buttonHeight = (28 * resources.displayMetrics.density).toInt()
+        val horizontalMargin = (3 * resources.displayMetrics.density).toInt()
+        val verticalMargin = (4 * resources.displayMetrics.density).toInt()
 
         for ((index, color) in KALEIDO_COLORS.withIndex()) {
             val colorView = View(this).apply {
+                // Use columnWeight to make each swatch fill half the container width
                 layoutParams = android.widget.GridLayout.LayoutParams().apply {
-                    width = buttonSize
-                    height = buttonSize
-                    setMargins(margin, margin, margin, margin)
+                    width = 0
+                    height = buttonHeight
+                    columnSpec = android.widget.GridLayout.spec(index % 2, 1f) // 1f weight
+                    rowSpec = android.widget.GridLayout.spec(index / 2)
+                    setMargins(horizontalMargin, verticalMargin, horizontalMargin, verticalMargin)
                 }
 
                 // Add border for visibility (especially for light colors)
@@ -626,11 +682,14 @@ class BooxDrawingActivity : AppCompatActivity() {
      * The slider is rotated 90° to display vertically, filling the remaining sidebar height.
      */
     private fun initWidthSlider() {
-        // Set slider range
-        binding.sliderWidth.valueFrom = MIN_STROKE_WIDTH
-        binding.sliderWidth.valueTo = MAX_STROKE_WIDTH
-        binding.sliderWidth.value = currentWidth
-        binding.tvWidthValue.text = currentWidth.toInt().toString()
+        // Set slider range based on current brush (in mm)
+        updateSliderRangeForBrush(currentStyle)
+        binding.sliderWidth.value = currentWidthMm
+        binding.tvWidthValue.text = formatWidthMm(currentWidthMm)
+
+        // Configure the brush size indicator
+        binding.brushSizeIndicator.setTaperRatio(0.05f, 0.6f)
+        binding.brushSizeIndicator.setVerticalPadding(24f)
 
         // Rotate slider to vertical after layout is measured
         binding.sliderContainer.post {
@@ -648,21 +707,22 @@ class BooxDrawingActivity : AppCompatActivity() {
             binding.sliderWidth.layoutParams = layoutParams
         }
 
-        binding.sliderWidth.addOnChangeListener { _, value, fromUser ->
+        binding.sliderWidth.addOnChangeListener { _, valueMm, fromUser ->
             if (fromUser) {
-                Log.d(TAG, "Width changed: $value")
-                currentWidth = value
-                paint.strokeWidth = value
+                Log.d(TAG, "Width changed: ${valueMm}mm")
+                currentWidthMm = valueMm
+                val internalWidth = mmToInternal(valueMm)
+                paint.strokeWidth = internalWidth
 
-                booxDrawingHelper?.setStrokeWidth(value)
+                booxDrawingHelper?.setStrokeWidth(internalWidth)
 
                 // Pause render to update UI, then resume
                 booxDrawingHelper?.pauseForUiRefresh {
-                    binding.tvWidthValue.text = value.toInt().toString()
+                    binding.tvWidthValue.text = formatWidthMm(valueMm)
                     // Re-render bitmap to restore previous strokes after pause clears native EPD
                     renderBitmapToSurface()
                 } ?: run {
-                    binding.tvWidthValue.text = value.toInt().toString()
+                    binding.tvWidthValue.text = formatWidthMm(valueMm)
                 }
             }
         }
@@ -677,9 +737,12 @@ class BooxDrawingActivity : AppCompatActivity() {
         currentStyle = style
         binding.tvBrushName.text = name
 
-        // Set default width for this brush type
-        val defaultWidth = DEFAULT_STROKE_WIDTHS[style] ?: currentWidth
-        updateStrokeWidth(defaultWidth)
+        // Update slider range for new brush type
+        updateSliderRangeForBrush(style)
+
+        // Set default width for this brush type (clamped to new range)
+        val defaultWidthMm = DEFAULT_STROKE_WIDTH_MM[style] ?: currentWidthMm
+        updateStrokeWidth(defaultWidthMm)
 
         // Update the stroke style on TouchHelper (no need to disable/enable)
         booxDrawingHelper?.setStrokeStyle(style)
@@ -697,15 +760,41 @@ class BooxDrawingActivity : AppCompatActivity() {
     }
 
     /**
-     * Update the stroke width and sync UI.
+     * Update the slider range for the given brush type (in mm).
      */
-    private fun updateStrokeWidth(width: Float) {
-        currentWidth = width
-        paint.strokeWidth = width
-        binding.sliderWidth.value = width
-        binding.tvWidthValue.text = width.toInt().toString()
-        booxDrawingHelper?.setStrokeWidth(width)
+    private fun updateSliderRangeForBrush(style: Int) {
+        val minMm = MIN_STROKE_WIDTH_MM[style] ?: 0.10f
+        val maxMm = MAX_STROKE_WIDTH_MM[style] ?: 2.00f
+        binding.sliderWidth.valueFrom = minMm
+        binding.sliderWidth.valueTo = maxMm
     }
+
+    /**
+     * Update the stroke width (in mm) and sync UI.
+     */
+    private fun updateStrokeWidth(widthMm: Float) {
+        // Clamp to current brush's range
+        val minMm = MIN_STROKE_WIDTH_MM[currentStyle] ?: 0.10f
+        val maxMm = MAX_STROKE_WIDTH_MM[currentStyle] ?: 2.00f
+        val clampedMm = widthMm.coerceIn(minMm, maxMm)
+
+        currentWidthMm = clampedMm
+        val internalWidth = mmToInternal(clampedMm)
+        paint.strokeWidth = internalWidth
+        binding.sliderWidth.value = clampedMm
+        binding.tvWidthValue.text = formatWidthMm(clampedMm)
+        booxDrawingHelper?.setStrokeWidth(internalWidth)
+    }
+
+    /**
+     * Convert mm display value to internal API pixel value.
+     */
+    private fun mmToInternal(mm: Float): Float = mm * MM_TO_INTERNAL_FACTOR
+
+    /**
+     * Format mm value for display (e.g., "0.50mm").
+     */
+    private fun formatWidthMm(mm: Float): String = String.format("%.2f", mm)
 
     /**
      * Update the visual state of brush buttons to reflect current selection.
@@ -848,6 +937,7 @@ class BooxDrawingActivity : AppCompatActivity() {
 
     /**
      * Handle done - export bitmap and return to caller.
+     * Uses file-based transfer for large drawings to avoid TransactionTooLargeException (Issue #2 fix).
      */
     private fun handleDone() {
         Log.i(TAG, "handleDone: Starting export...")
@@ -867,15 +957,28 @@ class BooxDrawingActivity : AppCompatActivity() {
                 val exportResult = exportToPng()
                 Log.i(TAG, "handleDone: Exported ${exportResult.bytes.size} bytes (${exportResult.width}x${exportResult.height})")
 
-                runOnUiThread {
-                    hideLoading()
-
-                    val resultIntent = Intent().apply {
+                // Use file-based transfer for larger drawings to avoid TransactionTooLargeException
+                // Android Intent limit is ~500KB; use file transfer for anything over 256KB to be safe
+                val resultIntent = if (exportResult.bytes.size > 256 * 1024) {
+                    Log.i(TAG, "handleDone: Using file-based transfer (${exportResult.bytes.size} bytes > 256KB)")
+                    val tempFile = java.io.File(cacheDir, "drawing_${System.currentTimeMillis()}.png")
+                    tempFile.writeBytes(exportResult.bytes)
+                    Intent().apply {
+                        putExtra(EXTRA_DRAWING_URI, android.net.Uri.fromFile(tempFile).toString())
+                        putExtra(EXTRA_DRAWING_WIDTH, exportResult.width)
+                        putExtra(EXTRA_DRAWING_HEIGHT, exportResult.height)
+                    }
+                } else {
+                    Log.i(TAG, "handleDone: Using Intent extras (${exportResult.bytes.size} bytes)")
+                    Intent().apply {
                         putExtra(EXTRA_DRAWING_PNG, exportResult.bytes)
                         putExtra(EXTRA_DRAWING_WIDTH, exportResult.width)
                         putExtra(EXTRA_DRAWING_HEIGHT, exportResult.height)
                     }
+                }
 
+                runOnUiThread {
+                    hideLoading()
                     Log.i(TAG, "handleDone: Returning successful result")
                     setResult(RESULT_DRAWING_COMPLETE, resultIntent)
                     finish()
@@ -889,6 +992,10 @@ class BooxDrawingActivity : AppCompatActivity() {
                         .setTitle("Export Failed")
                         .setMessage("Failed to export drawing: ${e.message}")
                         .setPositiveButton("OK", null)
+                        .setOnDismissListener {
+                            // Re-enable drawing after dialog dismissed
+                            booxDrawingHelper?.setDrawingEnabled(true)
+                        }
                         .show()
                 }
             }
@@ -908,8 +1015,14 @@ class BooxDrawingActivity : AppCompatActivity() {
         var maxY = Float.MIN_VALUE
 
         for (stroke in strokes) {
-            // Account for stroke width when calculating bounds
-            val halfWidth = stroke.width / 2f + 2f // Add small margin
+            // Account for actual rendered stroke width when calculating bounds
+            // Some brush types (fountain, neo brush, charcoal) use WIDTH_MULTIPLIER
+            val effectiveWidth = when (stroke.style) {
+                STYLE_FOUNTAIN, STYLE_NEO_BRUSH, STYLE_CHARCOAL -> stroke.width * BrushRenderer.WIDTH_MULTIPLIER
+                else -> stroke.width
+            }
+            // Add generous margin for round caps and any rendering artifacts
+            val halfWidth = effectiveWidth / 2f + 8f
 
             for (point in stroke.points) {
                 minX = minOf(minX, point.x - halfWidth)
@@ -1025,6 +1138,34 @@ class BooxDrawingActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
+    /**
+     * Pause device receiver when activity goes to background (Issue #5 fix).
+     * This prevents receiving broadcasts and wasting battery when not visible.
+     */
+    override fun onPause() {
+        super.onPause()
+        try {
+            deviceReceiver?.enable(this, false)
+        } catch (e: Exception) {
+            Log.w(TAG, "onPause: Failed to disable device receiver", e)
+        }
+    }
+
+    /**
+     * Re-enable device receiver when activity returns to foreground (Issue #5 fix).
+     */
+    override fun onResume() {
+        super.onResume()
+        // Only re-enable if we have an active drawing helper
+        if (booxDrawingHelper != null && deviceReceiver != null) {
+            try {
+                deviceReceiver?.enable(this, true)
+            } catch (e: Exception) {
+                Log.w(TAG, "onResume: Failed to enable device receiver", e)
+            }
+        }
+    }
+
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         Log.d(TAG, "onBackPressed")
@@ -1073,6 +1214,10 @@ class BooxDrawingHelper(
     // Direct reference to TouchHelper (SDK is bundled)
     private var touchHelper: com.onyx.android.sdk.pen.TouchHelper? = null
     private var isOpen = false
+
+    // Single reusable Handler to avoid memory leaks (Issue #1 fix)
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val pendingRunnables = mutableListOf<Runnable>()
 
     init {
         Log.d(TAG, "BooxDrawingHelper: Initializing...")
@@ -1136,7 +1281,8 @@ class BooxDrawingHelper(
             Log.d(TAG, "openDrawing: TouchHelper created: $touchHelper")
 
             touchHelper?.apply {
-                setStrokeWidth(3.0f)
+                // NOTE: Stroke width, style, and color should be set AFTER openDrawing()
+                // by the caller, since this method just creates the TouchHelper.
 
                 // Set limit rect as a list (required by some SDK versions)
                 Log.d(TAG, "openDrawing: Setting limit rect: ${bounds.left},${bounds.top} - ${bounds.right},${bounds.bottom}")
@@ -1261,20 +1407,32 @@ class BooxDrawingHelper(
      * Temporarily pause raw drawing to allow UI refresh, then resume.
      * This is needed for updating toolbar/button states which are outside
      * the drawing area.
+     *
+     * Note: Uses tracked runnables to prevent memory leaks if activity is
+     * destroyed while delays are pending (Issue #1 fix).
      */
     fun pauseForUiRefresh(onPaused: () -> Unit) {
         Log.d(TAG, "pauseForUiRefresh: Pausing for UI update...")
+        cancelPendingUiRefresh() // Cancel any pending refresh operations
+
         try {
             touchHelper?.setRawDrawingEnabled(false)
-            // Give the system a moment to do a normal refresh
-            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+
+            val resumeRunnable = Runnable {
+                touchHelper?.setRawDrawingEnabled(true)
+                Log.d(TAG, "pauseForUiRefresh: Drawing resumed")
+            }
+
+            val pauseRunnable = Runnable {
                 onPaused()
                 // Small delay to let the UI update render
-                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                    touchHelper?.setRawDrawingEnabled(true)
-                    Log.d(TAG, "pauseForUiRefresh: Drawing resumed")
-                }, 50)
-            }, 10)
+                mainHandler.postDelayed(resumeRunnable, 50)
+                pendingRunnables.add(resumeRunnable)
+            }
+
+            // Give the system a moment to do a normal refresh
+            mainHandler.postDelayed(pauseRunnable, 10)
+            pendingRunnables.add(pauseRunnable)
         } catch (e: Exception) {
             Log.w(TAG, "pauseForUiRefresh: Failed", e)
             onPaused() // Still call the callback
@@ -1282,10 +1440,22 @@ class BooxDrawingHelper(
     }
 
     /**
+     * Cancel any pending UI refresh operations.
+     * Called during cleanup to prevent leaks (Issue #1 fix).
+     */
+    private fun cancelPendingUiRefresh() {
+        pendingRunnables.forEach { mainHandler.removeCallbacks(it) }
+        pendingRunnables.clear()
+    }
+
+    /**
      * Close drawing mode and release resources.
      */
     fun closeDrawing() {
         Log.i(TAG, "closeDrawing: Releasing resources...")
+
+        // Cancel any pending UI refresh runnables to prevent leaks (Issue #1 fix)
+        cancelPendingUiRefresh()
 
         if (!isOpen) {
             Log.d(TAG, "closeDrawing: Not open, skipping")
@@ -1311,7 +1481,8 @@ data class StrokeData(
     val points: List<BooxTouchPoint>,
     val style: Int,
     val color: Int,
-    val width: Float
+    val width: Float,
+    val charcoalTexture: Int = BooxDrawingActivity.CHARCOAL_TEXTURE_V2  // Only used for charcoal style
 )
 
 /**
@@ -1324,17 +1495,32 @@ object BrushRenderer {
     // Cache max pressure value
     private var cachedMaxPressure: Float = 0f
 
+    // Safe default max pressure - common value for Boox devices
+    private const val DEFAULT_MAX_PRESSURE = 4096f
+
+    /**
+     * Width multiplier to compensate for pressure modulation in SDK pen rendering.
+     * The native EPD preview uses the stroke width directly, but SDK pen classes
+     * (NeoFountainPen, NeoBrushPen) internally scale width by pressure ratio.
+     * This multiplier ensures bitmap strokes match the native EPD preview appearance.
+     * Reset to 1.0f for tuning after preserving original touch point size values.
+     */
+    const val WIDTH_MULTIPLIER = 1.0f
+
     /**
      * Get max touch pressure from SDK.
+     * Always returns a positive value to prevent SDK division-by-zero issues (Issue #7 fix).
      */
     private fun getMaxPressure(): Float {
         if (cachedMaxPressure <= 0f) {
-            try {
-                cachedMaxPressure = com.onyx.android.sdk.api.device.epd.EpdController.getMaxTouchPressure()
-                Log.d(TAG, "getMaxPressure: $cachedMaxPressure")
+            cachedMaxPressure = try {
+                val pressure = com.onyx.android.sdk.api.device.epd.EpdController.getMaxTouchPressure()
+                Log.d(TAG, "getMaxPressure: SDK returned $pressure")
+                // Validate the SDK value - must be positive to avoid division issues
+                if (pressure > 0f) pressure else DEFAULT_MAX_PRESSURE
             } catch (e: Exception) {
                 Log.w(TAG, "getMaxPressure: Failed to get from SDK, using default", e)
-                cachedMaxPressure = 4096f // Common default
+                DEFAULT_MAX_PRESSURE
             }
         }
         return cachedMaxPressure
@@ -1342,12 +1528,19 @@ object BrushRenderer {
 
     /**
      * Convert our BooxTouchPoint list to SDK TouchPoint list.
-     * Note: We pass strokeWidth as the size parameter for each point, matching how notable does it.
-     * This ensures the bitmap rendering uses the same stroke width as the native EPD preview.
+     *
+     * IMPORTANT: We preserve the original `size` (contact area) from each touch point.
+     * This is critical for brushes like Charcoal, NeoBrush, and Fountain that use
+     * tilt/contact-area information to vary stroke appearance. The native EPD preview
+     * uses this data, so we must preserve it for bitmap rendering to match.
+     *
+     * The `size` parameter represents the stylus contact area on the digitizer,
+     * which varies based on pen tilt angle. SDK pen classes (NeoCharcoalPen,
+     * NeoBrushPen, NeoFountainPen) use this internally for expressive brush effects.
      */
-    private fun toSdkTouchPoints(points: List<BooxTouchPoint>, strokeWidth: Float): List<com.onyx.android.sdk.data.note.TouchPoint> {
+    private fun toSdkTouchPoints(points: List<BooxTouchPoint>): List<com.onyx.android.sdk.data.note.TouchPoint> {
         return points.map { pt ->
-            com.onyx.android.sdk.data.note.TouchPoint(pt.x, pt.y, pt.pressure, strokeWidth, pt.timestamp)
+            com.onyx.android.sdk.data.note.TouchPoint(pt.x, pt.y, pt.pressure, pt.size, pt.timestamp)
         }
     }
 
@@ -1391,26 +1584,27 @@ object BrushRenderer {
 
     /**
      * Pencil: Simple path-based rendering with consistent width.
+     * Uses direct path drawing, no SDK pressure modulation - no multiplier needed.
      */
     private fun renderPencilStroke(canvas: Canvas, stroke: StrokeData) {
         val paint = createPaint(stroke.color).apply {
             strokeWidth = stroke.width
         }
 
-        val sdkPoints = toSdkTouchPoints(stroke.points, stroke.width)
+        val points = stroke.points
 
-        if (sdkPoints.size == 1) {
+        if (points.size == 1) {
             paint.style = Paint.Style.FILL
-            canvas.drawCircle(sdkPoints[0].x, sdkPoints[0].y, stroke.width / 2, paint)
+            canvas.drawCircle(points[0].x, points[0].y, stroke.width / 2, paint)
             return
         }
 
         val path = Path()
-        path.moveTo(sdkPoints[0].x, sdkPoints[0].y)
+        path.moveTo(points[0].x, points[0].y)
 
-        for (i in 1 until sdkPoints.size) {
-            val prev = sdkPoints[i - 1]
-            val curr = sdkPoints[i]
+        for (i in 1 until points.size) {
+            val prev = points[i - 1]
+            val curr = points[i]
             path.quadTo(prev.x, prev.y, curr.x, curr.y)
         }
 
@@ -1419,10 +1613,12 @@ object BrushRenderer {
 
     /**
      * Fountain Pen: Use SDK NeoFountainPen for pressure-sensitive calligraphy strokes.
+     * Uses original touch point size values for tilt/contact-area responsiveness.
      */
     private fun renderFountainStroke(canvas: Canvas, stroke: StrokeData) {
+        val adjustedWidth = stroke.width * WIDTH_MULTIPLIER
         val paint = createPaint(stroke.color)
-        val sdkPoints = toSdkTouchPoints(stroke.points, stroke.width)
+        val sdkPoints = toSdkTouchPoints(stroke.points)
         val maxPressure = getMaxPressure()
 
         try {
@@ -1432,7 +1628,7 @@ object BrushRenderer {
                 paint,
                 sdkPoints,
                 1.0f, // density
-                stroke.width,
+                adjustedWidth,
                 maxPressure,
                 false // not erasing
             )
@@ -1444,11 +1640,12 @@ object BrushRenderer {
 
     /**
      * Neo Brush: Use SDK NeoBrushPen for dynamic brush strokes.
-     * Match notable's implementation: use drawStroke directly
+     * Uses original touch point size values for tilt/contact-area responsiveness.
      */
     private fun renderNeoBrushStroke(canvas: Canvas, stroke: StrokeData) {
+        val adjustedWidth = stroke.width * WIDTH_MULTIPLIER
         val paint = createPaint(stroke.color)
-        val sdkPoints = toSdkTouchPoints(stroke.points, stroke.width)
+        val sdkPoints = toSdkTouchPoints(stroke.points)
         val maxPressure = getMaxPressure()
 
         try {
@@ -1457,7 +1654,7 @@ object BrushRenderer {
                 canvas,
                 paint,
                 sdkPoints,
-                stroke.width,
+                adjustedWidth,
                 maxPressure,
                 false // not erasing
             )
@@ -1472,6 +1669,7 @@ object BrushRenderer {
      * Match notable's simple path-based approach for markers.
      */
     private fun renderMarkerStroke(canvas: Canvas, stroke: StrokeData) {
+        // Marker uses simple path rendering, no pressure modulation - no multiplier needed
         val paint = createPaint(stroke.color).apply {
             strokeWidth = stroke.width
             alpha = 100 // Semi-transparent like notable
@@ -1500,29 +1698,42 @@ object BrushRenderer {
     }
 
     /**
-     * Charcoal: Use SDK NeoCharcoalPen for textured charcoal strokes.
-     * This matches how notable app renders charcoal/pencil strokes.
+     * Charcoal: Use SDK NeoCharcoalPenV2 for textured charcoal strokes.
+     * Supports V1 and V2 textures via the stroke's charcoalTexture property.
+     * Uses original touch point size values for tilt/contact-area responsiveness,
+     * matching the native EPD preview appearance.
      */
     private fun renderCharcoalStroke(canvas: Canvas, stroke: StrokeData) {
+        val adjustedWidth = stroke.width * WIDTH_MULTIPLIER
         val paint = createPaint(stroke.color)
-        val sdkPoints = toSdkTouchPoints(stroke.points, stroke.width)
+        val sdkPoints = toSdkTouchPoints(stroke.points)
 
-        Log.d(TAG, "renderCharcoalStroke: Rendering ${sdkPoints.size} points with width=${stroke.width}")
+        // Determine pen type based on texture selection
+        val penType = if (stroke.charcoalTexture == BooxDrawingActivity.CHARCOAL_TEXTURE_V2) {
+            com.onyx.android.sdk.pen.NeoPenConfig.NEOPEN_PEN_TYPE_CHARCOAL_V2
+        } else {
+            com.onyx.android.sdk.pen.NeoPenConfig.NEOPEN_PEN_TYPE_CHARCOAL
+        }
+
+        Log.d(TAG, "renderCharcoalStroke: Rendering ${sdkPoints.size} points with width=$adjustedWidth, texture=V${stroke.charcoalTexture + 1}")
 
         try {
-            // Use SDK's NeoCharcoalPen (not V2) - this is what notable uses
-            com.onyx.android.sdk.pen.NeoCharcoalPen.drawNormalStroke(
-                null,                                          // RenderContext (nullable)
-                canvas,
-                paint,
-                sdkPoints,
-                stroke.color,                                  // color as int
-                stroke.width,
-                com.onyx.android.sdk.data.note.ShapeCreateArgs(),
-                android.graphics.Matrix(),                     // identity matrix
-                false                                          // not erasing
-            )
-            Log.d(TAG, "renderCharcoalStroke: SDK NeoCharcoalPen rendering succeeded")
+            // Use NeoCharcoalPenV2 with PenRenderArgs for full texture control
+            val renderArgs = com.onyx.android.sdk.pen.PenRenderArgs()
+                .setCreateArgs(com.onyx.android.sdk.data.note.ShapeCreateArgs())
+                .setCanvas(canvas)
+                .setPenType(penType)
+                .setColor(stroke.color)
+                .setErase(false)
+                .setPaint(paint)
+                .setStrokeWidth(adjustedWidth)
+                .setPoints(sdkPoints)
+                .setScreenMatrix(android.graphics.Matrix())
+
+            // Use drawNormalStroke for all widths (simpler, works well for typical use)
+            com.onyx.android.sdk.pen.NeoCharcoalPenV2.drawNormalStroke(renderArgs)
+
+            Log.d(TAG, "renderCharcoalStroke: SDK NeoCharcoalPenV2 rendering succeeded")
         } catch (e: Exception) {
             Log.w(TAG, "renderCharcoalStroke: SDK failed (${e.message}), using charcoal fallback", e)
             // Custom charcoal fallback - thick textured strokes
@@ -1534,6 +1745,7 @@ object BrushRenderer {
      * Charcoal fallback: Simulates charcoal texture with multiple overlapping strokes.
      */
     private fun renderCharcoalFallback(canvas: Canvas, stroke: StrokeData) {
+        val adjustedWidth = stroke.width * WIDTH_MULTIPLIER
         val paint = createPaint(stroke.color)
         val points = stroke.points
 
@@ -1542,7 +1754,7 @@ object BrushRenderer {
         if (points.size == 1) {
             paint.style = Paint.Style.FILL
             val pt = points[0]
-            val radius = stroke.width * 1.5f * pt.pressure.coerceIn(0.3f, 1.0f)
+            val radius = adjustedWidth * 1.5f * pt.pressure.coerceIn(0.3f, 1.0f)
             canvas.drawCircle(pt.x, pt.y, radius, paint)
             return
         }
@@ -1553,7 +1765,7 @@ object BrushRenderer {
             val p2 = points[i + 1]
 
             val avgPressure = ((p1.pressure + p2.pressure) / 2).coerceIn(0.3f, 1.0f)
-            val baseWidth = stroke.width * 2.5f * avgPressure
+            val baseWidth = adjustedWidth * 2.5f * avgPressure
 
             // Main stroke
             paint.strokeWidth = baseWidth
@@ -1578,15 +1790,16 @@ object BrushRenderer {
      * Fallback stroke rendering when SDK classes fail.
      */
     private fun renderFallbackStroke(canvas: Canvas, stroke: StrokeData) {
+        val adjustedWidth = stroke.width * WIDTH_MULTIPLIER
         val paint = createPaint(stroke.color).apply {
-            strokeWidth = stroke.width
+            strokeWidth = adjustedWidth
         }
 
         val points = stroke.points
 
         if (points.size == 1) {
             paint.style = Paint.Style.FILL
-            canvas.drawCircle(points[0].x, points[0].y, stroke.width / 2, paint)
+            canvas.drawCircle(points[0].x, points[0].y, adjustedWidth / 2, paint)
             return
         }
 
@@ -1595,7 +1808,7 @@ object BrushRenderer {
             val p1 = points[i]
             val p2 = points[i + 1]
             val avgPressure = ((p1.pressure + p2.pressure) / 2).coerceIn(0.2f, 1.0f)
-            paint.strokeWidth = stroke.width * avgPressure
+            paint.strokeWidth = adjustedWidth * avgPressure
             canvas.drawLine(p1.x, p1.y, p2.x, p2.y, paint)
         }
     }
