@@ -188,11 +188,7 @@ class BooxDrawingActivity : AppCompatActivity() {
     private var currentStyle = STYLE_FOUNTAIN
     private var currentWidthMm = DEFAULT_STROKE_WIDTH_MM[STYLE_FOUNTAIN] ?: 0.50f  // Width in mm for display
     private var currentColor = Color.BLACK
-    private var currentCharcoalTexture = CHARCOAL_TEXTURE_V2  // Default to V2
     private var hasDrawn = false
-
-    // Charcoal texture flyout popup
-    private var charcoalTexturePopup: PopupWindow? = null
 
     // Stored strokes for proper re-rendering with brush styles
     private val strokes = mutableListOf<StrokeData>()
@@ -586,7 +582,7 @@ class BooxDrawingActivity : AppCompatActivity() {
             style = currentStyle,
             color = currentColor,
             width = internalWidth,
-            charcoalTexture = currentCharcoalTexture
+            charcoalTexture = CHARCOAL_TEXTURE_V2
         )
         strokes.add(strokeData)
 
@@ -738,16 +734,8 @@ class BooxDrawingActivity : AppCompatActivity() {
     private fun selectBrush(style: Int, name: String) {
         Log.i(TAG, "selectBrush: style=$style ($name)")
 
-        // Dismiss any existing charcoal texture popup
-        charcoalTexturePopup?.dismiss()
-        charcoalTexturePopup = null
-
         currentStyle = style
-        binding.tvBrushName.text = if (style == STYLE_CHARCOAL) {
-            "Charcoal V${currentCharcoalTexture + 1}"
-        } else {
-            name
-        }
+        binding.tvBrushName.text = name
 
         // Update slider range for new brush type
         updateSliderRangeForBrush(style)
@@ -759,11 +747,6 @@ class BooxDrawingActivity : AppCompatActivity() {
         // Update the stroke style on TouchHelper (no need to disable/enable)
         booxDrawingHelper?.setStrokeStyle(style)
 
-        // Show charcoal texture flyout if charcoal is selected
-        if (style == STYLE_CHARCOAL) {
-            showCharcoalTextureFlyout()
-        }
-
         // Pause render, update UI, then resume render
         booxDrawingHelper?.pauseForUiRefresh {
             updateBrushButtonStates()
@@ -774,126 +757,6 @@ class BooxDrawingActivity : AppCompatActivity() {
             updateBrushButtonStates()
             renderBitmapToSurface()
         }
-    }
-
-    /**
-     * Show the charcoal texture selection flyout to the right of the charcoal button.
-     */
-    private fun showCharcoalTextureFlyout() {
-        val anchorView = binding.btnCharcoal
-        val density = resources.displayMetrics.density
-
-        // Pause raw drawing so popup can receive touch events
-        booxDrawingHelper?.setDrawingEnabled(false)
-
-        // Create container for texture options (horizontal layout)
-        val container = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(
-                (8 * density).toInt(),
-                (4 * density).toInt(),
-                (8 * density).toInt(),
-                (4 * density).toInt()
-            )
-            background = GradientDrawable().apply {
-                setColor(Color.WHITE)
-                setStroke((1 * density).toInt(), Color.parseColor("#CCCCCC"))
-                cornerRadius = 8 * density
-            }
-            elevation = 4 * density
-        }
-
-        // Create V1 option
-        val v1Button = createTextureOption("V1", CHARCOAL_TEXTURE_V1)
-        container.addView(v1Button)
-
-        // Create V2 option
-        val v2Button = createTextureOption("V2", CHARCOAL_TEXTURE_V2)
-        container.addView(v2Button)
-
-        // Create popup window
-        charcoalTexturePopup = PopupWindow(
-            container,
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-            true // focusable
-        ).apply {
-            isOutsideTouchable = true
-            setBackgroundDrawable(null)
-
-            // Resume raw drawing when popup is dismissed
-            setOnDismissListener {
-                booxDrawingHelper?.setDrawingEnabled(true)
-                renderBitmapToSurface()
-            }
-
-            // Measure the popup to get its dimensions
-            container.measure(
-                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
-                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
-            )
-
-            // Show to the right of the button, vertically centered
-            val xOffset = anchorView.width + (4 * density).toInt()
-            val yOffset = (anchorView.height - container.measuredHeight) / 2
-
-            showAsDropDown(anchorView, xOffset, yOffset, Gravity.START or Gravity.TOP)
-        }
-    }
-
-    /**
-     * Create a texture option button for the flyout.
-     */
-    private fun createTextureOption(label: String, textureValue: Int): TextView {
-        val density = resources.displayMetrics.density
-        val isSelected = currentCharcoalTexture == textureValue
-
-        return TextView(this).apply {
-            text = label
-            textSize = 14f
-            setTextColor(if (isSelected) Color.WHITE else Color.parseColor("#333333"))
-            gravity = Gravity.CENTER
-            setPadding(
-                (16 * density).toInt(),
-                (10 * density).toInt(),
-                (16 * density).toInt(),
-                (10 * density).toInt()
-            )
-            background = GradientDrawable().apply {
-                if (isSelected) {
-                    setColor(Color.parseColor("#2196F3"))
-                } else {
-                    setColor(Color.parseColor("#F0F0F0"))
-                }
-                cornerRadius = 4 * density
-            }
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                bottomMargin = (4 * density).toInt()
-            }
-
-            setOnClickListener {
-                selectCharcoalTexture(textureValue)
-            }
-        }
-    }
-
-    /**
-     * Select a charcoal texture variant.
-     */
-    private fun selectCharcoalTexture(texture: Int) {
-        Log.i(TAG, "selectCharcoalTexture: texture=$texture (V${texture + 1})")
-
-        currentCharcoalTexture = texture
-        binding.tvBrushName.text = "Charcoal V${texture + 1}"
-
-        // Dismiss and recreate the flyout to update selection state
-        charcoalTexturePopup?.dismiss()
-        showCharcoalTextureFlyout()
-
-        // No need to re-render - texture is used at render time
     }
 
     /**
@@ -1256,10 +1119,6 @@ class BooxDrawingActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         Log.i(TAG, "onDestroy: Cleaning up resources")
-
-        // Dismiss charcoal texture popup if showing
-        charcoalTexturePopup?.dismiss()
-        charcoalTexturePopup = null
 
         // Disable device receiver
         try {
